@@ -1,0 +1,7 @@
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.py[cod]
+__pycache__/
+/data/

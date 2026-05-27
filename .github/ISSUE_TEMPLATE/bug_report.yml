@@ -1,0 +1,100 @@
+name: Bug report
+description: Report a reproducible problem with the Hermes Agent Home Assistant add-on.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Please include concrete, reproducible details.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I updated to the latest add-on version and restarted it.
+          required: true
+        - label: I checked the docs/troubleshooting section first.
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Short description of the bug.
+      placeholder: Describe the broken behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: Describe expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide exact steps and values.
+      placeholder: |
+        1) Go to ...
+        2) Set ...
+        3) Restart add-on
+        4) Observe ...
+    validations:
+      required: true
+
+  - type: input
+    id: addon_version
+    attributes:
+      label: Add-on version
+      placeholder: e.g. 0.0.1
+    validations:
+      required: true
+
+  - type: input
+    id: hermes-agent_version
+    attributes:
+      label: Hermes Agent version (if known)
+      placeholder: e.g. 0.14.0
+
+  - type: dropdown
+    id: access_mode
+    attributes:
+      label: Access mode
+      options:
+        - custom
+        - local_only
+        - lan_https
+        - lan_reverse_proxy
+        - tailnet_https
+        - unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant add-on configuration (redacted)
+      description: Remove secrets/tokens/passwords.
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Add-on logs
+      description: Paste the relevant log section.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Network/proxy/tailscale setup, screenshots, etc.

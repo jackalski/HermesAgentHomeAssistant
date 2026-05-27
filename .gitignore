@@ -1,0 +1,79 @@
+# OS files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# IDE/editor folders
+.vscode/
+.idea/
+.cursor/
+.zed/
+.fleet/
+.history/
+.project
+.classpath
+.settings/
+*.code-workspace
+
+# Editor swap/backup files
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
+# Logs and local runtime data
+*.log
+*.pid
+*.seed
+*.sqlite
+*.sqlite3
+*.db
+*.db-*
+/data/
+/tmp/
+.cache/
+.local/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node/package-manager artifacts
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+bun.lockb
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Build/test output
+dist/
+build/
+coverage/
+.coverage
+.nyc_output/
+.parcel-cache/
+.turbo/
+.next/
+.vite/
+
+# Secrets and local environment overrides
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+*.pem
+*.key
+*.crt

@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest an improvement for the Hermes Agent Home Assistant add-on.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Concrete use-cases help us prioritize.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: As a user, I struggle with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      placeholder: Describe what should be added or changed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: Workarounds you've tried, and why they are not enough.
+
+  - type: textarea
+    id: user_flow
+    attributes:
+      label: Suggested UX / configuration flow
+      placeholder: |
+        1) User opens ...
+        2) User sets ...
+        3) Add-on does ...
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who benefits and how often this would be used.
+      placeholder: This helps users who...
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This is specific to the Home Assistant add-on (not upstream Hermes Agent core).
+          required: false
+        - label: I can help test this on my setup.
+          required: false

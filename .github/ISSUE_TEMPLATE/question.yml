@@ -1,0 +1,70 @@
+name: Question / Help
+description: Ask for setup help, configuration guidance, or troubleshooting clarification.
+title: "question: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask your question here. Include enough context so we can help quickly.
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Installation
+        - Access mode / HTTPS
+        - Tailscale
+        - Reverse proxy
+        - Telegram / Messaging
+        - Skills / Tools
+        - Assist pipeline
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: addon_version
+    attributes:
+      label: Add-on version
+      placeholder: e.g. 0.0.1
+
+  - type: dropdown
+    id: access_mode
+    attributes:
+      label: Access mode (if relevant)
+      options:
+        - custom
+        - local_only
+        - lan_https
+        - lan_reverse_proxy
+        - tailnet_https
+        - not sure
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      placeholder: What are you trying to do, and where are you blocked?
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_tried
+    attributes:
+      label: What have you already tried?
+      placeholder: Steps you've tested and results.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / errors (optional)
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context (optional)
+      description: Network setup, screenshots, links to docs you followed, etc.
