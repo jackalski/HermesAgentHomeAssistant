@@ -2,6 +2,29 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.3] - 2026-05-28
+
+### Changed
+- Replaced `DOCS.md` with a new canonical GitHub-facing documentation baseline.
+- Aligned release metadata for the patch release (`0.0.3`) in add-on configuration.
+
+### Notes
+- This release is intended as a public-facing documentation/reset patch for repository hygiene.
+
+## [0.0.2] - 2026-05-28
+
+### Added
+- Added add-on configuration options for optional tool bootstrap and provider/API tokens.
+- Added startup bootstrap for selected tools:
+  - Telegram dependency check/install (`python-telegram-bot`)
+  - Browser dependency check/install (`agent-browser`)
+  - Skills Hub one-time directory initialization.
+- Added Cloudflare Tunnel guidance using Home Assistant `Cloudflared` add-on in docs.
+
+### Changed
+- Updated image build to install `agent-browser` globally.
+- Updated user-facing command examples to prefer `hermes ...` command style in docs and landing tips.
+
 ## [0.0.1] - 2026-05-27
 
 ### Project Baseline

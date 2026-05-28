@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.1"
+version: "0.0.3"
 slug: hermes_agent
 description: Run Hermes Agent as a Home Assistant add-on.
 url: https://github.com/jackalski/HermesAgentHomeAssistant
@@ -138,6 +138,23 @@ options:
   # MCP server in Hermes Agent so the AI can control Home Assistant entities/services.
   auto_configure_mcp: false
 
+  # Tool bootstrap toggles.
+  # When enabled, run.sh verifies dependencies and auto-installs missing ones when possible.
+  tool_telegram_enabled: false
+  tool_browser_enabled: true
+  tool_skills_hub_enabled: true
+
+  # Optional provider/API tokens managed from add-on configuration (hybrid auth model).
+  # OAuth/device-code providers still require `hermes auth` in terminal.
+  openai_api_key: ""
+  openrouter_api_key: ""
+  anthropic_api_key: ""
+  google_api_key: ""
+  minimax_api_key: ""
+  discord_bot_token: ""
+  github_token: ""
+  xai_api_key: ""
+
 
 schema:
   timezone: str
@@ -169,3 +186,14 @@ schema:
       value: str
   nginx_log_level: list(full|minimal)?
   auto_configure_mcp: bool?
+  tool_telegram_enabled: bool?
+  tool_browser_enabled: bool?
+  tool_skills_hub_enabled: bool?
+  openai_api_key: str?
+  openrouter_api_key: str?
+  anthropic_api_key: str?
+  google_api_key: str?
+  minimax_api_key: str?
+  discord_bot_token: str?
+  github_token: str?
+  xai_api_key: str?
