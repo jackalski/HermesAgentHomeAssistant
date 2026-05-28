@@ -59,6 +59,17 @@ FORCE_IPV4_DNS=$(jq -r '.force_ipv4_dns // true' "$OPTIONS_FILE")
 ACCESS_MODE=$(jq -r '.access_mode // "custom"' "$OPTIONS_FILE")
 NGINX_LOG_LEVEL=$(jq -r '.nginx_log_level // "minimal"' "$OPTIONS_FILE")
 AUTO_CONFIGURE_MCP=$(jq -r '.auto_configure_mcp // false' "$OPTIONS_FILE")
+TOOL_TELEGRAM_ENABLED=$(jq -r '.tool_telegram_enabled // false' "$OPTIONS_FILE")
+TOOL_BROWSER_ENABLED=$(jq -r '.tool_browser_enabled // true' "$OPTIONS_FILE")
+TOOL_SKILLS_HUB_ENABLED=$(jq -r '.tool_skills_hub_enabled // true' "$OPTIONS_FILE")
+OPENAI_API_KEY_OPT=$(jq -r '.openai_api_key // empty' "$OPTIONS_FILE")
+OPENROUTER_API_KEY_OPT=$(jq -r '.openrouter_api_key // empty' "$OPTIONS_FILE")
+ANTHROPIC_API_KEY_OPT=$(jq -r '.anthropic_api_key // empty' "$OPTIONS_FILE")
+GOOGLE_API_KEY_OPT=$(jq -r '.google_api_key // empty' "$OPTIONS_FILE")
+MINIMAX_API_KEY_OPT=$(jq -r '.minimax_api_key // empty' "$OPTIONS_FILE")
+DISCORD_BOT_TOKEN_OPT=$(jq -r '.discord_bot_token // empty' "$OPTIONS_FILE")
+GITHUB_TOKEN_OPT=$(jq -r '.github_token // empty' "$OPTIONS_FILE")
+XAI_API_KEY_OPT=$(jq -r '.xai_api_key // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_TYPE=$(jq -r 'if .gateway_env_vars == null then "null" else (.gateway_env_vars | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.gateway_env_vars // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_JSON=$(jq -c '.gateway_env_vars // []' "$OPTIONS_FILE")
@@ -195,6 +206,85 @@ export NODE_PATH="${PERSISTENT_NODE_GLOBAL}/lib/node_modules:${NODE_PATH:-}"
 export PNPM_HOME="${PERSISTENT_NODE_GLOBAL}/pnpm"
 mkdir -p "$PNPM_HOME"
 export PATH="${PNPM_HOME}:${PATH}"
+
+safe_export_secret_env() {
+  local key="$1"
+  local value="$2"
+  if [ -z "$value" ]; then
+    return 0
+  fi
+  export "${key}=${value}"
+  echo "INFO: Loaded ${key} from add-on configuration."
+}
+
+install_python_package_if_missing() {
+  local module_name="$1"
+  local package_spec="$2"
+  if python3 -c "import ${module_name}" >/dev/null 2>&1; then
+    echo "INFO: Python dependency '${package_spec}' already available."
+    return 0
+  fi
+  echo "INFO: Installing missing Python dependency '${package_spec}'..."
+  if python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
+    echo "INFO: Installed Python dependency '${package_spec}'."
+  else
+    echo "WARN: Could not install Python dependency '${package_spec}'. Tool may stay unavailable."
+  fi
+}
+
+install_npm_package_if_missing() {
+  local command_name="$1"
+  local package_name="$2"
+  if command -v "${command_name}" >/dev/null 2>&1; then
+    echo "INFO: Node dependency '${package_name}' already available."
+    return 0
+  fi
+  echo "INFO: Installing missing Node dependency '${package_name}'..."
+  if npm install -g "${package_name}" >/dev/null 2>&1; then
+    echo "INFO: Installed Node dependency '${package_name}'."
+  else
+    echo "WARN: Could not install Node dependency '${package_name}'. Tool may stay unavailable."
+  fi
+}
+
+initialize_skills_hub_if_enabled() {
+  if [ "$TOOL_SKILLS_HUB_ENABLED" != "true" ] && [ "$TOOL_SKILLS_HUB_ENABLED" != "1" ]; then
+    return 0
+  fi
+  local skills_init_flag="/config/.hermes/.skills_hub_initialized"
+  if [ -f "$skills_init_flag" ]; then
+    return 0
+  fi
+  if ! command -v hermes-agent >/dev/null 2>&1; then
+    echo "WARN: Hermes CLI is unavailable; cannot initialize Skills Hub yet."
+    return 0
+  fi
+  if hermes-agent skills list >/dev/null 2>&1; then
+    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$skills_init_flag"
+    echo "INFO: Skills Hub directory initialized."
+  else
+    echo "WARN: Skills Hub initialization failed. You can retry in terminal with: hermes skills list"
+  fi
+}
+
+bootstrap_selected_tools() {
+  if [ "$TOOL_TELEGRAM_ENABLED" = "true" ] || [ "$TOOL_TELEGRAM_ENABLED" = "1" ]; then
+    install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]==22.6"
+  fi
+
+  if [ "$TOOL_BROWSER_ENABLED" = "true" ] || [ "$TOOL_BROWSER_ENABLED" = "1" ]; then
+    install_npm_package_if_missing "agent-browser" "agent-browser@latest"
+  fi
+}
+
+safe_export_secret_env "OPENAI_API_KEY" "$OPENAI_API_KEY_OPT"
+safe_export_secret_env "OPENROUTER_API_KEY" "$OPENROUTER_API_KEY_OPT"
+safe_export_secret_env "ANTHROPIC_API_KEY" "$ANTHROPIC_API_KEY_OPT"
+safe_export_secret_env "GOOGLE_API_KEY" "$GOOGLE_API_KEY_OPT"
+safe_export_secret_env "MINIMAX_API_KEY" "$MINIMAX_API_KEY_OPT"
+safe_export_secret_env "DISCORD_BOT_TOKEN" "$DISCORD_BOT_TOKEN_OPT"
+safe_export_secret_env "GITHUB_TOKEN" "$GITHUB_TOKEN_OPT"
+safe_export_secret_env "XAI_API_KEY" "$XAI_API_KEY_OPT"
 
 # Protect critical runtime variables from accidental override via gateway_env_vars.
 is_reserved_gateway_env_var() {
@@ -513,6 +603,9 @@ if ! command -v hermes-agent >/dev/null 2>&1; then
   exit 1
 fi
 
+# Verify/install dependencies for user-selected optional tool groups.
+bootstrap_selected_tools
+
 # Bootstrap minimal Hermes config ONLY if missing.
 # We do not overwrite or patch existing configs; onboarding owns everything else.
 HERMES_CONFIG_PATH="/config/.hermes/hermes.json"
@@ -547,6 +640,9 @@ cfg_path.write_text(json.dumps(cfg, indent=2) + "\n", encoding='utf-8')
 print("INFO: Wrote minimal Hermes config (gateway.mode=local, auth.token generated)")
 PY
 fi
+
+# Ensure Skills Hub directory is initialized when enabled.
+initialize_skills_hub_if_enabled
 
 # ------------------------------------------------------------------------------
 # Apply gateway LAN mode settings safely using helper script
@@ -738,42 +834,36 @@ fi
 
 # ------------------------------------------------------------------------------
 # Auto-configure MCP (Model Context Protocol) for Home Assistant
-# Registers HA as an MCP server so Hermes Agent can control HA entities/services.
-# Requires: homeassistant_token set in add-on options + mcporter CLI available.
-# Runs once; re-runs when the token changes.
+# Registers HA in Hermes built-in MCP config (mcp_servers in /config/.hermes/config.yaml).
+# Requires: homeassistant_token set in add-on options.
+# Re-runs when the token changes; stores token in /config/.hermes/.env for ${HOMEASSISTANT_TOKEN}.
 # Auto-detects HA API URL: supervisor proxy if available, else localhost:8123.
 # ------------------------------------------------------------------------------
 if [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
-  if command -v mcporter >/dev/null 2>&1; then
-    # Detect HA API URL: prefer supervisor proxy (works in all add-on network modes),
-    # fall back to localhost:8123 (works with host_network: true).
-    if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
-      MCP_HA_URL="http://supervisor/core/api/mcp"
-    else
-      MCP_HA_URL="http://localhost:8123/api/mcp"
-    fi
-    MCP_FLAG="/config/.hermes/.mcp_ha_configured"
-    MCP_TOKEN_HASH=$(printf '%s' "$HA_TOKEN" | sha256sum | cut -d' ' -f1)
+  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    MCP_HA_URL="http://supervisor/core/api/mcp"
+  else
+    MCP_HA_URL="http://localhost:8123/api/mcp"
+  fi
+  MCP_FLAG="/config/.hermes/.mcp_ha_configured"
+  MCP_TOKEN_HASH=$(printf '%s' "$HA_TOKEN" | sha256sum | cut -d' ' -f1)
 
-    if [ -f "$MCP_FLAG" ] && [ "$(cat "$MCP_FLAG" 2>/dev/null)" = "$MCP_TOKEN_HASH" ]; then
-      echo "INFO: MCP Home Assistant server already configured (token unchanged)"
+  if [ -f "$MCP_FLAG" ] && [ "$(cat "$MCP_FLAG" 2>/dev/null)" = "$MCP_TOKEN_HASH" ]; then
+    echo "INFO: MCP Home Assistant server already configured (token unchanged)"
+  elif [ -f "$HELPER_PATH" ]; then
+    echo "INFO: Configuring Home Assistant MCP in Hermes (mcp_servers) at $MCP_HA_URL ..."
+    if python3 "$HELPER_PATH" configure-ha-mcp HA "$MCP_HA_URL" "$HA_TOKEN"; then
+      printf '%s' "$MCP_TOKEN_HASH" > "$MCP_FLAG"
+      chmod 600 "$MCP_FLAG" 2>/dev/null || true
+      echo "INFO: MCP server 'HA' registered in /config/.hermes/config.yaml"
+      echo "INFO: Reload MCP in Gateway chat with /reload-mcp after first setup if tools are missing"
     else
-      echo "INFO: Configuring MCP for Home Assistant at $MCP_HA_URL ..."
-      # Remove stale entry if present (token may have changed)
-      mcporter config remove HA 2>/dev/null || true
-
-      if mcporter config add HA "$MCP_HA_URL" \
-          --header "Authorization=Bearer $HA_TOKEN" \
-          --scope home 2>&1; then
-        printf '%s' "$MCP_TOKEN_HASH" > "$MCP_FLAG"
-        echo "INFO: MCP server 'HA' registered — Hermes Agent can now control Home Assistant"
-      else
-        echo "WARN: MCP auto-configuration failed. Configure manually in the terminal:"
-        echo "WARN:   mcporter config add HA \"$MCP_HA_URL\" --header \"Authorization=Bearer YOUR_TOKEN\" --scope home"
-      fi
+      rc=$?
+      echo "WARN: MCP auto-configuration failed (exit code ${rc}). Configure manually:"
+      echo "WARN:   Add mcp_servers.HA in /config/.hermes/config.yaml, then run /reload-mcp"
     fi
   else
-    echo "INFO: mcporter not available; skipping MCP auto-configuration (run 'hermes-agent onboard' first)"
+    echo "WARN: hermes_config_helper.py not found; cannot auto-configure MCP"
   fi
 elif [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -z "$HA_TOKEN" ]; then
   echo "INFO: MCP auto-configure enabled but homeassistant_token not set — skipping"

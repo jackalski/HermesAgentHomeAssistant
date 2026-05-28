@@ -13,6 +13,7 @@ This repository contains a Home Assistant add-on that runs **Hermes Agent** insi
 - **Assist Pipeline** — use Hermes Agent as a conversation agent via the OpenAI-compatible API
 - **Browser Automation** — Chromium included for web scraping and automation skills
 - **Proxy Support** — optional outbound `http_proxy` setting for HTTP/HTTPS traffic
+- **Cloudflare Tunnel Ready** — works with Home Assistant `Cloudflared` add-on for secure remote HTTPS access
 - **Persistent Storage** — skills, config, and workspace survive add-on updates
 - **Bundled Tools** — git, vim, nano, bat, fd, ripgrep, curl, jq, python3, pnpm, Homebrew
 

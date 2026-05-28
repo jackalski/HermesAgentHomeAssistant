@@ -24,6 +24,7 @@ Desktop.ini
 *.orig
 
 # Logs and local runtime data
+.tmp-verify/
 *.log
 *.pid
 *.seed

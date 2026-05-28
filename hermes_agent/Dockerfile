@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils \
     file \
     python3 \
+    python3-aiohttp \
+    python3-yaml \
     nginx \
     gnupg \
     build-essential \
@@ -123,7 +125,10 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
 # Install Hermes Agent globally
 RUN npm config set fund false && npm config set audit false \
     && npm install -g hermes-agent@latest \
-    && python3 -m pip install --no-cache-dir websockets
+    && npm install -g agent-browser@latest \
+    && python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
+        websockets \
+        "python-telegram-bot[webhooks]==22.6"
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'

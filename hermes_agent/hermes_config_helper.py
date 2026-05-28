@@ -6,10 +6,18 @@ Safely reads/writes hermes.json without corrupting it.
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover - image installs python3-yaml
+    yaml = None
+
 CONFIG_PATH = Path(os.environ.get("HERMES_CONFIG_PATH", "/config/.hermes/hermes.json"))
+YAML_CONFIG_PATH = Path(os.environ.get("HERMES_YAML_CONFIG_PATH", "/config/.hermes/config.yaml"))
+HERMES_ENV_PATH = Path(os.environ.get("HERMES_ENV_PATH", "/config/.hermes/.env"))
 
 
 def read_config():
@@ -85,6 +93,96 @@ def set_control_ui_origins(origins_csv: str, additional_origins_csv: str = "", d
     return write_config(cfg)
 
 
+def read_yaml_config():
+    if yaml is None:
+        print("ERROR: PyYAML is not available (install python3-yaml)", file=sys.stderr)
+        return None
+    if not YAML_CONFIG_PATH.exists():
+        return {}
+    try:
+        data = yaml.safe_load(YAML_CONFIG_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (yaml.YAMLError, OSError) as e:
+        print(f"ERROR: Failed to read YAML config: {e}", file=sys.stderr)
+        return None
+
+
+def write_yaml_config(cfg):
+    if yaml is None:
+        print("ERROR: PyYAML is not available (install python3-yaml)", file=sys.stderr)
+        return False
+    try:
+        YAML_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        YAML_CONFIG_PATH.write_text(
+            yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False),
+            encoding="utf-8",
+        )
+        return True
+    except OSError as e:
+        print(f"ERROR: Failed to write YAML config: {e}", file=sys.stderr)
+        return False
+
+
+def upsert_env_var(key: str, value: str):
+    if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key):
+        print(f"ERROR: Invalid env var name: {key}", file=sys.stderr)
+        return False
+    if not value:
+        print(f"ERROR: Refusing to write empty value for {key}", file=sys.stderr)
+        return False
+
+    HERMES_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lines = []
+    if HERMES_ENV_PATH.exists():
+        lines = HERMES_ENV_PATH.read_text(encoding="utf-8").splitlines()
+
+    prefix = f"{key}="
+    replaced = False
+    out = []
+    for line in lines:
+        if line.startswith(prefix):
+            out.append(f"{key}={value}")
+            replaced = True
+        else:
+            out.append(line)
+    if not replaced:
+        out.append(f"{key}={value}")
+
+    try:
+        HERMES_ENV_PATH.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+        os.chmod(HERMES_ENV_PATH, 0o600)
+        return True
+    except OSError as e:
+        print(f"ERROR: Failed to update {HERMES_ENV_PATH}: {e}", file=sys.stderr)
+        return False
+
+
+def configure_ha_mcp(server_name: str, url: str, token_env_key: str = "HOMEASSISTANT_TOKEN"):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", server_name or ""):
+        print(f"ERROR: Invalid MCP server name: {server_name!r}", file=sys.stderr)
+        return False
+    if not url or not url.startswith(("http://", "https://")):
+        print(f"ERROR: Invalid MCP URL: {url!r}", file=sys.stderr)
+        return False
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    mcp_servers = cfg.get("mcp_servers")
+    if not isinstance(mcp_servers, dict):
+        mcp_servers = {}
+    mcp_servers[server_name] = {
+        "url": url,
+        "enabled": True,
+        "headers": {
+            "Authorization": f"Bearer ${{{token_env_key}}}",
+        },
+    }
+    cfg["mcp_servers"] = mcp_servers
+    return write_yaml_config(cfg)
+
+
 def repair_known_invalid_settings():
     cfg = read_config()
     if cfg is None:
@@ -126,6 +224,16 @@ def main():
         sys.exit(0 if set_control_ui_origins(origins_csv, additional_origins_csv, disable_device_auth) else 1)
     elif cmd == "repair-known-invalid-settings":
         sys.exit(0 if repair_known_invalid_settings() else 1)
+    elif cmd == "configure-ha-mcp":
+        if len(sys.argv) < 5:
+            print("Usage: hermes_config_helper.py configure-ha-mcp <server_name> <url> <token>", file=sys.stderr)
+            sys.exit(1)
+        server_name = sys.argv[2]
+        url = sys.argv[3]
+        token = sys.argv[4]
+        env_key = "HOMEASSISTANT_TOKEN"
+        ok = upsert_env_var(env_key, token) and configure_ha_mcp(server_name, url, env_key)
+        sys.exit(0 if ok else 1)
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)

@@ -112,4 +112,37 @@ configuration:
     description: Променливи на средата, предавани на Hermes Agent gateway процеса при стартиране (списък от записи name/value в Home Assistant UI; макс. 50 променливи, ключове до 255 знака, стойности до 10000 знака).
   auto_configure_mcp:
     name: Автоматично конфигуриране на MCP за Home Assistant
-    description: "Когато е ВКЛ. и Home Assistant Token е зададен, автоматично регистрира Home Assistant като MCP сървър при всяко стартиране. Това позволява на Hermes Agent да контролира HA устройства, услуги и автоматизации чрез Model Context Protocol. Изключете само ако управлявате mcporter конфигурацията ръчно."
+    description: "Когато е ВКЛ. и Home Assistant Token е зададен, автоматично регистрира Home Assistant във вграденото MCP на Hermes (mcp_servers) при всяко стартиране. Това позволява на Hermes Agent да контролира HA устройства, услуги и автоматизации чрез Model Context Protocol. Изключете само ако управлявате MCP конфигурацията на Hermes ръчно."
+  tool_telegram_enabled:
+    name: Telegram tool bootstrap
+    description: "When ON, startup verifies Telegram dependencies and auto-installs missing python-telegram-bot package when possible."
+  tool_browser_enabled:
+    name: Browser tool bootstrap
+    description: "When ON, startup verifies browser dependencies and auto-installs missing external tools (for example agent-browser) when possible."
+  tool_skills_hub_enabled:
+    name: Skills Hub bootstrap
+    description: "When ON, startup initializes Skills Hub directory automatically (equivalent to first-run `hermes skills list`)."
+  openai_api_key:
+    name: OpenAI API ключ
+    description: "Optional token exported as OPENAI_API_KEY for Hermes runtime."
+  openrouter_api_key:
+    name: OpenRouter API ключ
+    description: "Optional token exported as OPENROUTER_API_KEY for Hermes runtime."
+  anthropic_api_key:
+    name: Anthropic API ключ
+    description: "Optional token exported as ANTHROPIC_API_KEY for Hermes runtime."
+  google_api_key:
+    name: Google API ключ
+    description: "Optional token exported as GOOGLE_API_KEY for Hermes runtime."
+  minimax_api_key:
+    name: MiniMax API ключ
+    description: "Optional token exported as MINIMAX_API_KEY for Hermes runtime."
+  discord_bot_token:
+    name: Discord Bot Token
+    description: "Optional token exported as DISCORD_BOT_TOKEN for Discord tools."
+  github_token:
+    name: GitHub Token
+    description: "Optional token exported as GITHUB_TOKEN for better API rate limits."
+  xai_api_key:
+    name: xAI API ключ
+    description: "Optional token exported as XAI_API_KEY for x_search provider."
