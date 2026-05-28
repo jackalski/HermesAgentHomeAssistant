@@ -112,4 +112,37 @@ configuration:
     description: Zmienne środowiskowe przekazywane do procesu gateway Hermes Agent podczas uruchamiania (lista wpisow name/value w UI Home Assistant; maks. 50 zmiennych, klucze do 255 znakow, wartosci do 10000 znakow).
   auto_configure_mcp:
     name: Automatyczna konfiguracja MCP dla Home Assistant
-    description: "Gdy WŁĄCZONE i token Home Assistant jest ustawiony, automatycznie rejestruje Home Assistant jako serwer MCP przy każdym starcie. Pozwala to Hermes Agent kontrolować urządzenia HA, usługi i automatyzacje przez Model Context Protocol. Wyłącz tylko jeśli zarządzasz konfiguracją mcporter ręcznie."
+    description: "Gdy WŁĄCZONE i token Home Assistant jest ustawiony, automatycznie rejestruje Home Assistant w wbudowanym MCP Hermes (mcp_servers) przy każdym starcie. Pozwala to Hermes Agent kontrolować urządzenia HA, usługi i automatyzacje przez Model Context Protocol. Wyłącz tylko jeśli zarządzasz konfiguracją MCP Hermes ręcznie."
+  tool_telegram_enabled:
+    name: Bootstrap narzędzia Telegram
+    description: "Gdy WŁĄCZONE, start sprawdza zależności Telegram i automatycznie instaluje brakujące pakiety python-telegram-bot, jeśli to możliwe."
+  tool_browser_enabled:
+    name: Bootstrap narzędzia Browser
+    description: "Gdy WŁĄCZONE, start sprawdza zależności przeglądarki i automatycznie instaluje brakujące narzędzia zewnętrzne (np. agent-browser), jeśli to możliwe."
+  tool_skills_hub_enabled:
+    name: Bootstrap Skills Hub
+    description: "Gdy WŁĄCZONE, start automatycznie inicjalizuje katalog Skills Hub (odpowiednik pierwszego `hermes skills list`)."
+  openai_api_key:
+    name: Klucz API OpenAI
+    description: "Opcjonalny token eksportowany jako OPENAI_API_KEY dla runtime Hermes."
+  openrouter_api_key:
+    name: Klucz API OpenRouter
+    description: "Opcjonalny token eksportowany jako OPENROUTER_API_KEY dla runtime Hermes."
+  anthropic_api_key:
+    name: Klucz API Anthropic
+    description: "Opcjonalny token eksportowany jako ANTHROPIC_API_KEY dla runtime Hermes."
+  google_api_key:
+    name: Klucz API Google
+    description: "Opcjonalny token eksportowany jako GOOGLE_API_KEY dla runtime Hermes."
+  minimax_api_key:
+    name: Klucz API MiniMax
+    description: "Opcjonalny token eksportowany jako MINIMAX_API_KEY dla runtime Hermes."
+  discord_bot_token:
+    name: Token bota Discord
+    description: "Opcjonalny token eksportowany jako DISCORD_BOT_TOKEN dla narzędzi Discord."
+  github_token:
+    name: Token GitHub
+    description: "Opcjonalny token eksportowany jako GITHUB_TOKEN dla lepszych limitów API."
+  xai_api_key:
+    name: Klucz API xAI
+    description: "Opcjonalny token eksportowany jako XAI_API_KEY dla dostawcy x_search."

@@ -2,11 +2,20 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.4] - 2026-05-28
+
+### Fixed
+- Auto-configure MCP now writes Home Assistant into Hermes built-in `mcp_servers` (`/config/.hermes/config.yaml`) instead of using `mcporter`.
+
+### Changed
+- MCP token for auto-configure is stored in `/config/.hermes/.env` as `HOMEASSISTANT_TOKEN` and referenced from MCP headers.
+
 ## [0.0.3] - 2026-05-28
 
 ### Changed
 - Replaced `DOCS.md` with a new canonical GitHub-facing documentation baseline.
 - Aligned release metadata for the patch release (`0.0.3`) in add-on configuration.
+- Updated MCP documentation and UI strings to use Hermes built-in MCP (`mcp_servers`, `/reload-mcp`) instead of `mcporter`.
 
 ### Notes
 - This release is intended as a public-facing documentation/reset patch for repository hygiene.

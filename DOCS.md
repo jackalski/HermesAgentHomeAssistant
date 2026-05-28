@@ -694,7 +694,7 @@ The **Model Context Protocol (MCP)** lets Hermes Agent communicate directly with
 3. Set **Auto-Configure MCP for Home Assistant** (`auto_configure_mcp`) to **ON**
 4. Restart the add-on
 
-The add-on will automatically register Home Assistant as an MCP server named `HA` using `mcporter`. It auto-detects the HA API URL (supervisor proxy when available, otherwise `localhost:8123`). Check the logs for:
+The add-on will automatically register Home Assistant as an MCP server named `HA` in Hermes built-in MCP configuration (`mcp_servers` in `/config/.hermes/config.yaml`). The token is stored in `/config/.hermes/.env` as `HOMEASSISTANT_TOKEN` and referenced from the MCP `Authorization` header. It auto-detects the HA API URL (supervisor proxy when available, otherwise `localhost:8123`). Check the logs for:
 
 ```
 INFO: MCP server 'HA' registered — Hermes Agent can now control Home Assistant
@@ -704,15 +704,28 @@ On subsequent restarts, the configuration is skipped if the token hasn’t chang
 
 #### Manual setup
 
-If you prefer to configure MCP manually (or `auto_configure_mcp` is off), run this in the add-on terminal:
+If you prefer to configure MCP manually (or `auto_configure_mcp` is off), add Home Assistant to Hermes built-in MCP in `/config/.hermes/config.yaml`:
 
-```sh
-mcporter config add HA "http://localhost:8123/api/mcp" \
-  --header "Authorization=Bearer YOUR_LONG_LIVED_TOKEN" \
-  --scope home
+```yaml
+mcp_servers:
+  HA:
+    url: "http://localhost:8123/api/mcp"
+    headers:
+      Authorization: "Bearer YOUR_LONG_LIVED_TOKEN"
 ```
 
 Replace `YOUR_LONG_LIVED_TOKEN` with your HA long-lived access token.
+
+Then reload MCP in Hermes (Gateway chat: `/reload-mcp`, or restart the gateway/add-on).
+
+You can also manage MCP servers with Hermes CLI:
+
+```sh
+hermes mcp catalog
+hermes config show | grep -A 12 mcp_servers
+```
+
+See the official Hermes MCP guide: [MCP (Model Context Protocol)](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp).
 
 #### Verifying MCP works
 
@@ -726,13 +739,12 @@ If Hermes Agent can execute HA actions, MCP is working.
 
 #### Refreshing HA context after upgrades
 
-If Hermes Agent has stale or missing Home Assistant data after an upgrade, run:
+If Hermes Agent has stale or missing Home Assistant data after an upgrade:
 
-```sh
-mcporter call home-assistant.GetLiveContext
-```
+1. Run `/reload-mcp` in the Gateway chat (or restart the add-on).
+2. Ask Hermes to refresh HA context, for example: *"List all entities in the kitchen and summarize current states."*
 
-This refreshes the entity/service metadata that Hermes Agent uses.
+This reloads MCP tools from config and refreshes the entity/service metadata Hermes uses.
 
 #### Model requirements
 
@@ -741,12 +753,12 @@ MCP setup requires an AI model that understands tool/skill invocation. Budget mo
 #### Troubleshooting MCP
 
 
-| Symptom                              | Fix                                                                |
-| ------------------------------------ | ------------------------------------------------------------------ |
-| `mcporter: command not found`        | Run `hermes onboard` first, then restart the add-on                |
-| MCP add fails with auth error        | Verify your long-lived token is valid and not expired              |
-| Hermes Agent doesn’t see HA entities | Run `mcporter call home-assistant.GetLiveContext` to refresh       |
-| Model says “what’s MCP?”             | Switch to a more capable model for the initial session (see above) |
+| Symptom                              | Fix                                                                                      |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| MCP server `HA` missing in config    | Enable `auto_configure_mcp`, set `homeassistant_token`, restart add-on                   |
+| MCP add fails with auth error        | Verify your long-lived token is valid and not expired                                    |
+| Hermes Agent doesn’t see HA entities | Run `/reload-mcp`, then ask Hermes to list/refresh HA entities                         |
+| Model says “what’s MCP?”             | Switch to a more capable model for the initial session (see above)                       |
 
 
 To enable it, add to `/config/.hermes/hermes.json`:

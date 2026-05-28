@@ -111,7 +111,7 @@
       <div class="muted" style="margin-top:6px">
         If the Gateway UI says <b>Unauthorized</b>, get your token from the terminal:<br>
         <code>jq -r '.gateway.auth.token' /config/.hermes/hermes.json</code><br>
-        <small style="color:#6b7280">(If <code>hermes-agent config get</code> redacts secrets, read the file directly instead.)</small>
+        <small style="color:#6b7280">(If <code>hermes config show</code> redacts secrets, read the file directly instead.)</small>
       </div>
     </details>
 
@@ -129,13 +129,16 @@
           <li>Restart the add-on — MCP is configured automatically</li>
         </ol>
 
-        <b>Manual (terminal)</b>
-        <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">mcporter config add HA "http://localhost:8123/api/mcp" \
-  --header "Authorization=Bearer YOUR_LONG_LIVED_TOKEN" \
-  --scope home</pre>
+        <b>Manual (Hermes built-in MCP)</b>
+        <p>Add to <code>/config/.hermes/config.yaml</code> under <code>mcp_servers</code>, then run <code>/reload-mcp</code> in Gateway chat:</p>
+        <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">mcp_servers:
+  HA:
+    url: "http://localhost:8123/api/mcp"
+    headers:
+      Authorization: "Bearer YOUR_LONG_LIVED_TOKEN"</pre>
 
         <b>After upgrades</b> — if Hermes Agent has stale HA data:
-        <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">mcporter call home-assistant.GetLiveContext</pre>
+        <p>Run <code>/reload-mcp</code> in Gateway chat, or restart the add-on.</p>
 
         <p><b>Tip:</b> The first MCP session needs a capable model (Gemini 3.1 Pro, Claude Sonnet 4, GPT-4.1). After setup, cheaper models work fine.</p>
       </div>
@@ -243,7 +246,7 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
         friendly: 'The Gateway rejected the browser origin. The Control UI URL is not in the allow-list.',
         fix: ACCESS_MODE === 'lan_https'
           ? 'Restart the add-on — it auto-adds HTTPS origins to <code>controlUi.allowedOrigins</code>. If you changed your LAN IP, a restart regenerates the config.'
-          : 'Manually add your origin: <code>hermes-agent config set gateway.controlUi.allowedOrigins \'["https://YOUR_IP:18789"]\' </code>'
+          : 'Manually add your origin: <code>hermes config set gateway.controlUi.allowedOrigins \'["https://YOUR_IP:18789"]\' </code>'
       },
       '1008': {
         friendly: 'WebSocket disconnected (1008).',
