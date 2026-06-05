@@ -15,6 +15,12 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 ### Fixed
 - Runtime `hermes-agent` npm reconcile no longer installs into `/config/.node_global` (postinstall pip failed with PEP 668 `externally-managed-environment`); installs use image-global `/usr/local` with `PIP_BREAK_SYSTEM_PACKAGES=1`.
 - First boot with `latest` preset seeds the version marker when the image-baked `hermes` CLI is already present (avoids pointless reinstall attempts).
+- MCP auto-configure now re-runs when the resolved MCP URL changes (fixes stale `http://127.0.0.1:8123/api/mcp` entries on HAOS; target is `http://supervisor/core/api/mcp`).
+- Hermes npm reconcile runs before `/config/.node_global` prefix redirect; uses isolated `NPM_CONFIG_PREFIX=/usr/local` so postinstall pip no longer targets persistent prefix. Failed installs no longer retry every boot when image-baked `hermes` is present.
+- Built-in skills sync resolves the real `hermes-agent` npm package path (`/usr/local/lib/node_modules` vs stale `npm root -g` under `/usr/lib`).
+- Startup logs an explicit error when `lan_https` dashboard fails to bind the internal port (nginx 502 on the external HTTPS port).
+- **`lan_https` 502 fix:** modern Hermes splits messaging (`hermes gateway run`) from the Web UI (`hermes dashboard`); the add-on now starts the dashboard on the internal port nginx proxies to. Image installs `fastapi` + `uvicorn` for dashboard startup.
+- HA status exporter probes `/api/status` (dashboard) instead of nonexistent `/api/health`.
 
 ## [0.0.7] - 2026-06-05
 

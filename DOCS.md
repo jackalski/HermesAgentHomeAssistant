@@ -99,10 +99,14 @@ ingress:
 
 ### MCP (control HA from Hermes)
 
+**Prerequisite:** enable Home Assistant’s **Model Context Protocol Server** integration (Settings → Devices & services → Add integration). Without it, `/api/mcp` returns 404 and Hermes shows `HA (http) — failed`.
+
 1. Create a long-lived token in your HA profile.
 2. Paste into `homeassistant_token`; enable `auto_configure_mcp` (or use `setup_profile: home_assistant` with token set).
-3. Restart. Logs should show `MCP server 'HA' registered`.
-4. In gateway chat: `/reload-mcp` if tools are missing.
+3. Leave `hass_url` empty on HAOS (MCP URL becomes `http://supervisor/core/api/mcp`).
+4. Restart. Logs should show `MCP server 'HA' registered` and `Home Assistant URL (supervisor): ... (MCP: http://supervisor/core/api/mcp)`.
+5. In gateway chat: `/reload-mcp` if tools are missing.
+6. In HA: open the MCP Server integration → expose entities you want Hermes to control.
 
 ### Status sensors
 
@@ -161,17 +165,59 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |
 | `no such gateway 'default'` in terminal | Use `hermes gateway run` (not `hermes-agent gateway run`); ensure `HOME=/config` and `HERMES_HOME=/config/.hermes` (ttyd sets this automatically) |
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
+| `502 Bad Gateway` on `https://<LAN-IP>:18789/` | In `lan_https`, nginx on **18789** proxies to **`hermes dashboard`** on **18790** — 502 means the dashboard is not listening (`hermes gateway run` has no HTTP port); see probe below |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
+| `HA (http) — failed` in MCP Servers | Add HA **Model Context Protocol Server** integration; verify token; leave `hass_url` empty on HAOS; run probe below |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
 | HA URL / MCP failures | Set explicit `hass_url`; check add-on log for autodetection line |
 | Low disk | Run `hermes-cleanup` in terminal |
-| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Until then the image-baked `hermes` CLI is used. Pin a version in add-on config if reconcile keeps failing |
+| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo latest > /config/.hermes/.addon-managed-hermes-version` or pin `0.15.2` |
 
 Gateway token (if CLI redacts secrets):
 
 ```sh
 jq -r '.gateway.auth.token' /config/.hermes/hermes.json
 ```
+
+Gateway upstream probe (`lan_https` — add-on terminal):
+
+```sh
+ss -tlnp | grep -E ':18789|:18790'
+curl -sS -m 5 -o /dev/null -w "nginx HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:18789/"
+curl -sS -m 5 -o /dev/null -w "gateway loopback: HTTP %{http_code}\n" "http://127.0.0.1:18790/"
+jq '{port:.gateway.port,bind:.gateway.bind,mode:.gateway.mode}' /config/.hermes/hermes.json
+```
+
+| Check | Healthy |
+|-------|---------|
+| `:18789` listener | nginx TLS proxy (external URL) |
+| `:18790` listener | Hermes **dashboard** Web UI (nginx upstream; required for HTTPS) |
+| Messaging gateway | No HTTP port — `hermes gateway run` + `${HERMES_HOME}/gateway.pid` |
+| Loopback curl to `:18790` | Not connection refused (200/302 from dashboard is fine) |
+
+If **18790 is missing**: dashboard failed to start — read add-on log for `Starting Hermes dashboard` errors, or run:
+
+```sh
+export HOME=/config HERMES_HOME=/config/.hermes
+hermes dashboard --port 18790 --host 127.0.0.1 --no-open --skip-build
+```
+
+If import fails: `python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'`. Confirm `gateway_mode` is `local` (not `remote`).
+
+MCP connectivity probe (add-on terminal):
+
+```sh
+TOKEN="$(grep -E '^HOMEASSISTANT_TOKEN=' /config/.hermes/.env | cut -d= -f2-)"
+URL="$(python3 -c "import yaml; c=yaml.safe_load(open('/config/.hermes/config.yaml')); print(c.get('mcp_servers',{}).get('HA',{}).get('url',''))")"
+curl -sS -m 10 -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: Bearer ${TOKEN}" "${URL}"
+```
+
+| HTTP code | Meaning |
+|-----------|---------|
+| `404` | MCP Server integration not installed in HA |
+| `401` | Token invalid or expired — recreate long-lived token |
+| `405` | Endpoint exists (normal for GET on streamable HTTP MCP) |
+| `000` / timeout | Wrong `hass_url` or network — leave `hass_url` empty on HAOS, or set `http://homeassistant:8123` |
 
 ## Example automations
 
