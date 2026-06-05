@@ -131,6 +131,33 @@ RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false && npm config set audit false \
     && npm install -g hermes-agent@latest \
     && npm install -g agent-browser@latest \
+    && python3 - <<'PY'
+import os, shutil, tarfile, tempfile, urllib.request
+import hermes_cli
+
+site = os.path.dirname(hermes_cli.__file__)
+missing = [s for s in ("dashboard_auth", "proxy") if not os.path.isfile(os.path.join(site, s, "__init__.py"))]
+if not missing:
+    raise SystemExit(0)
+url = "https://github.com/NousResearch/hermes-agent/archive/refs/tags/v2026.5.29.2.tar.gz"
+with tempfile.TemporaryDirectory() as td:
+    arc = os.path.join(td, "src.tgz")
+    urllib.request.urlretrieve(url, arc)
+    with tarfile.open(arc, "r:gz") as tf:
+        tf.extractall(td)
+    tops = [d for d in os.listdir(td) if d.startswith("hermes-agent-") and os.path.isdir(os.path.join(td, d))]
+    if not tops:
+        raise SystemExit("hermes-agent source archive missing top-level directory")
+    top = os.path.join(td, tops[0])
+    for sub in missing:
+        src = os.path.join(top, "hermes_cli", sub)
+        dst = os.path.join(site, sub)
+        if os.path.isdir(src):
+            if os.path.exists(dst):
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+            print(f"patched hermes_cli/{sub}")
+PY
     && python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
         websockets \
         "python-telegram-bot[webhooks]==22.6" \

@@ -2,6 +2,12 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.10] - 2026-06-06
+
+### Fixed
+- Startup repairs broken **hermes-agent 0.15.2** Python wheel (missing `hermes_cli/dashboard_auth` and `hermes_cli/proxy`; upstream [#34701](https://github.com/NousResearch/hermes-agent/issues/34701)) by copying subpackages from the matching GitHub source tag before starting the dashboard.
+- Docker image applies the same wheel repair at build time so `hermes dashboard` works without a first-boot download.
+
 ## [0.0.9] - 2026-06-06
 
 ### Fixed

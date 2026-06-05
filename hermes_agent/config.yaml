@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.9"
+version: "0.0.10"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent as a Home Assistant add-on.

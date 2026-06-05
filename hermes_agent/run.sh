@@ -432,9 +432,97 @@ reconcile_hermes_agent_version() {
   return 1
 }
 
+resolve_hermes_cli_site_packages() {
+  python3 - <<'PY' 2>/dev/null || true
+import os
+import hermes_cli
+print(os.path.dirname(hermes_cli.__file__))
+PY
+}
+
+hermes_python_wheel_missing_subpackages() {
+  local site_pkg="$1"
+  local sub
+  if [ -z "$site_pkg" ] || [ ! -d "$site_pkg" ]; then
+    return 1
+  fi
+  for sub in dashboard_auth proxy; do
+    if [ ! -f "${site_pkg}/${sub}/__init__.py" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# hermes-agent 0.15.2 PyPI wheel omits hermes_cli/dashboard_auth and hermes_cli/proxy (upstream #34701).
+repair_hermes_python_wheel_subpackages() {
+  local site_pkg src_dir tag archive_url top_dir sub ver_line
+  site_pkg="$(resolve_hermes_cli_site_packages)"
+  if [ -z "$site_pkg" ]; then
+    echo "WARN: hermes_cli site-packages not found; skipping Python wheel subpackage repair."
+    return 0
+  fi
+  if ! hermes_python_wheel_missing_subpackages "$site_pkg"; then
+    return 0
+  fi
+
+  echo "INFO: Repairing hermes-agent Python wheel (missing hermes_cli/dashboard_auth or proxy)..."
+
+  tag="v2026.5.29.2"
+  ver_line="$(hermes --version 2>/dev/null | head -1 || true)"
+  if echo "$ver_line" | grep -qE '\(20[0-9]{2}\.[0-9]+\.[0-9]+\.[0-9]+\)'; then
+    tag="v$(echo "$ver_line" | sed -n 's/.*(\(20[0-9][0-9.]*\)).*/\1/p')"
+  fi
+
+  src_dir="$(mktemp -d /tmp/hermes-src-XXXXXX)"
+  archive_url="https://github.com/NousResearch/hermes-agent/archive/refs/tags/${tag}.tar.gz"
+
+  if ! curl -fsSL "$archive_url" -o "${src_dir}/src.tgz"; then
+    echo "WARN: Could not download Hermes source tag ${tag}; trying packaging-fix commit..."
+    archive_url="https://github.com/NousResearch/hermes-agent/archive/45b00bb49.tar.gz"
+    if ! curl -fsSL "$archive_url" -o "${src_dir}/src.tgz"; then
+      echo "ERROR: Failed to download Hermes source for Python wheel repair."
+      rm -rf "$src_dir"
+      return 1
+    fi
+  fi
+
+  if ! tar -xzf "${src_dir}/src.tgz" -C "$src_dir"; then
+    echo "ERROR: Failed to extract Hermes source for Python wheel repair."
+    rm -rf "$src_dir"
+    return 1
+  fi
+
+  top_dir="$(find "$src_dir" -mindepth 1 -maxdepth 1 -type d | head -1)"
+  if [ -z "$top_dir" ] || [ ! -d "${top_dir}/hermes_cli" ]; then
+    echo "ERROR: Hermes source archive layout unexpected."
+    rm -rf "$src_dir"
+    return 1
+  fi
+
+  for sub in dashboard_auth proxy; do
+    if [ ! -f "${site_pkg}/${sub}/__init__.py" ] && [ -d "${top_dir}/hermes_cli/${sub}" ]; then
+      rm -rf "${site_pkg}/${sub}"
+      cp -a "${top_dir}/hermes_cli/${sub}" "${site_pkg}/${sub}"
+      echo "INFO: Patched hermes_cli/${sub} into site-packages."
+    fi
+  done
+
+  rm -rf "$src_dir"
+
+  if hermes_python_wheel_missing_subpackages "$site_pkg"; then
+    echo "ERROR: hermes_cli subpackage repair incomplete; dashboard will fail until fixed."
+    return 1
+  fi
+  echo "INFO: hermes_cli subpackages repair complete."
+  return 0
+}
+
 if ! reconcile_hermes_agent_version; then
   exit 1
 fi
+
+repair_hermes_python_wheel_subpackages || true
 
 if ! command -v hermes >/dev/null 2>&1; then
   echo "ERROR: hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
@@ -1743,7 +1831,8 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
     echo "ERROR: https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
     echo "ERROR: Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
     echo "ERROR: Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
-    echo "ERROR: If import fails, install Web UI deps: python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'"
+    echo "ERROR: If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.10+ (0.15.2 wheel bug) or set hermes_agent_version_preset to latest."
+    echo "ERROR: If import fails otherwise, install Web UI deps: python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'"
   fi
 fi
 
