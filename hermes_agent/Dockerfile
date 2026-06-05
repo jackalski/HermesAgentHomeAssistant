@@ -137,7 +137,9 @@ RUN python3 -m pip config set global.break-system-packages true \
         edge-tts \
         ddgs \
         "discord.py[voice]==2.7.1" \
-        "brotlicffi==1.2.0.1"
+        "brotlicffi==1.2.0.1" \
+        "fastapi==0.133.1" \
+        "uvicorn[standard]==0.41.0"
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'

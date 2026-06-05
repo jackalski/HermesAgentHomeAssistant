@@ -298,8 +298,8 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
       const statusEl = $('statusGateway');
       try {
         const url = GW_PUBLIC_URL
-          ? GW_PUBLIC_URL.replace(/\/$/, '') + '/api/health'
-          : '/api/health'; // fallback to relative (only works if proxied)
+          ? GW_PUBLIC_URL.replace(/\/$/, '') + '/api/status'
+          : '/api/status'; // fallback to relative (only works if proxied)
         const r = await fetch(url, { mode: 'no-cors', cache: 'no-store' }).catch(() => null);
         if (r && (r.ok || r.type === 'opaque')) {
           statusEl.innerHTML = '<span class="icon">✅</span><span>Gateway: <b>running</b></span>';

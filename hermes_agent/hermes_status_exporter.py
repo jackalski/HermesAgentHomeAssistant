@@ -91,7 +91,7 @@ def _provider_configured(env_key: str, api_keys: dict, env_presence: dict[str, b
 
 
 def _probe_gateway_health(port: int) -> tuple[bool, str | None]:
-    url = f"http://127.0.0.1:{port}/api/health"
+    url = f"http://127.0.0.1:{port}/api/status"
     try:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=5) as resp:

@@ -343,17 +343,139 @@ export XDG_CONFIG_HOME=/config
 mkdir -p /config/.hermes /config/.hermes/identity /config/hermesd /config/keys /config/secrets
 
 # ------------------------------------------------------------------------------
+# Hermes Agent npm version reconcile (must run BEFORE redirecting npm prefix to /config)
+# ------------------------------------------------------------------------------
+resolve_hermes_agent_npm_spec() {
+  local preset
+  preset="$(echo "${HERMES_AGENT_VERSION_PRESET:-latest}" | tr '[:upper:]' '[:lower:]')"
+  case "$preset" in
+    latest)
+      echo "latest"
+      ;;
+    custom)
+      if [ -n "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
+        echo "$HERMES_AGENT_VERSION_CUSTOM"
+      else
+        echo "WARN: hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using latest." >&2
+        echo "latest"
+      fi
+      ;;
+    *)
+      echo "$preset"
+      ;;
+  esac
+}
+
+# Install hermes-agent to the image-global npm prefix (matches Dockerfile layout).
+# Never use /config/.node_global — postinstall pip fails with PEP 668 on Debian.
+install_hermes_agent_npm() {
+  local spec="$1"
+  local image_npm_prefix="/usr/local"
+
+  rm -rf "/config/.node_global/lib/node_modules/hermes-agent" 2>/dev/null || true
+  rm -f "/config/.node_global/bin/hermes" "/config/.node_global/bin/hermes-agent" 2>/dev/null || true
+
+  HOME=/root \
+    NPM_CONFIG_PREFIX="${image_npm_prefix}" \
+    NPM_CONFIG_USERCONFIG=/root/.npmrc \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    npm install -g "hermes-agent@${spec}" --prefix "${image_npm_prefix}"
+}
+
+reconcile_hermes_agent_version() {
+  local spec marker installed_marker
+  spec="$(resolve_hermes_agent_npm_spec)"
+  marker="/config/.hermes/.addon-managed-hermes-version"
+  installed_marker=""
+  if [ -f "$marker" ]; then
+    installed_marker="$(tr -d '\r\n' < "$marker" 2>/dev/null || true)"
+  fi
+
+  if command -v hermes >/dev/null 2>&1; then
+    if [ "$installed_marker" = "$spec" ]; then
+      echo "INFO: Hermes Agent npm spec '${spec}' already installed."
+      return 0
+    fi
+    if [ "$installed_marker" = "__image_baked__" ] && [ "$spec" = "latest" ]; then
+      echo "INFO: Using image-baked hermes CLI (preset: latest)."
+      printf '%s\n' "$spec" > "$marker"
+      chmod 600 "$marker" 2>/dev/null || true
+      return 0
+    fi
+    if [ -z "$installed_marker" ] && [ "$spec" = "latest" ]; then
+      echo "INFO: Using image-baked hermes CLI; seeding version marker (preset: latest)."
+      printf '%s\n' "$spec" > "$marker"
+      chmod 600 "$marker" 2>/dev/null || true
+      return 0
+    fi
+  fi
+
+  echo "INFO: Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
+  if install_hermes_agent_npm "$spec"; then
+    printf '%s\n' "$spec" > "$marker"
+    chmod 600 "$marker" 2>/dev/null || true
+    echo "INFO: Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
+    return 0
+  fi
+
+  echo "ERROR: Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
+  if command -v hermes >/dev/null 2>&1; then
+    echo "WARN: Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
+    printf '%s\n' "$spec" > "$marker"
+    chmod 600 "$marker" 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
+if ! reconcile_hermes_agent_version; then
+  exit 1
+fi
+
+if ! command -v hermes >/dev/null 2>&1; then
+  echo "ERROR: hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
+  exit 1
+fi
+
+# Resolve image-global hermes-agent package root (npm root -g can disagree with install prefix).
+resolve_image_hermes_node_modules() {
+  local candidate hermes_bin prefix_root
+  for candidate in \
+    "/usr/local/lib/node_modules" \
+    "$(HOME=/root NPM_CONFIG_PREFIX=/usr/local npm root -g 2>/dev/null)" \
+    "$(HOME=/root npm root -g 2>/dev/null)" \
+    "/usr/lib/node_modules"; do
+    [ -n "$candidate" ] || continue
+    if [ -d "${candidate}/hermes-agent" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  hermes_bin="$(command -v hermes 2>/dev/null || true)"
+  if [ -n "$hermes_bin" ]; then
+    prefix_root="$(cd "$(dirname "$hermes_bin")/.." 2>/dev/null && pwd || true)"
+    candidate="${prefix_root}/lib/node_modules"
+    if [ -n "$prefix_root" ] && [ -d "${candidate}/hermes-agent" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# ------------------------------------------------------------------------------
 # Sync built-in Hermes Agent skills from image to persistent storage
 # On each startup, copy new/updated built-in skills so they survive rebuilds.
 # We sync them to /config/.hermes/skills and symlink back.
-# NOTE: We cannot use `npm root -g` here because HOME=/config may contain a
-# persisted .npmrc with a custom prefix from a previous run. Instead, we
-# resolve the real image path by temporarily overriding HOME.
 # ------------------------------------------------------------------------------
-IMAGE_SKILLS_DIR="$(HOME=/root npm root -g 2>/dev/null)/hermes-agent/skills"
+IMAGE_NPM_MODULES="$(resolve_image_hermes_node_modules 2>/dev/null || true)"
+IMAGE_SKILLS_DIR=""
+if [ -n "$IMAGE_NPM_MODULES" ]; then
+  IMAGE_SKILLS_DIR="${IMAGE_NPM_MODULES}/hermes-agent/skills"
+fi
 PERSISTENT_SKILLS_DIR="/config/.hermes/skills"
 
-if [ -d "$IMAGE_SKILLS_DIR" ] && [ ! -L "$IMAGE_SKILLS_DIR" ]; then
+if [ -n "$IMAGE_SKILLS_DIR" ] && [ -d "$IMAGE_SKILLS_DIR" ] && [ ! -L "$IMAGE_SKILLS_DIR" ]; then
   mkdir -p "$PERSISTENT_SKILLS_DIR"
   # Sync skills: --update replaces older files so upgrades propagate,
   # but doesn't delete user-added files in persistent storage.
@@ -366,10 +488,12 @@ if [ -d "$IMAGE_SKILLS_DIR" ] && [ ! -L "$IMAGE_SKILLS_DIR" ]; then
   rm -rf "$IMAGE_SKILLS_DIR"
   ln -sf "$PERSISTENT_SKILLS_DIR" "$IMAGE_SKILLS_DIR"
   echo "INFO: Synced built-in skills to persistent storage at $PERSISTENT_SKILLS_DIR"
-elif [ -L "$IMAGE_SKILLS_DIR" ]; then
+elif [ -n "$IMAGE_SKILLS_DIR" ] && [ -L "$IMAGE_SKILLS_DIR" ]; then
   echo "INFO: Built-in skills already linked to persistent storage"
+elif [ -d "$PERSISTENT_SKILLS_DIR" ]; then
+  echo "INFO: Built-in skills served from persistent storage at $PERSISTENT_SKILLS_DIR"
 else
-  echo "WARN: Built-in skills directory not found at $IMAGE_SKILLS_DIR"
+  echo "WARN: Built-in skills directory not found (image package: ${IMAGE_SKILLS_DIR:-unknown})"
 fi
 
 # ------------------------------------------------------------------------------
@@ -488,81 +612,6 @@ export_gateway_tool_env() {
   export HERMES_INTERACTIVE=1
 }
 
-resolve_hermes_agent_npm_spec() {
-  local preset
-  preset="$(echo "${HERMES_AGENT_VERSION_PRESET:-latest}" | tr '[:upper:]' '[:lower:]')"
-  case "$preset" in
-    latest)
-      echo "latest"
-      ;;
-    custom)
-      if [ -n "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
-        echo "$HERMES_AGENT_VERSION_CUSTOM"
-      else
-        echo "WARN: hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using latest." >&2
-        echo "latest"
-      fi
-      ;;
-    *)
-      echo "$preset"
-      ;;
-  esac
-}
-
-# Install hermes-agent to the image-global npm prefix (matches Dockerfile layout).
-# Persistent /config/.node_global prefix breaks postinstall pip on PEP 668 systems.
-install_hermes_agent_npm() {
-  local spec="$1"
-  local image_npm_prefix="/usr/local"
-
-  rm -rf "${PERSISTENT_NODE_GLOBAL:-/config/.node_global}/lib/node_modules/hermes-agent" 2>/dev/null || true
-  rm -f "${PERSISTENT_NODE_GLOBAL:-/config/.node_global}/bin/hermes" \
-    "${PERSISTENT_NODE_GLOBAL:-/config/.node_global}/bin/hermes-agent" 2>/dev/null || true
-
-  HOME=/root PIP_BREAK_SYSTEM_PACKAGES=1 npm install -g "hermes-agent@${spec}" --prefix "${image_npm_prefix}"
-}
-
-reconcile_hermes_agent_version() {
-  local spec marker installed_marker
-  spec="$(resolve_hermes_agent_npm_spec)"
-  marker="/config/.hermes/.addon-managed-hermes-version"
-  installed_marker=""
-  if [ -f "$marker" ]; then
-    installed_marker="$(tr -d '\r\n' < "$marker" 2>/dev/null || true)"
-  fi
-
-  if [ "$installed_marker" = "$spec" ] && command -v hermes >/dev/null 2>&1; then
-    echo "INFO: Hermes Agent npm spec '${spec}' already installed."
-    return 0
-  fi
-
-  if [ -z "$installed_marker" ] && command -v hermes >/dev/null 2>&1 && [ "$spec" = "latest" ]; then
-    echo "INFO: Using image-baked hermes CLI; seeding version marker (preset: latest)."
-    printf '%s\n' "$spec" > "$marker"
-    chmod 600 "$marker" 2>/dev/null || true
-    return 0
-  fi
-
-  echo "INFO: Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
-  if install_hermes_agent_npm "$spec"; then
-    printf '%s\n' "$spec" > "$marker"
-    chmod 600 "$marker" 2>/dev/null || true
-    echo "INFO: Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
-    return 0
-  fi
-
-  echo "ERROR: Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
-  if command -v hermes >/dev/null 2>&1; then
-    echo "WARN: Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
-    if [ -z "$installed_marker" ]; then
-      printf '%s\n' "__image_baked__" > "$marker"
-      chmod 600 "$marker" 2>/dev/null || true
-    fi
-    return 0
-  fi
-  return 1
-}
-
 require_hermes_cli() {
   if command -v hermes >/dev/null 2>&1; then
     return 0
@@ -594,6 +643,53 @@ ensure_default_hermes_profile() {
 run_hermes_gateway() {
   export HERMES_GATEWAY_NO_SUPERVISE=1
   hermes gateway run --no-supervise &
+}
+
+resolve_hermes_web_dist() {
+  local web_dist=""
+  web_dist="$(python3 - <<'PY' 2>/dev/null || true
+import pathlib
+try:
+    import hermes_cli
+except ImportError:
+    raise SystemExit(0)
+dist = pathlib.Path(hermes_cli.__file__).resolve().parent / "web_dist"
+if (dist / "index.html").is_file():
+    print(dist)
+PY
+)"
+  if [ -n "$web_dist" ] && [ -f "${web_dist}/index.html" ]; then
+    echo "$web_dist"
+    return 0
+  fi
+  return 1
+}
+
+run_hermes_dashboard() {
+  local web_dist port host
+  port="$GATEWAY_INTERNAL_PORT"
+  host="127.0.0.1"
+
+  if ! command -v hermes >/dev/null 2>&1; then
+    echo "WARN: hermes CLI missing; cannot start dashboard Web UI."
+    return 1
+  fi
+  if ! hermes dashboard --help >/dev/null 2>&1; then
+    echo "WARN: hermes dashboard unavailable in installed Hermes version."
+    return 1
+  fi
+
+  web_dist="$(resolve_hermes_web_dist 2>/dev/null || true)"
+  if [ -z "$web_dist" ]; then
+    echo "WARN: Hermes dashboard web_dist not found; HTTPS gateway UI will return 502."
+    return 1
+  fi
+
+  export HERMES_WEB_DIST="$web_dist"
+  echo "INFO: Starting Hermes dashboard (Web UI) on ${host}:${port} ..."
+  hermes dashboard --port "$port" --host "$host" --no-open --skip-build &
+  DASHBOARD_PID=$!
+  return 0
 }
 
 start_cdp_chromium_if_enabled() {
@@ -921,6 +1017,7 @@ EOF
 # Graceful shutdown handling (PID 1 trap) to reduce stale locks
 # ------------------------------------------------------------------------------
 GW_PID=""
+DASHBOARD_PID=""
 GW_RELAY_PID=""
 NGINX_PID=""
 TTYD_PID=""
@@ -940,6 +1037,11 @@ shutdown() {
   if [ -n "${TTYD_PID}" ] && kill -0 "${TTYD_PID}" >/dev/null 2>&1; then
     kill -TERM "${TTYD_PID}" >/dev/null 2>&1 || true
     wait "${TTYD_PID}" || true
+  fi
+
+  if [ -n "${DASHBOARD_PID}" ] && kill -0 "${DASHBOARD_PID}" >/dev/null 2>&1; then
+    kill -TERM "${DASHBOARD_PID}" >/dev/null 2>&1 || true
+    wait "${DASHBOARD_PID}" 2>/dev/null || true
   fi
 
   if [ -n "${GW_PID}" ] && kill -0 "${GW_PID}" >/dev/null 2>&1; then
@@ -972,10 +1074,6 @@ shutdown() {
 }
 
 trap shutdown INT TERM
-
-if ! reconcile_hermes_agent_version; then
-  exit 1
-fi
 
 if ! require_hermes_cli; then
   exit 1
@@ -1312,7 +1410,7 @@ fi
 # Proxy shim for undici/Hermes startup
 # Keep official Hermes Agent npm release while enabling HTTP(S)_PROXY support.
 # ------------------------------------------------------------------------------
-HERMES_GLOBAL_NODE_MODULES="$(HOME=/root npm root -g 2>/dev/null || true)"
+HERMES_GLOBAL_NODE_MODULES="$(resolve_image_hermes_node_modules 2>/dev/null || HOME=/root NPM_CONFIG_PREFIX=/usr/local npm root -g 2>/dev/null || true)"
 if [ -f /usr/local/lib/hermes-proxy-shim.cjs ]; then
   if [ -n "${NODE_OPTIONS:-}" ]; then
     export NODE_OPTIONS="--require /usr/local/lib/hermes-proxy-shim.cjs ${NODE_OPTIONS}"
@@ -1326,8 +1424,8 @@ fi
 # Auto-configure MCP (Model Context Protocol) for Home Assistant
 # Registers HA in Hermes built-in MCP config (mcp_servers in /config/.hermes/config.yaml).
 # Requires: homeassistant_token set in add-on options.
-# Re-runs when the token changes; stores token in /config/.hermes/.env for ${HOMEASSISTANT_TOKEN}.
-# Auto-detects HA API URL: supervisor proxy if available, else localhost:8123.
+# Re-runs when the token or resolved MCP URL changes; stores token in /config/.hermes/.env for ${HOMEASSISTANT_TOKEN}.
+# On HAOS, MCP URL should be http://supervisor/core/api/mcp (not loopback) — reconciled every start.
 # ------------------------------------------------------------------------------
 if [ "$EFFECTIVE_AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
   if [ -z "$MCP_HA_URL" ]; then
@@ -1335,13 +1433,14 @@ if [ "$EFFECTIVE_AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
   fi
   MCP_FLAG="/config/.hermes/.mcp_ha_configured"
   MCP_TOKEN_HASH=$(printf '%s' "$HA_TOKEN" | sha256sum | cut -d' ' -f1)
+  MCP_MARKER="${MCP_TOKEN_HASH}:${MCP_HA_URL}"
 
-  if [ -f "$MCP_FLAG" ] && [ "$(cat "$MCP_FLAG" 2>/dev/null)" = "$MCP_TOKEN_HASH" ]; then
-    echo "INFO: MCP Home Assistant server already configured (token unchanged)"
+  if [ -f "$MCP_FLAG" ] && [ "$(tr -d '\r\n' < "$MCP_FLAG" 2>/dev/null || true)" = "$MCP_MARKER" ]; then
+    echo "INFO: MCP Home Assistant server already configured (${MCP_HA_URL})"
   elif [ -f "$HELPER_PATH" ]; then
     echo "INFO: Configuring Home Assistant MCP in Hermes (mcp_servers) at $MCP_HA_URL ..."
     if python3 "$HELPER_PATH" configure-ha-mcp HA "$MCP_HA_URL" "$HA_TOKEN"; then
-      printf '%s' "$MCP_TOKEN_HASH" > "$MCP_FLAG"
+      printf '%s' "$MCP_MARKER" > "$MCP_FLAG"
       chmod 600 "$MCP_FLAG" 2>/dev/null || true
       echo "INFO: MCP server 'HA' registered in /config/.hermes/config.yaml"
       echo "INFO: Reload MCP in Gateway chat with /reload-mcp after first setup if tools are missing"
@@ -1529,8 +1628,12 @@ PY
     hermes node run --host "$NODE_HOST" --port "$NODE_PORT" $NODE_TLS_FLAG &
   else
     run_hermes_gateway
+    GW_PID=$!
+    run_hermes_dashboard || true
   fi
-  GW_PID=$!
+  if [ -z "${GW_PID:-}" ]; then
+    GW_PID=$!
+  fi
   return 0
 }
 
@@ -1618,6 +1721,26 @@ find_gateway_daemon_pid() {
 
 if ! start_hermes_runtime; then
   exit 1
+fi
+
+if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
+  GATEWAY_BIND_OK=false
+  for _gw_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${GATEWAY_INTERNAL_PORT} "; then
+      GATEWAY_BIND_OK=true
+      break
+    fi
+    sleep 2
+  done
+  if [ "$GATEWAY_BIND_OK" = "true" ]; then
+    echo "INFO: Dashboard listening on 127.0.0.1:${GATEWAY_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
+  else
+    echo "ERROR: Dashboard did not bind port ${GATEWAY_INTERNAL_PORT} within 30s."
+    echo "ERROR: https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
+    echo "ERROR: Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
+    echo "ERROR: Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
+    echo "ERROR: If import fails, install Web UI deps: python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'"
+  fi
 fi
 
 start_gw_relay
