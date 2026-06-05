@@ -6,6 +6,10 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 
 ### Fixed
 - Removed deprecated `build.yaml`; base images are set in `Dockerfile` via `BUILD_ARCH` (resolves Supervisor `build.yaml is deprecated` warning).
+- Aligned `claude_sonnet` model preset with Anthropic provider default (`claude-sonnet-4-6`).
+- Setup readiness and `api_key_configured` status now require a main LLM provider key (not auxiliary tokens such as Discord/GitHub).
+- Removed stray DEBUG startup log lines for terminal options.
+- Status exporter process is stopped cleanly on add-on shutdown (no orphaned background loop).
 
 ### Changed
 - Add-on marked **Experimental** (`stage: experimental`) in the Home Assistant add-on store.
