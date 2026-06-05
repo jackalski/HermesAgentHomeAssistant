@@ -132,7 +132,11 @@ RUN npm config set fund false && npm config set audit false \
     && npm install -g agent-browser@latest \
     && python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
         websockets \
-        "python-telegram-bot[webhooks]==22.6"
+        "python-telegram-bot[webhooks]==22.6" \
+        edge-tts \
+        ddgs \
+        "discord.py[voice]==2.7.1" \
+        "brotlicffi==1.2.0.1"
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'

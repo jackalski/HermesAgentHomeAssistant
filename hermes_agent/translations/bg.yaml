@@ -15,13 +15,13 @@ configuration:
     name: Публичен URL на Gateway
     description: Публичен базов URL за отваряне на Gateway уеб интерфейса в нов таб (не вграден). Пример - https://example.duckdns.org:12345 или http://192.168.1.10:18789
   
-  homeassistant_token:
-    name: Home Assistant токен
-    description: Опционално - дълготраен токен на Home Assistant за локални API скриптове/инструменти и MCP auto-configure
-
   hass_url:
     name: Home Assistant URL
     description: "Базов URL на Home Assistant за скриптове/инструменти. Оставете празно за автоматично откриване на HAOS (препоръчително). Синхронизира се като HOMEASSISTANT_URL в /config/.hermes/.env при зададен токен."
+
+  homeassistant_token:
+    name: Home Assistant токен
+    description: Дълготраен токен за MCP и HA скриптове. Скрит след запис. Синхронизира се в /config/secrets/homeassistant.token и /config/.hermes/.env при рестарт.
 
   setup_profile:
     name: Профил за настройка

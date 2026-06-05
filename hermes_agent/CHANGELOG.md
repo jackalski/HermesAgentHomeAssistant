@@ -2,6 +2,12 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.7] - 2026-06-05
+
+### Fixed
+- Restored **Home Assistant Token** in add-on Configuration UI (`homeassistant_token` was missing from `options` since 0.0.5; schema now uses `password?` for masked input).
+- Bootstrap core Hermes tool prerequisites on startup: `HASS_TOKEN`/`HASS_URL` aliases, gateway session env for cronjob/messaging, free `ddgs` web search backend, `edge-tts` for TTS, optional Discord deps, and local Chromium CDP for `browser-cdp`.
+
 ## [0.0.6] - 2026-06-05
 
 ### Fixed

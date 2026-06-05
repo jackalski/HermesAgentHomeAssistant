@@ -15,13 +15,13 @@ configuration:
     name: Öffentliche Gateway-URL
     description: Öffentliche Basis-URL zum Öffnen der Gateway-Weboberfläche in einem neuen Tab (nicht eingebettet). Beispiel - https://example.duckdns.org:12345 oder http://192.168.1.10:18789
   
-  homeassistant_token:
-    name: Home Assistant Token
-    description: Optional - Langlebiger Home Assistant Token für lokale API-Skripte/Tools und MCP-Auto-Konfiguration
-
   hass_url:
     name: Home Assistant URL
     description: "Home Assistant Basis-URL für Skripte/Tools. Leer lassen für Autodetektion auf HAOS (empfohlen). Wird als HOMEASSISTANT_URL in /config/.hermes/.env synchronisiert, wenn ein Token gesetzt ist."
+
+  homeassistant_token:
+    name: Home Assistant Token
+    description: Langlebiger Zugriffstoken für MCP und HA-Skripte. Nach dem Speichern maskiert. Wird beim Neustart nach /config/secrets/homeassistant.token und /config/.hermes/.env synchronisiert.
 
   setup_profile:
     name: Setup-Profil

@@ -223,6 +223,9 @@ PROVIDER_KEY_PRIORITY = (
 # Main LLM provider env keys only (excludes auxiliary/search tokens).
 MAIN_MODEL_PROVIDER_ENV_KEYS = tuple(env_key for _, env_key in PROVIDER_KEY_PRIORITY)
 
+# Local CDP endpoint for browser-cdp tool (headless Chromium in the add-on image).
+BROWSER_CDP_URL = "http://127.0.0.1:9222"
+
 
 def model_needs_bootstrap(cfg: dict) -> bool:
     if not cfg:
@@ -509,16 +512,91 @@ def bootstrap_browser_if_enabled(enabled: bool):
         return False
 
     browser = cfg.get("browser")
-    if isinstance(browser, dict) and browser.get("noSandbox") is True:
+    if isinstance(browser, dict):
+        updated = dict(browser)
+    else:
+        updated = {}
+
+    changed = False
+    if not updated.get("noSandbox"):
+        updated["enabled"] = True
+        updated["headless"] = True
+        updated["noSandbox"] = True
+        changed = True
+    if not str(updated.get("cdp_url", "") or "").strip():
+        updated["cdp_url"] = BROWSER_CDP_URL
+        changed = True
+
+    if not changed:
         return True
 
-    cfg["browser"] = {
-        "enabled": True,
-        "headless": True,
-        "noSandbox": True,
-    }
+    cfg["browser"] = updated
     if write_yaml_config(cfg):
-        print(f"INFO: Bootstrapped Docker-safe browser settings in {YAML_CONFIG_PATH}")
+        print(
+            f"INFO: Bootstrapped Docker-safe browser settings in {YAML_CONFIG_PATH} "
+            f"(cdp_url={BROWSER_CDP_URL})"
+        )
+        return True
+    return False
+
+
+def _resolve_web_backend(firecrawl_key: str, searxng_url: str) -> str:
+    if (firecrawl_key or "").strip() or _env_has_value("FIRECRAWL_API_KEY"):
+        return "firecrawl"
+    if (searxng_url or "").strip() or _env_has_value("SEARXNG_URL"):
+        return "searxng"
+    return "ddgs"
+
+
+def _env_has_value(key: str) -> bool:
+    if not HERMES_ENV_PATH.exists():
+        return False
+    prefix = f"{key}="
+    try:
+        for line in HERMES_ENV_PATH.read_text(encoding="utf-8").splitlines():
+            if line.startswith(prefix) and line[len(prefix) :].strip():
+                return True
+    except OSError:
+        pass
+    return False
+
+
+def bootstrap_web_search_if_missing(firecrawl_key: str, searxng_url: str):
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    web = cfg.get("web")
+    if isinstance(web, dict) and str(web.get("backend", "") or "").strip():
+        return True
+
+    backend = _resolve_web_backend(firecrawl_key, searxng_url)
+    cfg["web"] = {"backend": backend}
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped web search backend in {YAML_CONFIG_PATH}: {backend}")
+        return True
+    return False
+
+
+def bootstrap_kanban_toolset_if_missing(setup_profile: str):
+    profile = (setup_profile or "").strip() or "home_assistant"
+    if profile not in ("home_assistant", "general"):
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    toolsets = cfg.get("toolsets")
+    if isinstance(toolsets, list):
+        if "kanban" in toolsets:
+            return True
+        cfg["toolsets"] = [*toolsets, "kanban"]
+    else:
+        cfg["toolsets"] = ["kanban"]
+
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped kanban toolset in {YAML_CONFIG_PATH} for profile {profile}")
         return True
     return False
 
@@ -547,10 +625,16 @@ def sync_homeassistant_env(url: str, token: str):
     ok = True
     if base:
         ok = upsert_env_var("HOMEASSISTANT_URL", base) and ok
+        ok = upsert_env_var("HASS_URL", base) and ok
     if tok:
         ok = upsert_env_var("HOMEASSISTANT_TOKEN", tok) and ok
+        ok = upsert_env_var("HASS_TOKEN", tok) and ok
     if ok and (base or tok):
-        synced = [k for k, v in (("HOMEASSISTANT_URL", base), ("HOMEASSISTANT_TOKEN", tok)) if v]
+        synced = []
+        if base:
+            synced.extend(["HOMEASSISTANT_URL", "HASS_URL"])
+        if tok:
+            synced.extend(["HOMEASSISTANT_TOKEN", "HASS_TOKEN"])
         print(f"INFO: Synced Home Assistant env for Hermes setup: {', '.join(synced)}")
     return ok
 
@@ -572,6 +656,9 @@ def bootstrap_first_run(payload: dict):
     api_keys = payload.get("api_keys", {})
     ha_url = payload.get("homeassistant_url", "")
     ha_token = payload.get("homeassistant_token", "")
+    setup_profile = str(payload.get("setup_profile", "home_assistant"))
+    firecrawl_key = str(payload.get("firecrawl_api_key", ""))
+    searxng_url = str(payload.get("searxng_url", ""))
     enable_openai_api = str(payload.get("enable_openai_api", "false")).lower() in ("1", "true", "yes")
     mcp_configured = str(payload.get("mcp_configured", "false")).lower() in ("1", "true", "yes")
 
@@ -585,6 +672,8 @@ def bootstrap_first_run(payload: dict):
         ok = sync_homeassistant_env(str(ha_url), str(ha_token)) and ok
     ok = bootstrap_timezone_if_missing(str(timezone)) and ok
     ok = bootstrap_browser_if_enabled(browser_enabled) and ok
+    ok = bootstrap_web_search_if_missing(firecrawl_key, searxng_url) and ok
+    ok = bootstrap_kanban_toolset_if_missing(setup_profile) and ok
     ok = bootstrap_model_if_missing(resolved_model, api_keys) and ok
     if bootstrap_auxiliary_title:
         ok = bootstrap_auxiliary_title_if_needed(api_keys) and ok
