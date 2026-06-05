@@ -1,6 +1,6 @@
 # Hermes Agent — Home Assistant Add-on
 
-Canonical setup and operations guide. Read [SECURITY.md](SECURITY.md) before enabling remote access.
+Canonical setup and operations guide. This add-on is marked **Experimental** in the Home Assistant add-on store — expect breaking changes between releases. Read [SECURITY.md](SECURITY.md) before enabling remote access.
 
 ## What you get
 
