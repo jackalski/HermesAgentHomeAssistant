@@ -2,6 +2,14 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.6] - 2026-06-05
+
+### Fixed
+- Removed deprecated `build.yaml`; base images are set in `Dockerfile` via `BUILD_ARCH` (resolves Supervisor `build.yaml is deprecated` warning).
+
+### Changed
+- Add-on marked **Experimental** (`stage: experimental`) in the Home Assistant add-on store.
+
 ## [0.0.5] - 2026-06-05
 
 ### Added
@@ -21,7 +29,6 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 - Documentation consolidated into a single streamlined `DOCS.md`.
 
 ### Changed
-- Add-on marked as **Experimental** (`stage: experimental`) in the Home Assistant add-on store.
 - Default `access_mode` is now `lan_https` (was `custom`).
 - `setup_profile: home_assistant` auto-enables MCP when `homeassistant_token` is set.
 - MCP URL respects `hass_url` when not running under the HA supervisor proxy.

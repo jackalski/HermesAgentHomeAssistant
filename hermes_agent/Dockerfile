@@ -1,7 +1,10 @@
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+# Base image is Debian Bookworm (glibc). BUILD_ARCH is supplied by the HA Supervisor build.
+# Replaces deprecated build.yaml (per-arch ghcr.io/home-assistant/*-base-debian:bookworm).
+ARG BUILD_ARCH
+ARG BUILD_VERSION
+FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:bookworm
 
-# Base image is Debian Bookworm (glibc). This avoids musl-related native module issues
+# This avoids musl-related native module issues
 # that occur on Alpine (e.g. clipboard, node-llama-cpp).
 
 # Install base packages (without nodejs/npm - we'll get Node 22 from NodeSource)
