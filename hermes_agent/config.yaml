@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.7"
+version: "0.0.8"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent as a Home Assistant add-on.
@@ -176,6 +176,11 @@ options:
   # (mcp_servers in /config/.hermes/config.yaml) so the AI can control HA entities/services.
   auto_configure_mcp: false
 
+  # Hermes Agent npm package version (installs the `hermes` CLI). Reconciled on startup when changed.
+  # latest: always track npm latest; custom: use hermes_agent_version_custom below.
+  hermes_agent_version_preset: latest
+  hermes_agent_version_custom: ""
+
   # Tool bootstrap toggles.
   # When enabled, run.sh verifies dependencies and auto-installs missing ones when possible.
   tool_telegram_enabled: false
@@ -236,6 +241,8 @@ schema:
       value: str
   nginx_log_level: list(full|minimal)?
   auto_configure_mcp: bool?
+  hermes_agent_version_preset: list(latest|0.15.2|0.15.1|0.14.0|custom)?
+  hermes_agent_version_custom: str?
   tool_telegram_enabled: bool?
   tool_browser_enabled: bool?
   tool_skills_hub_enabled: bool?

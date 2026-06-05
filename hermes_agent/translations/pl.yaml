@@ -159,6 +159,20 @@ configuration:
   auto_configure_mcp:
     name: Automatyczna konfiguracja MCP dla Home Assistant
     description: "Gdy WŁĄCZONE i token Home Assistant jest ustawiony, automatycznie rejestruje Home Assistant w wbudowanym MCP Hermes (mcp_servers) przy każdym starcie. Pozwala to Hermes Agent kontrolować urządzenia HA, usługi i automatyzacje przez Model Context Protocol. Wyłącz tylko jeśli zarządzasz konfiguracją MCP Hermes ręcznie."
+  hermes_agent_version_preset:
+    name: Wersja Hermes Agent
+    description: "Wersja pakietu npm instalowana przy starcie (dostarcza CLI `hermes`). Przypięta wersja dla stabilności; latest śledzi najnowsze wydanie."
+    options:
+      latest: "Latest (npm @latest)"
+      0.15.2: "0.15.2 (przypięta)"
+      0.15.1: "0.15.1 (przypięta)"
+      0.14.0: "0.14.0 (przypięta)"
+      custom: "Wersja niestandardowa"
+
+  hermes_agent_version_custom:
+    name: Wersja Hermes Agent (niestandardowa)
+    description: "Tag npm lub semver, gdy Wersja Hermes Agent to niestandardowa (np. 0.15.2). Stosowane przy następnym restarcie add-onu."
+
   tool_telegram_enabled:
     name: Bootstrap narzędzia Telegram
     description: "Gdy WŁĄCZONE, start sprawdza zależności Telegram i automatycznie instaluje brakujące pakiety python-telegram-bot, jeśli to możliwe."

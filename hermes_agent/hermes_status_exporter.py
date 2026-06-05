@@ -103,7 +103,7 @@ def _probe_gateway_health(port: int) -> tuple[bool, str | None]:
 
 
 def _hermes_agent_version() -> str:
-    for cmd in (["hermes-agent", "--version"], ["hermes", "--version"]):
+    for cmd in (["hermes", "--version"],):
         try:
             proc = subprocess.run(
                 cmd,

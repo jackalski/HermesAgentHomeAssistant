@@ -2,6 +2,16 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.8] - 2026-06-05
+
+### Changed
+- Gateway runtime now uses the modern **`hermes gateway run`** CLI (with `HERMES_HOME` and `HERMES_GATEWAY_NO_SUPERVISE`) instead of legacy `hermes-agent gateway run`.
+- Skills Hub bootstrap uses `hermes skills list`; process detection uses `gateway.pid`, port bind, and `hermes` gateway process patterns.
+
+### Added
+- **`hermes_agent_version_preset`** add-on option (`latest`, pinned `0.15.2` / `0.15.1` / `0.14.0`, or `custom`) with runtime npm reconcile on startup.
+- Terminal profile exports `HERMES_HOME` for manual `hermes` commands.
+
 ## [0.0.7] - 2026-06-05
 
 ### Fixed

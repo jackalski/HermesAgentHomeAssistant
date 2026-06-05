@@ -36,7 +36,7 @@ When changing landing/nginx placeholders:
 ## Security Rules
 
 - Do not log secrets/tokens.
-- For gateway token docs/UI guidance, do not use `hermes-agent config get gateway.auth.token` (redacted in v2026.2.22+).
+- For gateway token docs/UI guidance, do not use `hermes config show` for the gateway token (redacted in v2026.2.22+).
 - Prefer `jq -r '.gateway.auth.token' /config/.hermes/hermes.json`.
 
 ## Editing Rules
