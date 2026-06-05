@@ -43,7 +43,7 @@ PROFILE_MANIFEST = {
 
 MODEL_PRESETS = {
     "gemini_flash": "google/gemini-2.5-flash",
-    "claude_sonnet": "anthropic/claude-sonnet-4",
+    "claude_sonnet": "anthropic/claude-sonnet-4-6",
     "gpt_mini": "openai/gpt-4.1-mini",
 }
 
@@ -220,6 +220,9 @@ PROVIDER_KEY_PRIORITY = (
     ("minimax", "MINIMAX_API_KEY"),
 )
 
+# Main LLM provider env keys only (excludes auxiliary/search tokens).
+MAIN_MODEL_PROVIDER_ENV_KEYS = tuple(env_key for _, env_key in PROVIDER_KEY_PRIORITY)
+
 
 def model_needs_bootstrap(cfg: dict) -> bool:
     if not cfg:
@@ -239,6 +242,17 @@ def model_needs_bootstrap(cfg: dict) -> bool:
 def _has_api_key(api_keys: dict, env_key: str) -> bool:
     value = api_keys.get(env_key, "")
     return isinstance(value, str) and bool(value.strip())
+
+
+def has_main_model_api_key(
+    api_keys: dict, env_presence: dict[str, bool] | None = None
+) -> bool:
+    for env_key in MAIN_MODEL_PROVIDER_ENV_KEYS:
+        if _has_api_key(api_keys, env_key):
+            return True
+        if env_presence is not None and env_presence.get(env_key):
+            return True
+    return False
 
 
 HA_URL_AUTO_DEFAULTS = frozenset(
@@ -433,7 +447,7 @@ def write_readiness_marker(name: str, present: bool):
 
 
 def update_readiness_markers(api_keys: dict, enable_openai_api: bool, mcp_configured: bool):
-    has_api_key = any(_has_api_key(api_keys, key) for key in ADDON_API_KEY_ENV_MAP)
+    has_api_key = has_main_model_api_key(api_keys)
     cfg = read_yaml_config()
     model_ok = cfg is not None and not model_needs_bootstrap(cfg)
 

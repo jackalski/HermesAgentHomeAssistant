@@ -43,9 +43,6 @@ else
   TERMINAL_PORT="7681"
 fi
 
-echo "DEBUG: enable_terminal config value: '$ENABLE_TERMINAL'"
-echo "DEBUG: terminal_port config value: '$TERMINAL_PORT' (validated)"
-
 # Generic router SSH settings
 ROUTER_HOST=$(jq -r '.router_ssh_host // empty' "$OPTIONS_FILE")
 ROUTER_USER=$(jq -r '.router_ssh_user // empty' "$OPTIONS_FILE")
@@ -741,6 +738,7 @@ GW_PID=""
 GW_RELAY_PID=""
 NGINX_PID=""
 TTYD_PID=""
+STATUS_EXPORTER_PID=""
 SHUTTING_DOWN="false"
 
 shutdown() {
@@ -770,6 +768,11 @@ shutdown() {
   fi
 
   stop_gw_relay
+
+  if [ -n "${STATUS_EXPORTER_PID}" ] && kill -0 "${STATUS_EXPORTER_PID}" >/dev/null 2>&1; then
+    kill -TERM "${STATUS_EXPORTER_PID}" >/dev/null 2>&1 || true
+    wait "${STATUS_EXPORTER_PID}" || true
+  fi
 
   if [ "$CLEAN_LOCKS_ON_EXIT" = "true" ]; then
     cleanup_session_locks || true

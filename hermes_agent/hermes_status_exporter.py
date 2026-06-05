@@ -29,6 +29,7 @@ try:
         HERMES_STATE_DIR,
         YAML_CONFIG_PATH,
         _has_api_key,
+        has_main_model_api_key,
         model_needs_bootstrap,
         read_yaml_config,
     )
@@ -41,6 +42,7 @@ except ImportError:
         HERMES_STATE_DIR,
         YAML_CONFIG_PATH,
         _has_api_key,
+        has_main_model_api_key,
         model_needs_bootstrap,
         read_yaml_config,
     )
@@ -283,10 +285,7 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         provider_flags[name] = ok
         configured_providers.append({"name": name, "configured": ok})
 
-    any_api_key = any(
-        _provider_configured(env_name, api_keys, env_presence)
-        for env_name in ADDON_API_KEY_ENV_MAP
-    ) or any(env_presence.values())
+    any_api_key = has_main_model_api_key(api_keys, env_presence)
 
     model_ok = bool(cfg) and not model_needs_bootstrap(cfg)
     mcp_ok = Path(HERMES_STATE_DIR / ".mcp_ha_configured").exists()
