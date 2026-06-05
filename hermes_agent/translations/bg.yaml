@@ -17,7 +17,41 @@ configuration:
   
   homeassistant_token:
     name: Home Assistant токен
-    description: Опционално - дълготраен токен на Home Assistant за локални API скриптове/инструменти
+    description: Опционално - дълготраен токен на Home Assistant за локални API скриптове/инструменти и MCP auto-configure
+
+  hass_url:
+    name: Home Assistant URL
+    description: "Базов URL на Home Assistant за скриптове/инструменти. Оставете празно за автоматично откриване на HAOS (препоръчително). Синхронизира се като HOMEASSISTANT_URL в /config/.hermes/.env при зададен токен."
+
+  setup_profile:
+    name: Профил за настройка
+    description: "Предустановка за първо стартиране. home_assistant включва LAN HTTPS, auto MCP при зададен токен и bootstrap на model/browser/timezone. general използва local-only. advanced използва само отделните опции."
+    options:
+      home_assistant: "Home Assistant (препоръчително)"
+      general: "Общ асистент"
+      advanced: "Разширено (ръчни опции)"
+
+  default_model_preset:
+    name: Предустановка за модел
+    description: "Куриран основен модел за първо стартиране. auto извежда от първия API ключ; custom използва полето Модел (custom)."
+    options:
+      auto: "Auto (от API ключ)"
+      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
+      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
+      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
+      custom: "Персонален model ID"
+
+  default_model:
+    name: Модел (custom)
+    description: "Model ID при предустановка custom. Bootstrap само при първо стартиране, ако няма конфигуриран модел."
+
+  firecrawl_api_key:
+    name: Firecrawl API ключ
+    description: "Опционален токен за web search, синхронизиран като FIRECRAWL_API_KEY в /config/.hermes/.env."
+
+  searxng_url:
+    name: SearXNG URL
+    description: "Опционален SearXNG URL, синхронизиран като SEARXNG_URL в /config/.hermes/.env."
 
   http_proxy:
     name: Изходящ HTTP прокси
@@ -98,6 +132,18 @@ configuration:
   enable_openai_api:
     name: Активиране на OpenAI API
     description: Активиране на OpenAI-съвместим Chat Completions ендпойнт. Позволява използването на Hermes Agent като разговорен агент в HA Assist pipeline чрез Extended OpenAI Conversation (HACS) или всеки OpenAI-съвместим клиент.
+  enable_ha_status_sensors:
+    name: HA статус сензори
+    description: "Публикува настройка, здраве на gateway, модел/доставчик и метрики за употреба към Home Assistant чрез MQTT discovery (при Mosquitto) и безопасен /status.json snapshot през Ingress."
+  publish_mqtt_discovery:
+    name: MQTT discovery
+    description: "Когато е ВКЛ и Mosquitto add-on работи, автоматично създава HA entities за Hermes статус. Изключете, ако искате само /status.json API."
+  status_poll_interval_seconds:
+    name: Интервал на статус (секунди)
+    description: "Колко често да се обновяват сензорите и /share/hermes/status.json. Диапазон 30-300. По-високи стойности намаляват записи на флаш при SD карти."
+  mqtt_state_prefix:
+    name: MQTT префикс на topics
+    description: "Префикс за MQTT state topics (по подразбиране hermes). Пример: <prefix>/status/gateway_running."
   force_ipv4_dns:
     name: Принудителен IPv4 DNS ред
     description: Принудително задава IPv4-приоритет при DNS резолв. Повечето HAOS VM нямат IPv6 изход — предизвиква web_fetch и Telegram грешки. Препоръчително ВКЛЮЧЕНО (по подразбиране).
@@ -124,25 +170,25 @@ configuration:
     description: "When ON, startup initializes Skills Hub directory automatically (equivalent to first-run `hermes skills list`)."
   openai_api_key:
     name: OpenAI API ключ
-    description: "Optional token exported as OPENAI_API_KEY for Hermes runtime."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като OPENAI_API_KEY за Hermes onboard/model setup и runtime."
   openrouter_api_key:
     name: OpenRouter API ключ
-    description: "Optional token exported as OPENROUTER_API_KEY for Hermes runtime."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като OPENROUTER_API_KEY за Hermes onboard/model setup и runtime."
   anthropic_api_key:
     name: Anthropic API ключ
-    description: "Optional token exported as ANTHROPIC_API_KEY for Hermes runtime."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като ANTHROPIC_API_KEY за Hermes onboard/model setup и runtime."
   google_api_key:
     name: Google API ключ
-    description: "Optional token exported as GOOGLE_API_KEY for Hermes runtime."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като GOOGLE_API_KEY за Hermes onboard/model setup и runtime."
   minimax_api_key:
     name: MiniMax API ключ
-    description: "Optional token exported as MINIMAX_API_KEY for Hermes runtime."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като MINIMAX_API_KEY за Hermes onboard/model setup и runtime."
   discord_bot_token:
     name: Discord Bot Token
-    description: "Optional token exported as DISCORD_BOT_TOKEN for Discord tools."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като DISCORD_BOT_TOKEN за Discord инструменти."
   github_token:
     name: GitHub Token
-    description: "Optional token exported as GITHUB_TOKEN for better API rate limits."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като GITHUB_TOKEN за по-добри API лимити."
   xai_api_key:
     name: xAI API ключ
-    description: "Optional token exported as XAI_API_KEY for x_search provider."
+    description: "Опционален токен, синхронизиран в /config/.hermes/.env като XAI_API_KEY за x_search."

@@ -13,6 +13,16 @@ if [ ! -f "$OPTIONS_FILE" ]; then
   exit 1
 fi
 
+HELPER_PATH="/hermes_config_helper.py"
+if [ ! -f "$HELPER_PATH" ] && [ -f "$(dirname "$0")/hermes_config_helper.py" ]; then
+  HELPER_PATH="$(dirname "$0")/hermes_config_helper.py"
+fi
+
+EXPORTER_PATH="/hermes_status_exporter.py"
+if [ ! -f "$EXPORTER_PATH" ] && [ -f "$(dirname "$0")/hermes_status_exporter.py" ]; then
+  EXPORTER_PATH="$(dirname "$0")/hermes_status_exporter.py"
+fi
+
 # ------------------------------------------------------------------------------
 # Read add-on options (only add-on-specific knobs; Hermes Agent is configured via onboarding)
 # ------------------------------------------------------------------------------
@@ -56,7 +66,15 @@ GATEWAY_TRUSTED_PROXIES=$(jq -r '.gateway_trusted_proxies // empty' "$OPTIONS_FI
 GATEWAY_ADDITIONAL_ALLOWED_ORIGINS=$(jq -r '.gateway_additional_allowed_origins // empty' "$OPTIONS_FILE")
 CONTROLUI_DISABLE_DEVICE_AUTH=$(jq -r '.controlui_disable_device_auth // true' "$OPTIONS_FILE")
 FORCE_IPV4_DNS=$(jq -r '.force_ipv4_dns // true' "$OPTIONS_FILE")
-ACCESS_MODE=$(jq -r '.access_mode // "custom"' "$OPTIONS_FILE")
+SETUP_PROFILE=$(jq -r '.setup_profile // "home_assistant"' "$OPTIONS_FILE")
+DEFAULT_MODEL_PRESET=$(jq -r '.default_model_preset // "auto"' "$OPTIONS_FILE")
+DEFAULT_MODEL_OPT=$(jq -r '.default_model // empty' "$OPTIONS_FILE")
+HASS_URL=$(jq -r '.hass_url // empty' "$OPTIONS_FILE")
+ACCESS_MODE=$(jq -r '.access_mode // "lan_https"' "$OPTIONS_FILE")
+FIRECRAWL_API_KEY_OPT=$(jq -r '.firecrawl_api_key // empty' "$OPTIONS_FILE")
+SEARXNG_URL_OPT=$(jq -r '.searxng_url // empty' "$OPTIONS_FILE")
+BOOTSTRAP_AUXILIARY_TITLE="false"
+LOG_GATEWAY_URL_HINT="false"
 NGINX_LOG_LEVEL=$(jq -r '.nginx_log_level // "minimal"' "$OPTIONS_FILE")
 AUTO_CONFIGURE_MCP=$(jq -r '.auto_configure_mcp // false' "$OPTIONS_FILE")
 TOOL_TELEGRAM_ENABLED=$(jq -r '.tool_telegram_enabled // false' "$OPTIONS_FILE")
@@ -73,8 +91,173 @@ XAI_API_KEY_OPT=$(jq -r '.xai_api_key // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_TYPE=$(jq -r 'if .gateway_env_vars == null then "null" else (.gateway_env_vars | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.gateway_env_vars // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_JSON=$(jq -c '.gateway_env_vars // []' "$OPTIONS_FILE")
+ENABLE_HA_STATUS_SENSORS=$(jq -r '.enable_ha_status_sensors // true' "$OPTIONS_FILE")
+PUBLISH_MQTT_DISCOVERY=$(jq -r '.publish_mqtt_discovery // true' "$OPTIONS_FILE")
+STATUS_POLL_INTERVAL_RAW=$(jq -r '.status_poll_interval_seconds // 60' "$OPTIONS_FILE")
+MQTT_STATE_PREFIX=$(jq -r '.mqtt_state_prefix // "hermes"' "$OPTIONS_FILE")
+
+# Validate status poll interval (30-300 seconds)
+if [[ "$STATUS_POLL_INTERVAL_RAW" =~ ^[0-9]+$ ]] && [ "$STATUS_POLL_INTERVAL_RAW" -ge 30 ] && [ "$STATUS_POLL_INTERVAL_RAW" -le 300 ]; then
+  STATUS_POLL_INTERVAL_SECONDS="$STATUS_POLL_INTERVAL_RAW"
+else
+  echo "WARN: Invalid status_poll_interval_seconds '$STATUS_POLL_INTERVAL_RAW'. Using default 60."
+  STATUS_POLL_INTERVAL_SECONDS="60"
+fi
+
+# Sanitize MQTT state topic prefix (alphanumeric + underscore/hyphen only)
+if [[ "$MQTT_STATE_PREFIX" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  MQTT_STATE_PREFIX_SAFE="$MQTT_STATE_PREFIX"
+else
+  echo "WARN: Invalid mqtt_state_prefix '$MQTT_STATE_PREFIX'. Using default 'hermes'."
+  MQTT_STATE_PREFIX_SAFE="hermes"
+fi
 
 export TZ="$TZNAME"
+
+# ------------------------------------------------------------------------------
+# Setup profile — simplify first-run defaults without hiding advanced options
+# ------------------------------------------------------------------------------
+if [ -f "$HELPER_PATH" ]; then
+  PROFILE_JSON=$(jq -n \
+    --arg setup_profile "$SETUP_PROFILE" \
+    --arg access_mode "$ACCESS_MODE" \
+    --arg auto_configure_mcp "$AUTO_CONFIGURE_MCP" \
+    --arg homeassistant_token "$HA_TOKEN" \
+    '{
+      setup_profile: $setup_profile,
+      access_mode: $access_mode,
+      auto_configure_mcp: $auto_configure_mcp,
+      homeassistant_token: $homeassistant_token
+    }')
+  RESOLVED_PROFILE=$(python3 "$HELPER_PATH" resolve-setup-profile "$PROFILE_JSON" 2>/dev/null || true)
+  if [ -n "$RESOLVED_PROFILE" ]; then
+    resolved_access_mode=$(echo "$RESOLVED_PROFILE" | jq -r '.access_mode // empty')
+    if [ -n "$resolved_access_mode" ]; then
+      ACCESS_MODE="$resolved_access_mode"
+    fi
+    EFFECTIVE_AUTO_CONFIGURE_MCP=$(echo "$RESOLVED_PROFILE" | jq -r 'if .auto_configure_mcp then "true" else "false" end')
+    BOOTSTRAP_AUXILIARY_TITLE=$(echo "$RESOLVED_PROFILE" | jq -r 'if .bootstrap_auxiliary_title then "true" else "false" end')
+    LOG_GATEWAY_URL_HINT=$(echo "$RESOLVED_PROFILE" | jq -r 'if .log_gateway_url_hint then "true" else "false" end')
+    echo "INFO: setup_profile=${SETUP_PROFILE} — effective access_mode=${ACCESS_MODE}"
+  else
+    EFFECTIVE_AUTO_CONFIGURE_MCP="$AUTO_CONFIGURE_MCP"
+  fi
+else
+  EFFECTIVE_AUTO_CONFIGURE_MCP="$AUTO_CONFIGURE_MCP"
+fi
+
+# ------------------------------------------------------------------------------
+# Home Assistant instance autodetection (hass_url empty/local → supervisor/loopback)
+# ------------------------------------------------------------------------------
+EFFECTIVE_HASS_URL="$HASS_URL"
+MCP_HA_URL=""
+HA_URL_SOURCE="user"
+HA_INTERNAL_HOST=""
+HA_INTERNAL_PORT="8123"
+
+load_bashio() {
+  if [ -f /etc/bashio.sh ]; then
+    # shellcheck disable=SC1091
+    . /etc/bashio.sh
+    return 0
+  fi
+  return 1
+}
+
+cloudflared_addon_running() {
+  if load_bashio && bashio::addons.installed "a0d7b954_cloudflared" 2>/dev/null; then
+    bashio::addons.running "a0d7b954_cloudflared" 2>/dev/null && return 0
+  fi
+  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    local state
+    state=$(curl -fsS -m 5 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+      "http://supervisor/addons/a0d7b954_cloudflared/info" 2>/dev/null \
+      | jq -r '.data.state // empty' 2>/dev/null || true)
+    [ "$state" = "started" ] && return 0
+  fi
+  return 1
+}
+
+resolve_ha_instance_urls() {
+  if [ ! -f "$HELPER_PATH" ]; then
+    EFFECTIVE_HASS_URL="${HASS_URL:-http://127.0.0.1:8123}"
+    MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
+    return 0
+  fi
+
+  local supervisor_available="false"
+  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    supervisor_available="true"
+  fi
+
+  if load_bashio; then
+    HA_INTERNAL_HOST="$(bashio::services homeassistant "host" 2>/dev/null || true)"
+    HA_INTERNAL_PORT="$(bashio::services homeassistant "port" 2>/dev/null || true)"
+    if [ -z "$HA_INTERNAL_PORT" ]; then
+      HA_INTERNAL_PORT="8123"
+    fi
+  fi
+
+  local ha_json resolved
+  ha_json=$(jq -n \
+    --arg hass_url "$HASS_URL" \
+    --arg supervisor_available "$supervisor_available" \
+    --arg internal_host "$HA_INTERNAL_HOST" \
+    --arg internal_port "$HA_INTERNAL_PORT" \
+    '{
+      hass_url: $hass_url,
+      supervisor_available: $supervisor_available,
+      internal_host: $internal_host,
+      internal_port: $internal_port
+    }')
+  resolved=$(python3 "$HELPER_PATH" resolve-home-assistant-url "$ha_json" 2>/dev/null || true)
+  if [ -n "$resolved" ]; then
+    EFFECTIVE_HASS_URL=$(echo "$resolved" | jq -r '.homeassistant_url // empty')
+    MCP_HA_URL=$(echo "$resolved" | jq -r '.mcp_url // empty')
+    HA_URL_SOURCE=$(echo "$resolved" | jq -r '.source // "user"')
+  fi
+  if [ -z "$EFFECTIVE_HASS_URL" ]; then
+    EFFECTIVE_HASS_URL="http://127.0.0.1:8123"
+  fi
+  if [ -z "$MCP_HA_URL" ]; then
+    MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
+  fi
+  echo "INFO: Home Assistant URL (${HA_URL_SOURCE}): ${EFFECTIVE_HASS_URL} (MCP: ${MCP_HA_URL})"
+}
+
+verify_ha_instance_reachable() {
+  if [ -z "$HA_TOKEN" ]; then
+    return 0
+  fi
+  local probe_url="${EFFECTIVE_HASS_URL%/}/api/"
+  if curl -fsS -m 8 -H "Authorization: Bearer ${HA_TOKEN}" "$probe_url" >/dev/null 2>&1; then
+    echo "INFO: Verified Home Assistant API at ${EFFECTIVE_HASS_URL}"
+    return 0
+  fi
+  echo "WARN: Could not verify Home Assistant at ${EFFECTIVE_HASS_URL}"
+  echo "WARN: If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant:8123 or your external URL)"
+  return 0
+}
+
+resolve_ha_instance_urls
+verify_ha_instance_reachable
+
+apply_reverse_proxy_defaults() {
+  if [ "$ACCESS_MODE" != "lan_reverse_proxy" ]; then
+    return 0
+  fi
+  if [ -n "$GATEWAY_TRUSTED_PROXIES" ]; then
+    return 0
+  fi
+  GATEWAY_TRUSTED_PROXIES="127.0.0.1,172.30.0.0/16,10.0.0.0/8"
+  if cloudflared_addon_running; then
+    echo "INFO: Cloudflared add-on detected — applied gateway_trusted_proxies: ${GATEWAY_TRUSTED_PROXIES}"
+    echo "INFO: Recommended for Cloudflare Tunnel: access_mode=lan_https with noTLSVerify on origin (see DOCS.md)."
+  else
+    echo "WARN: gateway_trusted_proxies was empty — applied defaults: ${GATEWAY_TRUSTED_PROXIES}"
+    echo "WARN: trusted-proxy requires X-Forwarded-User from your reverse proxy (e.g. NPM custom header)."
+  fi
+}
 
 # ------------------------------------------------------------------------------
 # Access mode presets — override individual gateway settings for common scenarios
@@ -99,10 +282,7 @@ case "$ACCESS_MODE" in
   lan_reverse_proxy)
     GATEWAY_BIND_MODE="lan"
     GATEWAY_AUTH_MODE="trusted-proxy"
-    if [ -z "$GATEWAY_TRUSTED_PROXIES" ]; then
-      echo "ERROR: access_mode=lan_reverse_proxy requires gateway_trusted_proxies to be set."
-      echo "ERROR: Set it to your reverse proxy's IP/CIDR (e.g. 127.0.0.1,192.168.88.0/24)."
-    fi
+    apply_reverse_proxy_defaults
     echo "INFO: Access mode: lan_reverse_proxy (LAN bind + trusted-proxy auth)"
     ;;
   tailnet_https)
@@ -650,11 +830,114 @@ initialize_skills_hub_if_enabled
 # ------------------------------------------------------------------------------
 export HERMES_CONFIG_PATH="/config/.hermes/hermes.json"
 
-# Find the helper script (copied to root in Dockerfile, or fallback to add-on dir)
-HELPER_PATH="/hermes_config_helper.py"
-if [ ! -f "$HELPER_PATH" ] && [ -f "$(dirname "$0")/hermes_config_helper.py" ]; then
-  HELPER_PATH="$(dirname "$0")/hermes_config_helper.py"
-fi
+# Sync add-on API keys into /config/.hermes/.env so hermes onboard/model/setup
+# can detect authenticated providers (same persistence model as MCP token sync).
+sync_addon_api_keys_to_hermes_env() {
+  if [ ! -f "$HELPER_PATH" ]; then
+    echo "WARN: hermes_config_helper.py not found; cannot sync add-on API keys to Hermes .env"
+    return 0
+  fi
+
+  local sync_json
+  sync_json=$(jq -n \
+    --arg openai "$OPENAI_API_KEY_OPT" \
+    --arg openrouter "$OPENROUTER_API_KEY_OPT" \
+    --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
+    --arg google "$GOOGLE_API_KEY_OPT" \
+    --arg minimax "$MINIMAX_API_KEY_OPT" \
+    --arg discord "$DISCORD_BOT_TOKEN_OPT" \
+    --arg github "$GITHUB_TOKEN_OPT" \
+    --arg xai "$XAI_API_KEY_OPT" \
+    --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
+    --arg searxng "$SEARXNG_URL_OPT" \
+    '{
+      OPENAI_API_KEY: $openai,
+      OPENROUTER_API_KEY: $openrouter,
+      ANTHROPIC_API_KEY: $anthropic,
+      GOOGLE_API_KEY: $google,
+      MINIMAX_API_KEY: $minimax,
+      DISCORD_BOT_TOKEN: $discord,
+      GITHUB_TOKEN: $github,
+      XAI_API_KEY: $xai,
+      FIRECRAWL_API_KEY: $firecrawl,
+      SEARXNG_URL: $searxng
+    }')
+
+  if ! python3 "$HELPER_PATH" sync-addon-api-keys "$sync_json"; then
+    echo "WARN: Failed to sync add-on API keys into /config/.hermes/.env"
+  fi
+}
+
+sync_addon_api_keys_to_hermes_env
+
+sync_router_ssh_env_to_hermes() {
+  if [ ! -f "$HELPER_PATH" ]; then
+    return 0
+  fi
+  if ! python3 "$HELPER_PATH" sync-router-ssh-env "$ROUTER_HOST" "$ROUTER_USER" "$ROUTER_KEY"; then
+    echo "WARN: Failed to sync router SSH env into /config/.hermes/.env"
+  fi
+}
+
+sync_router_ssh_env_to_hermes
+
+bootstrap_hermes_first_run() {
+  if [ ! -f "$HELPER_PATH" ]; then
+    echo "WARN: hermes_config_helper.py not found; cannot bootstrap Hermes first-run config"
+    return 0
+  fi
+
+  local browser_enabled_json="false"
+  if [ "$TOOL_BROWSER_ENABLED" = "true" ] || [ "$TOOL_BROWSER_ENABLED" = "1" ]; then
+    browser_enabled_json="true"
+  fi
+
+  local bootstrap_json
+  local mcp_configured_json="false"
+  if [ -f "/config/.hermes/.mcp_ha_configured" ]; then
+    mcp_configured_json="true"
+  fi
+
+  bootstrap_json=$(jq -n \
+    --arg timezone "$TZNAME" \
+    --arg default_model_preset "$DEFAULT_MODEL_PRESET" \
+    --arg default_model "$DEFAULT_MODEL_OPT" \
+    --arg ha_url "$EFFECTIVE_HASS_URL" \
+    --arg ha_token "$HA_TOKEN" \
+    --arg bootstrap_auxiliary_title "$BOOTSTRAP_AUXILIARY_TITLE" \
+    --arg enable_openai_api "$ENABLE_OPENAI_API" \
+    --arg mcp_configured "$mcp_configured_json" \
+    --argjson browser_enabled "$browser_enabled_json" \
+    --arg openai "$OPENAI_API_KEY_OPT" \
+    --arg openrouter "$OPENROUTER_API_KEY_OPT" \
+    --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
+    --arg google "$GOOGLE_API_KEY_OPT" \
+    --arg minimax "$MINIMAX_API_KEY_OPT" \
+    '{
+      timezone: $timezone,
+      default_model_preset: $default_model_preset,
+      default_model: $default_model,
+      browser_enabled: $browser_enabled,
+      bootstrap_auxiliary_title: $bootstrap_auxiliary_title,
+      enable_openai_api: $enable_openai_api,
+      mcp_configured: $mcp_configured,
+      homeassistant_url: $ha_url,
+      homeassistant_token: $ha_token,
+      api_keys: {
+        OPENROUTER_API_KEY: $openrouter,
+        ANTHROPIC_API_KEY: $anthropic,
+        OPENAI_API_KEY: $openai,
+        GOOGLE_API_KEY: $google,
+        MINIMAX_API_KEY: $minimax
+      }
+    }')
+
+  if ! python3 "$HELPER_PATH" bootstrap-first-run "$bootstrap_json"; then
+    echo "WARN: Failed to bootstrap Hermes first-run config (model/browser/timezone/HA env)"
+  fi
+}
+
+bootstrap_hermes_first_run
 
 if [ -f "$HERMES_CONFIG_PATH" ]; then
   if [ -f "$HELPER_PATH" ]; then
@@ -704,6 +987,9 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
 
   # Detect primary LAN IP
   LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [ "$LOG_GATEWAY_URL_HINT" = "true" ] && [ -z "$GW_PUBLIC_URL" ] && [ -n "$LAN_IP" ]; then
+    echo "INFO: Gateway LAN URL hint (set gateway_public_url if needed): https://${LAN_IP}:${GATEWAY_PORT}/"
+  fi
   STORED_IP=$(cat "$CERT_DIR/.cert_ip" 2>/dev/null || echo "")
 
   # --- Local CA (generated once, persists across restarts) ---
@@ -839,11 +1125,9 @@ fi
 # Re-runs when the token changes; stores token in /config/.hermes/.env for ${HOMEASSISTANT_TOKEN}.
 # Auto-detects HA API URL: supervisor proxy if available, else localhost:8123.
 # ------------------------------------------------------------------------------
-if [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
-  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
-    MCP_HA_URL="http://supervisor/core/api/mcp"
-  else
-    MCP_HA_URL="http://localhost:8123/api/mcp"
+if [ "$EFFECTIVE_AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
+  if [ -z "$MCP_HA_URL" ]; then
+    MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
   fi
   MCP_FLAG="/config/.hermes/.mcp_ha_configured"
   MCP_TOKEN_HASH=$(printf '%s' "$HA_TOKEN" | sha256sum | cut -d' ' -f1)
@@ -865,10 +1149,132 @@ if [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
   else
     echo "WARN: hermes_config_helper.py not found; cannot auto-configure MCP"
   fi
-elif [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -z "$HA_TOKEN" ]; then
+elif [ "$EFFECTIVE_AUTO_CONFIGURE_MCP" = "true" ] && [ -z "$HA_TOKEN" ]; then
   echo "INFO: MCP auto-configure enabled but homeassistant_token not set — skipping"
   echo "INFO: To auto-configure, set homeassistant_token in add-on Configuration, then restart"
 fi
+
+update_setup_readiness_markers() {
+  if [ ! -f "$HELPER_PATH" ]; then
+    return 0
+  fi
+  local mcp_ok="false"
+  if [ -f "/config/.hermes/.mcp_ha_configured" ]; then
+    mcp_ok="true"
+  fi
+  local markers_json
+  markers_json=$(jq -n \
+    --arg enable_openai_api "$ENABLE_OPENAI_API" \
+    --arg mcp_configured "$mcp_ok" \
+    --arg openai "$OPENAI_API_KEY_OPT" \
+    --arg openrouter "$OPENROUTER_API_KEY_OPT" \
+    --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
+    --arg google "$GOOGLE_API_KEY_OPT" \
+    --arg minimax "$MINIMAX_API_KEY_OPT" \
+    '{
+      enable_openai_api: $enable_openai_api,
+      mcp_configured: $mcp_configured,
+      api_keys: {
+        OPENROUTER_API_KEY: $openrouter,
+        ANTHROPIC_API_KEY: $anthropic,
+        OPENAI_API_KEY: $openai,
+        GOOGLE_API_KEY: $google,
+        MINIMAX_API_KEY: $minimax
+      }
+    }')
+  python3 "$HELPER_PATH" update-readiness-markers "$markers_json" >/dev/null 2>&1 || true
+}
+
+update_setup_readiness_markers
+
+resolve_mqtt_config_json() {
+  local host="" port="" user="" password=""
+  if [ -f /etc/bashio.sh ]; then
+    # shellcheck disable=SC1091
+    . /etc/bashio.sh
+    if bashio::services.available "mqtt" 2>/dev/null; then
+      host="$(bashio::services "mqtt" "host" 2>/dev/null || true)"
+      port="$(bashio::services "mqtt" "port" 2>/dev/null || true)"
+      user="$(bashio::services "mqtt" "username" 2>/dev/null || true)"
+      password="$(bashio::services "mqtt" "password" 2>/dev/null || true)"
+    fi
+  fi
+  jq -n \
+    --arg host "$host" \
+    --arg port "${port:-1883}" \
+    --arg username "$user" \
+    --arg password "$password" \
+    '{
+      host: (if ($host | length) > 0 then $host else null end),
+      port: (if ($port | length) > 0 then $port else "1883" end),
+      username: $username,
+      password: $password
+    }'
+}
+
+build_status_exporter_payload() {
+  local mqtt_json
+  mqtt_json="$(resolve_mqtt_config_json)"
+  jq -n \
+    --argjson mqtt "$mqtt_json" \
+    --arg gateway_internal_port "$GATEWAY_INTERNAL_PORT" \
+    --arg gateway_mode "$GATEWAY_MODE" \
+    --arg access_mode "$ACCESS_MODE" \
+    --arg setup_profile "$SETUP_PROFILE" \
+    --arg enable_openai_api "$ENABLE_OPENAI_API" \
+    --arg homeassistant_token "$HA_TOKEN" \
+    --arg publish_mqtt_discovery "$PUBLISH_MQTT_DISCOVERY" \
+    --arg mqtt_state_prefix "$MQTT_STATE_PREFIX_SAFE" \
+    --argjson status_poll_interval_seconds "$STATUS_POLL_INTERVAL_SECONDS" \
+    --arg openrouter "$OPENROUTER_API_KEY_OPT" \
+    --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
+    --arg openai "$OPENAI_API_KEY_OPT" \
+    --arg google "$GOOGLE_API_KEY_OPT" \
+    --arg minimax "$MINIMAX_API_KEY_OPT" \
+    --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
+    --arg searxng "$SEARXNG_URL_OPT" \
+    '{
+      mqtt: $mqtt,
+      gateway_internal_port: ($gateway_internal_port | tonumber),
+      gateway_mode: $gateway_mode,
+      access_mode: $access_mode,
+      setup_profile: $setup_profile,
+      enable_openai_api: $enable_openai_api,
+      homeassistant_token: $homeassistant_token,
+      publish_mqtt_discovery: $publish_mqtt_discovery,
+      mqtt_state_prefix: $mqtt_state_prefix,
+      status_poll_interval_seconds: $status_poll_interval_seconds,
+      api_keys: {
+        OPENROUTER_API_KEY: $openrouter,
+        ANTHROPIC_API_KEY: $anthropic,
+        OPENAI_API_KEY: $openai,
+        GOOGLE_API_KEY: $google,
+        MINIMAX_API_KEY: $minimax,
+        FIRECRAWL_API_KEY: $firecrawl,
+        SEARXNG_URL: $searxng
+      }
+    }'
+}
+
+start_status_exporter() {
+  if [ "$ENABLE_HA_STATUS_SENSORS" != "true" ] && [ "$ENABLE_HA_STATUS_SENSORS" != "1" ]; then
+    echo "INFO: HA status sensors disabled (enable_ha_status_sensors=false)"
+    return 0
+  fi
+  if [ ! -f "$EXPORTER_PATH" ]; then
+    echo "WARN: hermes_status_exporter.py not found; HA status sensors unavailable"
+    return 0
+  fi
+
+  mkdir -p /share/hermes 2>/dev/null || true
+
+  local payload
+  payload="$(build_status_exporter_payload)"
+
+  echo "INFO: Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE})"
+  python3 "$EXPORTER_PATH" run-loop "$payload" &
+  STATUS_EXPORTER_PID=$!
+}
 
 start_hermes_runtime() {
   echo "Starting Hermes Agent runtime (hermes-agent)..."
@@ -1014,6 +1420,21 @@ fi
 
 start_gw_relay
 
+install_hermes_terminal_profile() {
+  cat > /config/.hermes-terminal.bashrc <<'EOF'
+# Managed by Hermes Agent add-on — sources API keys for onboard/model/setup.
+export HERMES_CONFIG_DIR=/config/.hermes
+export HERMES_WORKSPACE_DIR=/config/hermesd
+if [ -f /config/.hermes/.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /config/.hermes/.env
+  set +a
+fi
+EOF
+  chmod 600 /config/.hermes-terminal.bashrc 2>/dev/null || true
+}
+
 # Start web terminal (optional)
 TTYD_PID_FILE="/var/run/hermes-ttyd.pid"
 
@@ -1046,8 +1467,11 @@ if [ "$ENABLE_TERMINAL" = "true" ] || [ "$ENABLE_TERMINAL" = "1" ]; then
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     echo ""
   fi
+  # Source Hermes .env in terminal sessions so onboard/model/setup see add-on keys.
+  install_hermes_terminal_profile
+
   echo "Starting web terminal (ttyd) on 127.0.0.1:${TERMINAL_PORT} ..."
-  ttyd -W -i 127.0.0.1 -p "${TERMINAL_PORT}" -b /terminal bash &
+  ttyd -W -i 127.0.0.1 -p "${TERMINAL_PORT}" -b /terminal bash --rcfile /config/.hermes-terminal.bashrc &
   TTYD_PID=$!
   echo "$TTYD_PID" > "$TTYD_PID_FILE"
   echo "ttyd started with PID $TTYD_PID"
@@ -1115,11 +1539,24 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
     fi
   fi
 
+  local setup_api_key="no" setup_model="no" setup_mcp="no" setup_assist="no" gateway_url_hint=""
+  [ -f "/config/.hermes/.bootstrap-api-key-ok" ] && setup_api_key="yes"
+  [ -f "/config/.hermes/.bootstrap-model-ok" ] && setup_model="yes"
+  [ -f "/config/.hermes/.mcp_ha_configured" ] && setup_mcp="yes"
+  if [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; then
+    setup_assist="yes"
+  fi
+  if [ "$LOG_GATEWAY_URL_HINT" = "true" ] && [ -z "$GW_PUBLIC_URL" ] && [ -n "${LAN_IP:-}" ]; then
+    gateway_url_hint="https://${LAN_IP}:${GATEWAY_PORT}/"
+  fi
+
   GW_PUBLIC_URL="$GW_PUBLIC_URL" GW_TOKEN="$token" TERMINAL_PORT="$TERMINAL_PORT" \
     ENABLE_HTTPS_PROXY="$ENABLE_HTTPS_PROXY" HTTPS_PROXY_PORT="$GATEWAY_PORT" \
     GATEWAY_INTERNAL_PORT="$GATEWAY_INTERNAL_PORT" ACCESS_MODE="$ACCESS_MODE" \
     DISK_TOTAL="$disk_total" DISK_USED="$disk_used" DISK_AVAIL="$disk_avail" DISK_PCT="$disk_pct" \
     NGINX_LOG_LEVEL="$NGINX_LOG_LEVEL" \
+    SETUP_API_KEY="$setup_api_key" SETUP_MODEL="$setup_model" SETUP_MCP="$setup_mcp" \
+    SETUP_ASSIST="$setup_assist" SETUP_GATEWAY_URL_HINT="$gateway_url_hint" \
     python3 /render_nginx.py
 
   if [ "$label" != "startup" ]; then
@@ -1146,6 +1583,8 @@ if kill -0 "$NGINX_PID" 2>/dev/null; then
 else
   echo "WARN: nginx failed to start (PID $NGINX_PID exited); ingress UI may be unavailable"
 fi
+
+start_status_exporter
 
 # If the token was not available at startup (first boot / pre-onboard), schedule
 # a background re-render so the "Open Gateway Web UI" button gets the real token

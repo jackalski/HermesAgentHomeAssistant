@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bat \
     less \
     openssl \
+    mosquitto-clients \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -150,12 +151,13 @@ fi
 EOF
 COPY run.sh /run.sh
 COPY hermes_config_helper.py /hermes_config_helper.py
+COPY hermes_status_exporter.py /hermes_status_exporter.py
 COPY render_nginx.py /render_nginx.py
 COPY hermes-cleanup.sh /usr/local/bin/hermes-cleanup
 COPY hermes-proxy-shim.cjs /usr/local/lib/hermes-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
-RUN chmod +x /run.sh /hermes_config_helper.py /render_nginx.py /usr/local/bin/hermes-cleanup \
+RUN chmod +x /run.sh /hermes_config_helper.py /hermes_status_exporter.py /render_nginx.py /usr/local/bin/hermes-cleanup \
     && mkdir -p /run/nginx
 
 CMD [ "/run.sh" ]

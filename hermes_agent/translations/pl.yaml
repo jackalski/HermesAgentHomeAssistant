@@ -17,7 +17,41 @@ configuration:
   
   homeassistant_token:
     name: Token Home Assistant
-    description: Opcjonalnie - długoterminowy token Home Assistant dla lokalnych skryptów/narzędzi API HA
+    description: Opcjonalnie - długoterminowy token Home Assistant dla lokalnych skryptów/narzędzi API HA i auto-konfiguracji MCP
+
+  hass_url:
+    name: URL Home Assistant
+    description: "Bazowy URL Home Assistant dla skryptów/narzędzi. Pozostaw puste dla autowykrywania na HAOS (zalecane). Synchronizowany jako HOMEASSISTANT_URL w /config/.hermes/.env, gdy ustawiony jest token."
+
+  setup_profile:
+    name: Profil konfiguracji
+    description: "Preset pierwszego uruchomienia. home_assistant włącza LAN HTTPS, auto MCP przy tokenie i bootstrap model/browser/timezone. general używa dostępu tylko lokalnego. advanced używa wyłącznie opcji indywidualnych."
+    options:
+      home_assistant: "Home Assistant (zalecane)"
+      general: "Asystent ogólny"
+      advanced: "Zaawansowane (opcje ręczne)"
+
+  default_model_preset:
+    name: Preset modelu
+    description: "Kuratowany model główny dla pierwszego uruchomienia. auto wnioskuje z pierwszego klucza API; custom używa pola Model (custom)."
+    options:
+      auto: "Auto (z klucza API)"
+      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
+      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
+      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
+      custom: "Własny ID modelu"
+
+  default_model:
+    name: Model (custom)
+    description: "ID modelu gdy preset to custom. Bootstrap tylko przy pierwszym uruchomieniu, gdy model nie jest skonfigurowany."
+
+  firecrawl_api_key:
+    name: Klucz API Firecrawl
+    description: "Opcjonalny token wyszukiwania web, synchronizowany jako FIRECRAWL_API_KEY w /config/.hermes/.env."
+
+  searxng_url:
+    name: URL SearXNG
+    description: "Opcjonalny URL SearXNG synchronizowany jako SEARXNG_URL w /config/.hermes/.env."
 
   http_proxy:
     name: Wychodzący proxy HTTP
@@ -98,6 +132,18 @@ configuration:
   enable_openai_api:
     name: Włącz API OpenAI
     description: Włącz endpoint Chat Completions kompatybilny z OpenAI. Pozwala używać Hermes Agent jako agenta konwersacji w HA Assist pipeline przez Extended OpenAI Conversation (HACS) lub dowolnego klienta kompatybilnego z OpenAI.
+  enable_ha_status_sensors:
+    name: Włącz sensory statusu HA
+    description: "Publikuje konfigurację, stan gateway, model/dostawcę i metryki użycia do Home Assistant przez MQTT discovery (gdy Mosquitto jest zainstalowany) oraz bezpieczny snapshot /status.json przez Ingress."
+  publish_mqtt_discovery:
+    name: Publikuj MQTT discovery
+    description: "Gdy WŁĄCZONE i Mosquitto działa, automatycznie tworzy encje HA dla statusu Hermes. Wyłącz, jeśli potrzebujesz tylko API /status.json."
+  status_poll_interval_seconds:
+    name: Interwał odświeżania statusu (sekundy)
+    description: "Jak często odświeżać sensory i /share/hermes/status.json. Zakres 30-300. Wyższe wartości zmniejszają zapisy na flash na kartach SD."
+  mqtt_state_prefix:
+    name: Prefiks tematów MQTT
+    description: "Prefiks tematów stanu MQTT (domyślnie hermes). Przykład: <prefix>/status/gateway_running."
   force_ipv4_dns:
     name: Wymuś kolejność DNS IPv4
     description: Wymusza priorytet IPv4 w DNS. Większość VM HAOS nie ma wyjścia IPv6 — powoduje błędy web_fetch i Telegram. Zalecane WŁĄCZONE (domyślnie).
@@ -124,25 +170,25 @@ configuration:
     description: "Gdy WŁĄCZONE, start automatycznie inicjalizuje katalog Skills Hub (odpowiednik pierwszego `hermes skills list`)."
   openai_api_key:
     name: Klucz API OpenAI
-    description: "Opcjonalny token eksportowany jako OPENAI_API_KEY dla runtime Hermes."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako OPENAI_API_KEY dla konfiguracji onboard/model i runtime Hermes."
   openrouter_api_key:
     name: Klucz API OpenRouter
-    description: "Opcjonalny token eksportowany jako OPENROUTER_API_KEY dla runtime Hermes."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako OPENROUTER_API_KEY dla konfiguracji onboard/model i runtime Hermes."
   anthropic_api_key:
     name: Klucz API Anthropic
-    description: "Opcjonalny token eksportowany jako ANTHROPIC_API_KEY dla runtime Hermes."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako ANTHROPIC_API_KEY dla konfiguracji onboard/model i runtime Hermes."
   google_api_key:
     name: Klucz API Google
-    description: "Opcjonalny token eksportowany jako GOOGLE_API_KEY dla runtime Hermes."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako GOOGLE_API_KEY dla konfiguracji onboard/model i runtime Hermes."
   minimax_api_key:
     name: Klucz API MiniMax
-    description: "Opcjonalny token eksportowany jako MINIMAX_API_KEY dla runtime Hermes."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako MINIMAX_API_KEY dla konfiguracji onboard/model i runtime Hermes."
   discord_bot_token:
     name: Token bota Discord
-    description: "Opcjonalny token eksportowany jako DISCORD_BOT_TOKEN dla narzędzi Discord."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako DISCORD_BOT_TOKEN dla narzędzi Discord."
   github_token:
     name: Token GitHub
-    description: "Opcjonalny token eksportowany jako GITHUB_TOKEN dla lepszych limitów API."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako GITHUB_TOKEN dla lepszych limitów API."
   xai_api_key:
     name: Klucz API xAI
-    description: "Opcjonalny token eksportowany jako XAI_API_KEY dla dostawcy x_search."
+    description: "Opcjonalny token synchronizowany do /config/.hermes/.env jako XAI_API_KEY dla x_search."

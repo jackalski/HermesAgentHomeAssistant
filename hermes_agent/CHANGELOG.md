@@ -2,6 +2,30 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.5] - 2026-06-05
+
+### Added
+- First-run bootstrap: sync API keys to `/config/.hermes/.env`, auto-configure main model, Docker-safe browser settings, timezone, and Home Assistant URL/token env vars.
+- `setup_profile` preset (`home_assistant`, `general`, `advanced`) with centralized profile manifest for access mode and MCP behavior.
+- `default_model_preset` curated dropdown (`auto`, `gemini_flash`, `claude_sonnet`, `gpt_mini`, `custom`) plus optional `default_model` for custom IDs.
+- Auxiliary `title_generation` bootstrap (cheap flash model) for `home_assistant` and `general` profiles on first run.
+- Router SSH env sync (`TERMINAL_SSH_HOST`, `TERMINAL_SSH_USER`, `TERMINAL_SSH_KEY`) when router options are set.
+- Optional web search env sync: `firecrawl_api_key`, `searxng_url`.
+- Landing page **Setup status** checklist (API key, model, MCP, Assist API).
+- Web terminal sources `/config/.hermes/.env` automatically for `hermes onboard` / `hermes model`.
+- `hass_url` added to configuration schema.
+- **Home Assistant status sensors**: background exporter publishes gateway health, model/provider, setup readiness, token usage, and disk metrics via MQTT discovery (when Mosquitto is installed) and a safe `/status.json` snapshot on Ingress (`/share/hermes/status.json`).
+- New options: `enable_ha_status_sensors`, `publish_mqtt_discovery`, `status_poll_interval_seconds`, `mqtt_state_prefix`.
+- Home Assistant instance autodetection: empty/local `hass_url` resolves to supervisor MCP + loopback API on HAOS; optional reachability check when a token is set.
+- Cloudflared: default `gateway_trusted_proxies` when using `lan_reverse_proxy`; startup hints recommend `lan_https` + `noTLSVerify` for Cloudflare Tunnel.
+- Documentation consolidated into a single streamlined `DOCS.md`.
+
+### Changed
+- Default `access_mode` is now `lan_https` (was `custom`).
+- `setup_profile: home_assistant` auto-enables MCP when `homeassistant_token` is set.
+- MCP URL respects `hass_url` when not running under the HA supervisor proxy.
+- Gateway LAN URL hint logged and shown on landing page when `gateway_public_url` is empty.
+
 ## [0.0.4] - 2026-05-28
 
 ### Fixed
@@ -38,10 +62,3 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 
 ### Project Baseline
 - Initial baseline release for this repository under the Hermes Agent naming.
-
-### Attribution And Recognition
-- This project is based on the original and excellent work from:
-  - **techartdev/OpenClawHomeAssistant**
-  - Repository: <https://github.com/techartdev/OpenClawHomeAssistant>
-  - Commit history: <https://github.com/techartdev/OpenClawHomeAssistant/commits/main>
-- Full recognition and thanks to the original maintainers and contributors for building and open-sourcing the foundation this project extends.
