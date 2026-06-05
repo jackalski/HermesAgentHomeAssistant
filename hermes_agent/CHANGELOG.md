@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.9] - 2026-06-06
+
+### Fixed
+- Runtime npm reconcile removes existing image-global `hermes`/`hermes-agent` binaries before reinstall (fixes `EEXIST: file already exists` at `/usr/local/bin/hermes` when pinning a version preset).
+
 ## [0.0.8] - 2026-06-05
 
 ### Changed
