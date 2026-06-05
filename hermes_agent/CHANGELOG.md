@@ -12,6 +12,10 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 - **`hermes_agent_version_preset`** add-on option (`latest`, pinned `0.15.2` / `0.15.1` / `0.14.0`, or `custom`) with runtime npm reconcile on startup.
 - Terminal profile exports `HERMES_HOME` for manual `hermes` commands.
 
+### Fixed
+- Runtime `hermes-agent` npm reconcile no longer installs into `/config/.node_global` (postinstall pip failed with PEP 668 `externally-managed-environment`); installs use image-global `/usr/local` with `PIP_BREAK_SYSTEM_PACKAGES=1`.
+- First boot with `latest` preset seeds the version marker when the image-baked `hermes` CLI is already present (avoids pointless reinstall attempts).
+
 ## [0.0.7] - 2026-06-05
 
 ### Fixed
