@@ -375,6 +375,10 @@ install_hermes_agent_npm() {
   rm -rf "/config/.node_global/lib/node_modules/hermes-agent" 2>/dev/null || true
   rm -f "/config/.node_global/bin/hermes" "/config/.node_global/bin/hermes-agent" 2>/dev/null || true
 
+  # Image-baked or prior reconcile leaves /usr/local/bin/hermes; npm EEXIST without this.
+  rm -rf "${image_npm_prefix}/lib/node_modules/hermes-agent" 2>/dev/null || true
+  rm -f "${image_npm_prefix}/bin/hermes" "${image_npm_prefix}/bin/hermes-agent" 2>/dev/null || true
+
   HOME=/root \
     NPM_CONFIG_PREFIX="${image_npm_prefix}" \
     NPM_CONFIG_USERCONFIG=/root/.npmrc \
