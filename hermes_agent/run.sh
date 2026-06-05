@@ -330,6 +330,8 @@ fi
 
 # HA add-ons mount persistent storage at /config (maps to /addon_configs/<slug> on the host).
 export HOME=/config
+export PIP_BREAK_SYSTEM_PACKAGES=1
+python3 -m pip config set global.break-system-packages true 2>/dev/null || true
 
 # Explicitly set Hermes Agent directories to ensure they persist across add-on updates
 # This prevents loss of installed skills, configuration, and workspace state
@@ -507,6 +509,19 @@ resolve_hermes_agent_npm_spec() {
   esac
 }
 
+# Install hermes-agent to the image-global npm prefix (matches Dockerfile layout).
+# Persistent /config/.node_global prefix breaks postinstall pip on PEP 668 systems.
+install_hermes_agent_npm() {
+  local spec="$1"
+  local image_npm_prefix="/usr/local"
+
+  rm -rf "${PERSISTENT_NODE_GLOBAL:-/config/.node_global}/lib/node_modules/hermes-agent" 2>/dev/null || true
+  rm -f "${PERSISTENT_NODE_GLOBAL:-/config/.node_global}/bin/hermes" \
+    "${PERSISTENT_NODE_GLOBAL:-/config/.node_global}/bin/hermes-agent" 2>/dev/null || true
+
+  HOME=/root PIP_BREAK_SYSTEM_PACKAGES=1 npm install -g "hermes-agent@${spec}" --prefix "${image_npm_prefix}"
+}
+
 reconcile_hermes_agent_version() {
   local spec marker installed_marker
   spec="$(resolve_hermes_agent_npm_spec)"
@@ -521,8 +536,15 @@ reconcile_hermes_agent_version() {
     return 0
   fi
 
+  if [ -z "$installed_marker" ] && command -v hermes >/dev/null 2>&1 && [ "$spec" = "latest" ]; then
+    echo "INFO: Using image-baked hermes CLI; seeding version marker (preset: latest)."
+    printf '%s\n' "$spec" > "$marker"
+    chmod 600 "$marker" 2>/dev/null || true
+    return 0
+  fi
+
   echo "INFO: Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
-  if npm install -g "hermes-agent@${spec}"; then
+  if install_hermes_agent_npm "$spec"; then
     printf '%s\n' "$spec" > "$marker"
     chmod 600 "$marker" 2>/dev/null || true
     echo "INFO: Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
@@ -531,7 +553,11 @@ reconcile_hermes_agent_version() {
 
   echo "ERROR: Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
   if command -v hermes >/dev/null 2>&1; then
-    echo "WARN: Continuing with previously installed hermes CLI."
+    echo "WARN: Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
+    if [ -z "$installed_marker" ]; then
+      printf '%s\n' "__image_baked__" > "$marker"
+      chmod 600 "$marker" 2>/dev/null || true
+    fi
     return 0
   fi
   return 1

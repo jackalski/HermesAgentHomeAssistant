@@ -165,6 +165,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
 | HA URL / MCP failures | Set explicit `hass_url`; check add-on log for autodetection line |
 | Low disk | Run `hermes-cleanup` in terminal |
+| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Until then the image-baked `hermes` CLI is used. Pin a version in add-on config if reconcile keeps failing |
 
 Gateway token (if CLI redacts secrets):
 

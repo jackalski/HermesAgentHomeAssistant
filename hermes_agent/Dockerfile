@@ -127,7 +127,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # Install Hermes Agent globally
-RUN npm config set fund false && npm config set audit false \
+RUN python3 -m pip config set global.break-system-packages true \
+    && npm config set fund false && npm config set audit false \
     && npm install -g hermes-agent@latest \
     && npm install -g agent-browser@latest \
     && python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
