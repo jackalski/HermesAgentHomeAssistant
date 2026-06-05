@@ -95,6 +95,40 @@
     <!-- ==================== SUCCESS BANNER ==================== -->
     <div class="banner success hidden" id="successBanner"></div>
 
+    <!-- ==================== SETUP READINESS ==================== -->
+    <details open>
+      <summary>Setup status</summary>
+      <div style="margin-top:8px;font-size:13px;color:#9ca3af;line-height:1.9">
+        <div>API key synced: <b id="setupApiKey">__SETUP_API_KEY__</b></div>
+        <div>Model configured: <b id="setupModel">__SETUP_MODEL__</b></div>
+        <div>Home Assistant MCP: <b id="setupMcp">__SETUP_MCP__</b></div>
+        <div>Assist API enabled: <b id="setupAssist">__SETUP_ASSIST__</b> <span class="muted">(optional — set <code>enable_openai_api</code> for voice/Assist)</span></div>
+        <div id="setupGatewayHint" class="muted" style="margin-top:6px"></div>
+      </div>
+    </details>
+
+    <!-- ==================== HOME ASSISTANT ==================== -->
+    <details>
+      <summary>Home Assistant</summary>
+      <div style="margin-top:8px;font-size:13px;color:#9ca3af;line-height:1.9">
+        <div>
+          Install the <a href="https://github.com/jackalski/HermesAgentHomeAssistantIntegration" target="_blank" rel="noopener">Hermes Agent integration</a>
+          (HACS) for chat card, voice mode, and tool services.
+        </div>
+        <div style="margin-top:6px">
+          <b>Status sensors</b> (when <code>enable_ha_status_sensors</code> is ON):
+          MQTT entities auto-appear if the <b>Mosquitto</b> add-on is installed; otherwise use
+          <code>/status.json</code> on this Ingress page.
+        </div>
+        <div id="haStatusLive" class="muted" style="margin-top:8px">Loading live status…</div>
+        <div class="muted" style="margin-top:6px;font-size:12px">
+          Example MQTT entities: <code>binary_sensor.hermes_gateway_running</code>,
+          <code>sensor.hermes_main_model</code>, <code>sensor.hermes_total_tokens</code>,
+          <code>sensor.hermes_estimated_cost_usd</code>
+        </div>
+      </div>
+    </details>
+
     <!-- ==================== ACCESS WIZARD ==================== -->
     <div class="wizard hidden" id="wizard">
       <h3>🧭 Quick-Start: Secure LAN Access</h3>
@@ -104,6 +138,9 @@
     <!-- ==================== TIPS ==================== -->
     <details>
       <summary>Tips &amp; token help</summary>
+      <div class="muted" style="margin-top:6px">
+        <b>First-time setup (3 fields):</b> set <code>setup_profile</code> to <b>home_assistant</b>, paste your <b>OpenRouter API key</b> (or another provider key) and optional <b>Home Assistant token</b>, then restart. The add-on bootstraps model, browser, timezone, and MCP automatically. Run <code>hermes onboard</code> only if you need OAuth or advanced tuning.
+      </div>
       <div class="muted" style="margin-top:6px">
         The gateway UI opens in a separate tab to avoid websocket/proxy issues with Ingress.
         Set <code>gateway_public_url</code> in add-on options if the button URL is wrong.
@@ -126,14 +163,14 @@
           <li>Create a <b>Long-Lived Access Token</b> in HA: click your profile avatar → scroll to <b>Long-Lived Access Tokens</b> → <b>Create Token</b></li>
           <li>Paste it into add-on option <code>homeassistant_token</code> in <b>Settings → Add-ons → Configuration</b></li>
           <li>Set <code>auto_configure_mcp</code> to <b>ON</b> in add-on Configuration</li>
-          <li>Restart the add-on — MCP is configured automatically</li>
+          <li>Leave <code>hass_url</code> empty on HAOS (autodetected) and restart — MCP is configured automatically</li>
         </ol>
 
         <b>Manual (Hermes built-in MCP)</b>
         <p>Add to <code>/config/.hermes/config.yaml</code> under <code>mcp_servers</code>, then run <code>/reload-mcp</code> in Gateway chat:</p>
         <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">mcp_servers:
   HA:
-    url: "http://localhost:8123/api/mcp"
+    url: "http://supervisor/core/api/mcp"
     headers:
       Authorization: "Bearer YOUR_LONG_LIVED_TOKEN"</pre>
 
@@ -164,6 +201,15 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
 - "traefik.http.routers.hermes.tls.certresolver=le"
 - "traefik.http.services.hermes.loadbalancer.server.port=18789"</pre>
 
+        <b>Cloudflare Tunnel (Cloudflared add-on)</b>
+        <p>Keep <code>access_mode: lan_https</code>. Point the tunnel at the local HTTPS origin (self-signed cert — use <code>noTLSVerify</code>):</p>
+        <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">ingress:
+  - hostname: hermes.example.com
+    service: https://127.0.0.1:18789
+    originRequest:
+      noTLSVerify: true</pre>
+        <p>Set <code>gateway_public_url</code> to <code>https://hermes.example.com</code> and restart.</p>
+
         <b>Tailscale HTTPS</b>
         <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px"># 1. Set access_mode to tailnet_https in add-on configuration
 # 2. Enable Tailscale HTTPS in your Tailnet admin: DNS → HTTPS Certificates
@@ -192,6 +238,21 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
 
     const $ = id => document.getElementById(id);
 
+    function formatSetupFlag(el) {
+      if (!el) return;
+      const val = (el.textContent || '').trim().toLowerCase();
+      el.innerHTML = val === 'yes' ? '✅ yes' : '❌ no';
+    }
+    formatSetupFlag($('setupApiKey'));
+    formatSetupFlag($('setupModel'));
+    formatSetupFlag($('setupMcp'));
+    formatSetupFlag($('setupAssist'));
+    const gatewayHint = '__SETUP_GATEWAY_URL_HINT__';
+    if (gatewayHint && $('setupGatewayHint')) {
+      $('setupGatewayHint').innerHTML =
+        'Suggested gateway URL: <code>' + gatewayHint + '</code> — set <code>gateway_public_url</code> if the Open Gateway button URL is wrong.';
+    }
+
     // ---------- Secure context detection ----------
     const isSecure = window.isSecureContext;
     const secureBadge = $('secureBadge');
@@ -205,6 +266,29 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
       secureBadge.className = 'badge insecure';
       statusSecure.innerHTML = '<span class="icon">❌</span><span>Secure context: <b>no</b> — HTTPS required for Control UI</span>';
     }
+
+    // ---------- HA status.json (add-on exporter) ----------
+    (async function loadHaStatus() {
+      const el = $('haStatusLive');
+      if (!el) return;
+      try {
+        const r = await fetch('/status.json', { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const s = await r.json();
+        const u = s.usage || {};
+        const gw = s.gateway_running ? 'running' : 'unreachable';
+        const model = (s.main_provider && s.main_model && s.main_model !== 'unknown')
+          ? s.main_provider + ' / ' + s.main_model
+          : (s.main_model || 'not set');
+        const tokens = u.total_tokens != null ? u.total_tokens : '—';
+        const cost = u.estimated_cost_usd != null ? '$' + Number(u.estimated_cost_usd).toFixed(4) : '—';
+        el.innerHTML =
+          'Gateway: <b>' + gw + '</b> · Model: <b>' + model + '</b> · Tokens: <b>' + tokens + '</b> · Est. cost: <b>' + cost + '</b>' +
+          (s.updated_at ? ' <span class="muted">(updated ' + s.updated_at + ')</span>' : '');
+      } catch {
+        el.innerHTML = 'Live status unavailable yet — exporter may still be starting. Check add-on logs or <code>/share/hermes/status.json</code>.';
+      }
+    })();
 
     // ---------- Gateway health check ----------
     (async function checkGateway() {

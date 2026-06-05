@@ -31,6 +31,11 @@ def main():
     disk_avail = os.environ.get('DISK_AVAIL', '')
     disk_pct = os.environ.get('DISK_PCT', '')
     nginx_log_level = os.environ.get('NGINX_LOG_LEVEL', 'minimal')
+    setup_api_key = os.environ.get('SETUP_API_KEY', 'no')
+    setup_model = os.environ.get('SETUP_MODEL', 'no')
+    setup_mcp = os.environ.get('SETUP_MCP', 'no')
+    setup_assist = os.environ.get('SETUP_ASSIST', 'no')
+    gateway_url_hint = os.environ.get('SETUP_GATEWAY_URL_HINT', '')
 
     # Token comes from environment (best-effort CLI query in run.sh)
     token = os.environ.get('GW_TOKEN', '')
@@ -115,6 +120,11 @@ def main():
     landing = landing.replace('__DISK_USED__', disk_used)
     landing = landing.replace('__DISK_AVAIL__', disk_avail)
     landing = landing.replace('__DISK_PCT__', disk_pct)
+    landing = landing.replace('__SETUP_API_KEY__', setup_api_key)
+    landing = landing.replace('__SETUP_MODEL__', setup_model)
+    landing = landing.replace('__SETUP_MCP__', setup_mcp)
+    landing = landing.replace('__SETUP_ASSIST__', setup_assist)
+    landing = landing.replace('__SETUP_GATEWAY_URL_HINT__', gateway_url_hint)
 
     out_dir = Path('/etc/nginx/html')
     out_dir.mkdir(parents=True, exist_ok=True)

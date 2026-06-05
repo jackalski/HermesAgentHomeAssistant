@@ -1,8 +1,10 @@
 name: Hermes Agent
-version: "0.0.4"
+version: "0.0.5"
 slug: hermes_agent
 description: Run Hermes Agent as a Home Assistant add-on.
 url: https://github.com/jackalski/HermesAgentHomeAssistant
+services:
+  - mqtt:want
 arch:
   - amd64
   - aarch64
@@ -38,8 +40,27 @@ options:
   # Example: "https://example.duckdns.org:12345" or "http://192.168.1.10:18789"
   gateway_public_url: ""
 
-  # Optional: Home Assistant long-lived token (for local HA API scripts/tools)
-  homeassistant_token: ""
+  # Home Assistant base URL for scripts/tools and HOMEASSISTANT_URL in .env.
+  # Leave empty for autodetection on HAOS (supervisor/loopback). Override for remote or custom HA URLs.
+  # Example: "https://example.duckdns.org:8443"
+  hass_url: ""
+
+  # First-run preset — bundles sensible defaults for common use cases.
+  # home_assistant: LAN HTTPS + auto MCP when token set + model/browser bootstrap
+  # general: local-only access + model/browser bootstrap
+  # advanced: use individual options only (no profile overrides)
+  setup_profile: home_assistant
+
+  # Default main model preset for first-run bootstrap (when config.yaml has no model yet).
+  # auto: infer from first API key; custom: use default_model field below.
+  default_model_preset: auto
+
+  # Custom model ID when default_model_preset is custom (e.g. google/gemini-2.5-flash).
+  default_model: ""
+
+  # Optional web search credentials (synced to /config/.hermes/.env when set).
+  firecrawl_api_key: ""
+  searxng_url: ""
 
   # Optional: outbound HTTP/HTTPS proxy for Hermes Agent network access.
   # Example: "http://192.168.2.1:3128"
@@ -82,7 +103,7 @@ options:
   # lan_https: Built-in HTTPS reverse proxy for LAN access (recommended for phones/tablets)
   # lan_reverse_proxy: LAN bind + trusted-proxy for an external reverse proxy (NPM, Caddy, …)
   # tailnet_https: Tailscale interface bind + token auth
-  access_mode: custom
+  access_mode: lan_https
 
   # Gateway authentication mode:
   # - token: standard token auth (default)
@@ -109,6 +130,18 @@ options:
   # When enabled, Hermes Agent can be used as a conversation agent in HA Assist pipeline
   # via Extended OpenAI Conversation (HACS) or any OpenAI-compatible client
   enable_openai_api: false
+
+  # Expose Hermes setup/runtime/usage metrics to Home Assistant (MQTT discovery + /status.json).
+  enable_ha_status_sensors: true
+
+  # Publish MQTT discovery configs when the Mosquitto add-on is available.
+  publish_mqtt_discovery: true
+
+  # How often to refresh status sensors and /share/hermes/status.json (30-300 seconds).
+  status_poll_interval_seconds: 60
+
+  # Prefix for MQTT state topics (e.g. hermes/status/gateway_running).
+  mqtt_state_prefix: "hermes"
 
   # Force IPv4-first DNS result ordering for Node fetch/network calls.
   # Most HAOS VMs lack IPv6 egress, causing web_fetch / Telegram timeouts.
@@ -145,6 +178,8 @@ options:
   tool_skills_hub_enabled: true
 
   # Optional provider/API tokens managed from add-on configuration (hybrid auth model).
+  # Non-empty values are synced to /config/.hermes/.env on each startup so
+  # `hermes onboard`, `hermes model`, and the gateway can use them during setup.
   # OAuth/device-code providers still require `hermes auth` in terminal.
   openai_api_key: ""
   openrouter_api_key: ""
@@ -161,7 +196,13 @@ schema:
   enable_terminal: bool?
   terminal_port: int(1024,65535)?
   gateway_public_url: str?
+  hass_url: str?
   homeassistant_token: str?
+  setup_profile: list(home_assistant|general|advanced)?
+  default_model_preset: list(auto|gemini_flash|claude_sonnet|gpt_mini|custom)?
+  default_model: str?
+  firecrawl_api_key: str?
+  searxng_url: str?
   http_proxy: str?
 
   router_ssh_host: str
@@ -180,6 +221,10 @@ schema:
   gateway_additional_allowed_origins: str?
   controlui_disable_device_auth: bool?
   enable_openai_api: bool?
+  enable_ha_status_sensors: bool?
+  publish_mqtt_discovery: bool?
+  status_poll_interval_seconds: int(30,300)?
+  mqtt_state_prefix: str?
   force_ipv4_dns: bool?
   gateway_env_vars:
     - name: "match(^[A-Z_][A-Z0-9_]*$)"

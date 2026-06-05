@@ -18,6 +18,36 @@ except ImportError:  # pragma: no cover - image installs python3-yaml
 CONFIG_PATH = Path(os.environ.get("HERMES_CONFIG_PATH", "/config/.hermes/hermes.json"))
 YAML_CONFIG_PATH = Path(os.environ.get("HERMES_YAML_CONFIG_PATH", "/config/.hermes/config.yaml"))
 HERMES_ENV_PATH = Path(os.environ.get("HERMES_ENV_PATH", "/config/.hermes/.env"))
+HERMES_STATE_DIR = YAML_CONFIG_PATH.parent
+
+PROFILE_MANIFEST = {
+    "home_assistant": {
+        "access_mode_when_custom": "lan_https",
+        "auto_mcp_when_ha_token": True,
+        "bootstrap_auxiliary_title": True,
+        "log_gateway_url_hint": True,
+    },
+    "general": {
+        "access_mode_when_custom": "local_only",
+        "auto_mcp_when_ha_token": False,
+        "bootstrap_auxiliary_title": True,
+        "log_gateway_url_hint": False,
+    },
+    "advanced": {
+        "access_mode_when_custom": None,
+        "auto_mcp_when_ha_token": False,
+        "bootstrap_auxiliary_title": False,
+        "log_gateway_url_hint": False,
+    },
+}
+
+MODEL_PRESETS = {
+    "gemini_flash": "google/gemini-2.5-flash",
+    "claude_sonnet": "anthropic/claude-sonnet-4",
+    "gpt_mini": "openai/gpt-4.1-mini",
+}
+
+AUXILIARY_TITLE_MODEL = "google/gemini-2.5-flash"
 
 
 def read_config():
@@ -123,6 +153,21 @@ def write_yaml_config(cfg):
         return False
 
 
+# Add-on option keys synced into /config/.hermes/.env for Hermes setup/runtime.
+ADDON_API_KEY_ENV_MAP = {
+    "OPENAI_API_KEY": "openai_api_key",
+    "OPENROUTER_API_KEY": "openrouter_api_key",
+    "ANTHROPIC_API_KEY": "anthropic_api_key",
+    "GOOGLE_API_KEY": "google_api_key",
+    "MINIMAX_API_KEY": "minimax_api_key",
+    "DISCORD_BOT_TOKEN": "discord_bot_token",
+    "GITHUB_TOKEN": "github_token",
+    "XAI_API_KEY": "xai_api_key",
+    "FIRECRAWL_API_KEY": "firecrawl_api_key",
+    "SEARXNG_URL": "searxng_url",
+}
+
+
 def upsert_env_var(key: str, value: str):
     if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key):
         print(f"ERROR: Invalid env var name: {key}", file=sys.stderr)
@@ -155,6 +200,404 @@ def upsert_env_var(key: str, value: str):
     except OSError as e:
         print(f"ERROR: Failed to update {HERMES_ENV_PATH}: {e}", file=sys.stderr)
         return False
+
+
+# Default main models when add-on default_model is empty (provider -> model id).
+DEFAULT_MODEL_BY_PROVIDER = {
+    "openrouter": "google/gemini-2.5-flash",
+    "anthropic": "claude-sonnet-4-6",
+    "openai": "gpt-4.1-mini",
+    "google": "gemini-2.5-flash",
+    "minimax": "MiniMax-M2.7",
+}
+
+# Provider preference when multiple API keys are configured.
+PROVIDER_KEY_PRIORITY = (
+    ("openrouter", "OPENROUTER_API_KEY"),
+    ("anthropic", "ANTHROPIC_API_KEY"),
+    ("openai", "OPENAI_API_KEY"),
+    ("google", "GOOGLE_API_KEY"),
+    ("minimax", "MINIMAX_API_KEY"),
+)
+
+
+def model_needs_bootstrap(cfg: dict) -> bool:
+    if not cfg:
+        return True
+    model = cfg.get("model")
+    if model is None:
+        return True
+    if model == "":
+        return True
+    if isinstance(model, dict):
+        default = model.get("default", "")
+        if not default or (isinstance(default, str) and not default.strip()):
+            return True
+    return False
+
+
+def _has_api_key(api_keys: dict, env_key: str) -> bool:
+    value = api_keys.get(env_key, "")
+    return isinstance(value, str) and bool(value.strip())
+
+
+HA_URL_AUTO_DEFAULTS = frozenset(
+    {
+        "",
+        "http://localhost:8123",
+        "https://localhost:8123",
+        "http://127.0.0.1:8123",
+        "https://127.0.0.1:8123",
+    }
+)
+
+
+def is_hass_url_auto(user_url: str) -> bool:
+    normalized = (user_url or "").strip().rstrip("/")
+    return normalized in HA_URL_AUTO_DEFAULTS
+
+
+def resolve_home_assistant_url(payload: dict):
+    """Resolve HA base URL and MCP endpoint for add-on runtime.
+
+    When hass_url is empty or a local placeholder, prefer supervisor/core on HAOS
+    and fall back to loopback. User-provided non-local URLs are never overridden.
+    """
+    if not isinstance(payload, dict):
+        print("ERROR: resolve-home-assistant-url expects a JSON object", file=sys.stderr)
+        return None
+
+    user_url = str(payload.get("hass_url", "")).strip().rstrip("/")
+    supervisor_available = str(payload.get("supervisor_available", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    internal_host = str(payload.get("internal_host", "")).strip()
+    internal_port = str(payload.get("internal_port", "")).strip()
+
+    if user_url and not is_hass_url_auto(user_url):
+        return {
+            "homeassistant_url": user_url,
+            "mcp_url": f"{user_url}/api/mcp",
+            "source": "user",
+            "verified": None,
+        }
+
+    if supervisor_available:
+        ha_url = "http://127.0.0.1:8123"
+        if internal_host and internal_port:
+            ha_url = f"http://{internal_host}:{internal_port}"
+        return {
+            "homeassistant_url": ha_url,
+            "mcp_url": "http://supervisor/core/api/mcp",
+            "source": "supervisor",
+            "verified": None,
+        }
+
+    fallback = user_url or "http://127.0.0.1:8123"
+    return {
+        "homeassistant_url": fallback,
+        "mcp_url": f"{fallback}/api/mcp",
+        "source": "default",
+        "verified": None,
+    }
+
+
+def resolve_setup_profile(payload: dict):
+    if not isinstance(payload, dict):
+        print("ERROR: resolve-setup-profile expects a JSON object", file=sys.stderr)
+        return None
+
+    profile = str(payload.get("setup_profile", "home_assistant")).strip() or "home_assistant"
+    access_mode = str(payload.get("access_mode", "lan_https")).strip() or "lan_https"
+    auto_configure_mcp = str(payload.get("auto_configure_mcp", "false")).lower() in ("1", "true", "yes")
+    ha_token = str(payload.get("homeassistant_token", "")).strip()
+
+    manifest = PROFILE_MANIFEST.get(profile, PROFILE_MANIFEST["advanced"])
+    effective_access_mode = access_mode
+    if access_mode == "custom" and manifest.get("access_mode_when_custom"):
+        effective_access_mode = manifest["access_mode_when_custom"]
+
+    effective_auto_configure_mcp = auto_configure_mcp
+    if manifest.get("auto_mcp_when_ha_token") and ha_token:
+        effective_auto_configure_mcp = True
+
+    return {
+        "setup_profile": profile,
+        "access_mode": effective_access_mode,
+        "auto_configure_mcp": effective_auto_configure_mcp,
+        "bootstrap_auxiliary_title": bool(manifest.get("bootstrap_auxiliary_title")),
+        "log_gateway_url_hint": bool(manifest.get("log_gateway_url_hint")),
+    }
+
+
+def resolve_default_model_text(default_model_preset: str, default_model: str) -> str:
+    preset = (default_model_preset or "auto").strip().lower()
+    if preset == "custom":
+        return (default_model or "").strip()
+    if preset == "auto":
+        return (default_model or "").strip()
+    return MODEL_PRESETS.get(preset, (default_model or "").strip())
+
+
+def infer_provider_and_model(default_model: str, api_keys: dict):
+    """Return (provider, model) or (None, None) when inference is not possible."""
+    explicit = (default_model or "").strip()
+    if explicit:
+        if "/" in explicit and _has_api_key(api_keys, "OPENROUTER_API_KEY"):
+            return "openrouter", explicit
+        if "/" in explicit:
+            prefix, model_id = explicit.split("/", 1)
+            prefix = prefix.strip().lower()
+            model_id = model_id.strip()
+            if prefix == "anthropic" and _has_api_key(api_keys, "ANTHROPIC_API_KEY"):
+                return "anthropic", model_id
+            if prefix in ("openai", "gpt") and _has_api_key(api_keys, "OPENAI_API_KEY"):
+                return "openai", model_id
+            if prefix == "google" and _has_api_key(api_keys, "GOOGLE_API_KEY"):
+                return "google", model_id
+        for provider, env_key in PROVIDER_KEY_PRIORITY:
+            if _has_api_key(api_keys, env_key):
+                return provider, explicit
+        return None, None
+
+    for provider, env_key in PROVIDER_KEY_PRIORITY:
+        if _has_api_key(api_keys, env_key):
+            return provider, DEFAULT_MODEL_BY_PROVIDER[provider]
+
+    return None, None
+
+
+def _infer_provider_from_api_keys(api_keys: dict):
+    for provider, env_key in PROVIDER_KEY_PRIORITY:
+        if _has_api_key(api_keys, env_key):
+            return provider
+    return None
+
+
+def auxiliary_title_needs_bootstrap(cfg: dict) -> bool:
+    auxiliary = cfg.get("auxiliary")
+    if not isinstance(auxiliary, dict):
+        return True
+    title = auxiliary.get("title_generation")
+    if not isinstance(title, dict):
+        return True
+    provider = str(title.get("provider", "auto")).strip().lower()
+    model = str(title.get("model", "")).strip()
+    if provider in ("", "auto") and not model:
+        return True
+    return False
+
+
+def bootstrap_auxiliary_title_if_needed(api_keys: dict):
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    if not auxiliary_title_needs_bootstrap(cfg):
+        return True
+
+    provider = _infer_provider_from_api_keys(api_keys) or "openrouter"
+    model = AUXILIARY_TITLE_MODEL
+    if provider != "openrouter" and "/" not in model:
+        model = DEFAULT_MODEL_BY_PROVIDER.get(provider, model)
+
+    auxiliary = cfg.get("auxiliary")
+    if not isinstance(auxiliary, dict):
+        auxiliary = {}
+    auxiliary["title_generation"] = {
+        "provider": provider,
+        "model": model,
+        "base_url": "",
+        "api_key": "",
+        "timeout": 30,
+    }
+    cfg["auxiliary"] = auxiliary
+    if write_yaml_config(cfg):
+        print(
+            "INFO: Bootstrapped auxiliary title_generation in "
+            f"{YAML_CONFIG_PATH}: {provider} / {model}"
+        )
+        return True
+    return False
+
+
+def write_readiness_marker(name: str, present: bool):
+    path = HERMES_STATE_DIR / name
+    HERMES_STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if present:
+        path.write_text("ok\n", encoding="utf-8")
+    elif path.exists():
+        path.unlink()
+    return True
+
+
+def update_readiness_markers(api_keys: dict, enable_openai_api: bool, mcp_configured: bool):
+    has_api_key = any(_has_api_key(api_keys, key) for key in ADDON_API_KEY_ENV_MAP)
+    cfg = read_yaml_config()
+    model_ok = cfg is not None and not model_needs_bootstrap(cfg)
+
+    write_readiness_marker(".bootstrap-api-key-ok", has_api_key)
+    write_readiness_marker(".bootstrap-model-ok", model_ok)
+    write_readiness_marker(".bootstrap-mcp-ok", mcp_configured)
+    write_readiness_marker(".bootstrap-assist-ok", enable_openai_api)
+    return True
+
+
+def sync_router_ssh_env(host: str, user: str, key_path: str):
+    host = (host or "").strip()
+    user = (user or "").strip()
+    key_path = (key_path or "").strip()
+    if not host or not user:
+        return True
+
+    ok = upsert_env_var("TERMINAL_SSH_HOST", host) and upsert_env_var("TERMINAL_SSH_USER", user)
+    if key_path:
+        ok = upsert_env_var("TERMINAL_SSH_KEY", key_path) and ok
+    if ok:
+        print(f"INFO: Synced router SSH env for Hermes: TERMINAL_SSH_HOST, TERMINAL_SSH_USER")
+    return ok
+
+
+def bootstrap_model_if_missing(default_model: str, api_keys: dict):
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    if not model_needs_bootstrap(cfg):
+        return True
+
+    provider, model_id = infer_provider_and_model(default_model, api_keys)
+    if not provider or not model_id:
+        return True
+
+    cfg["model"] = {
+        "provider": provider,
+        "default": model_id,
+        "base_url": "",
+        "api_mode": "chat_completions",
+    }
+    if write_yaml_config(cfg):
+        print(
+            "INFO: Bootstrapped Hermes main model in "
+            f"{YAML_CONFIG_PATH}: {provider} / {model_id}"
+        )
+        write_readiness_marker(".bootstrap-model-ok", True)
+        return True
+    return False
+
+
+def bootstrap_browser_if_enabled(enabled: bool):
+    if not enabled:
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    browser = cfg.get("browser")
+    if isinstance(browser, dict) and browser.get("noSandbox") is True:
+        return True
+
+    cfg["browser"] = {
+        "enabled": True,
+        "headless": True,
+        "noSandbox": True,
+    }
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped Docker-safe browser settings in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+def bootstrap_timezone_if_missing(timezone: str):
+    tz = (timezone or "").strip()
+    if not tz:
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    if cfg.get("timezone"):
+        return True
+
+    cfg["timezone"] = tz
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped Hermes timezone in {YAML_CONFIG_PATH}: {tz}")
+        return True
+    return False
+
+
+def sync_homeassistant_env(url: str, token: str):
+    base = (url or "").strip().rstrip("/")
+    tok = (token or "").strip()
+    ok = True
+    if base:
+        ok = upsert_env_var("HOMEASSISTANT_URL", base) and ok
+    if tok:
+        ok = upsert_env_var("HOMEASSISTANT_TOKEN", tok) and ok
+    if ok and (base or tok):
+        synced = [k for k, v in (("HOMEASSISTANT_URL", base), ("HOMEASSISTANT_TOKEN", tok)) if v]
+        print(f"INFO: Synced Home Assistant env for Hermes setup: {', '.join(synced)}")
+    return ok
+
+
+def bootstrap_first_run(payload: dict):
+    if not isinstance(payload, dict):
+        print("ERROR: bootstrap-first-run expects a JSON object", file=sys.stderr)
+        return False
+
+    timezone = payload.get("timezone", "")
+    browser_enabled = str(payload.get("browser_enabled", "false")).lower() in ("1", "true", "yes")
+    default_model_preset = payload.get("default_model_preset", "auto")
+    default_model = payload.get("default_model", "")
+    bootstrap_auxiliary_title = str(payload.get("bootstrap_auxiliary_title", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    api_keys = payload.get("api_keys", {})
+    ha_url = payload.get("homeassistant_url", "")
+    ha_token = payload.get("homeassistant_token", "")
+    enable_openai_api = str(payload.get("enable_openai_api", "false")).lower() in ("1", "true", "yes")
+    mcp_configured = str(payload.get("mcp_configured", "false")).lower() in ("1", "true", "yes")
+
+    if not isinstance(api_keys, dict):
+        api_keys = {}
+
+    resolved_model = resolve_default_model_text(str(default_model_preset), str(default_model))
+
+    ok = True
+    if ha_url or ha_token:
+        ok = sync_homeassistant_env(str(ha_url), str(ha_token)) and ok
+    ok = bootstrap_timezone_if_missing(str(timezone)) and ok
+    ok = bootstrap_browser_if_enabled(browser_enabled) and ok
+    ok = bootstrap_model_if_missing(resolved_model, api_keys) and ok
+    if bootstrap_auxiliary_title:
+        ok = bootstrap_auxiliary_title_if_needed(api_keys) and ok
+    ok = update_readiness_markers(api_keys, enable_openai_api, mcp_configured) and ok
+    return ok
+
+
+def sync_addon_api_keys(secrets: dict):
+    """Write non-empty add-on API keys into Hermes .env for onboard/model setup."""
+    if not isinstance(secrets, dict):
+        print("ERROR: sync-addon-api-keys expects a JSON object", file=sys.stderr)
+        return False
+
+    synced = []
+    for env_key in ADDON_API_KEY_ENV_MAP:
+        value = secrets.get(env_key, "")
+        if not isinstance(value, str) or not value.strip():
+            continue
+        if upsert_env_var(env_key, value.strip()):
+            synced.append(env_key)
+
+    if synced:
+        print(
+            "INFO: Synced add-on API keys to "
+            f"{HERMES_ENV_PATH} for Hermes setup: {', '.join(synced)}"
+        )
+    return True
 
 
 def configure_ha_mcp(server_name: str, url: str, token_env_key: str = "HOMEASSISTANT_TOKEN"):
@@ -234,6 +677,79 @@ def main():
         env_key = "HOMEASSISTANT_TOKEN"
         ok = upsert_env_var(env_key, token) and configure_ha_mcp(server_name, url, env_key)
         sys.exit(0 if ok else 1)
+    elif cmd == "sync-addon-api-keys":
+        if len(sys.argv) < 3:
+            print("Usage: hermes_config_helper.py sync-addon-api-keys '<json-object>'", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(sys.argv[2])
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON for sync-addon-api-keys: {e}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0 if sync_addon_api_keys(payload) else 1)
+    elif cmd == "bootstrap-first-run":
+        if len(sys.argv) < 3:
+            print("Usage: hermes_config_helper.py bootstrap-first-run '<json-object>'", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(sys.argv[2])
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON for bootstrap-first-run: {e}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0 if bootstrap_first_run(payload) else 1)
+    elif cmd == "sync-homeassistant-env":
+        if len(sys.argv) < 4:
+            print("Usage: hermes_config_helper.py sync-homeassistant-env <url> <token>", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0 if sync_homeassistant_env(sys.argv[2], sys.argv[3]) else 1)
+    elif cmd == "resolve-setup-profile":
+        if len(sys.argv) < 3:
+            print("Usage: hermes_config_helper.py resolve-setup-profile '<json-object>'", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(sys.argv[2])
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON for resolve-setup-profile: {e}", file=sys.stderr)
+            sys.exit(1)
+        resolved = resolve_setup_profile(payload)
+        if resolved is None:
+            sys.exit(1)
+        print(json.dumps(resolved))
+        sys.exit(0)
+    elif cmd == "resolve-home-assistant-url":
+        if len(sys.argv) < 3:
+            print("Usage: hermes_config_helper.py resolve-home-assistant-url '<json-object>'", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(sys.argv[2])
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON for resolve-home-assistant-url: {e}", file=sys.stderr)
+            sys.exit(1)
+        resolved = resolve_home_assistant_url(payload)
+        if resolved is None:
+            sys.exit(1)
+        print(json.dumps(resolved))
+        sys.exit(0)
+    elif cmd == "sync-router-ssh-env":
+        if len(sys.argv) < 5:
+            print("Usage: hermes_config_helper.py sync-router-ssh-env <host> <user> <key_path>", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0 if sync_router_ssh_env(sys.argv[2], sys.argv[3], sys.argv[4]) else 1)
+    elif cmd == "update-readiness-markers":
+        if len(sys.argv) < 3:
+            print("Usage: hermes_config_helper.py update-readiness-markers '<json-object>'", file=sys.stderr)
+            sys.exit(1)
+        try:
+            payload = json.loads(sys.argv[2])
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON for update-readiness-markers: {e}", file=sys.stderr)
+            sys.exit(1)
+        api_keys = payload.get("api_keys", {})
+        if not isinstance(api_keys, dict):
+            api_keys = {}
+        enable_openai_api = str(payload.get("enable_openai_api", "false")).lower() in ("1", "true", "yes")
+        mcp_configured = str(payload.get("mcp_configured", "false")).lower() in ("1", "true", "yes")
+        sys.exit(0 if update_readiness_markers(api_keys, enable_openai_api, mcp_configured) else 1)
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)

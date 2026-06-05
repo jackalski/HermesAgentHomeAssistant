@@ -51,6 +51,13 @@ http {
       try_files /index.html =404;
     }
 
+    # Home Assistant status API (safe snapshot; no secrets)
+    location = /status.json {
+      alias /share/hermes/status.json;
+      default_type application/json;
+      add_header Cache-Control "no-store";
+    }
+
     # (Optional) Gateway UI via ingress has been intentionally removed.
     # See landing page link that opens the gateway in a separate tab.
 

@@ -11,6 +11,7 @@ This repository contains a Home Assistant add-on that runs **Hermes Agent** insi
 - **AI Gateway** — Hermes Agent server with chat, skills, and automation capabilities
 - **Web Terminal** — browser-based terminal embedded in Home Assistant
 - **Assist Pipeline** — use Hermes Agent as a conversation agent via the OpenAI-compatible API
+- **HA Status Sensors** — MQTT discovery (with Mosquitto) plus Ingress `/status.json` for model, provider, usage, and gateway health
 - **Browser Automation** — Chromium included for web scraping and automation skills
 - **Proxy Support** — optional outbound `http_proxy` setting for HTTP/HTTPS traffic
 - **Cloudflare Tunnel Ready** — works with Home Assistant `Cloudflared` add-on for secure remote HTTPS access
