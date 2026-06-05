@@ -85,6 +85,8 @@ MINIMAX_API_KEY_OPT=$(jq -r '.minimax_api_key // empty' "$OPTIONS_FILE")
 DISCORD_BOT_TOKEN_OPT=$(jq -r '.discord_bot_token // empty' "$OPTIONS_FILE")
 GITHUB_TOKEN_OPT=$(jq -r '.github_token // empty' "$OPTIONS_FILE")
 XAI_API_KEY_OPT=$(jq -r '.xai_api_key // empty' "$OPTIONS_FILE")
+HERMES_AGENT_VERSION_PRESET=$(jq -r '.hermes_agent_version_preset // "latest"' "$OPTIONS_FILE")
+HERMES_AGENT_VERSION_CUSTOM=$(jq -r '.hermes_agent_version_custom // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_TYPE=$(jq -r 'if .gateway_env_vars == null then "null" else (.gateway_env_vars | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.gateway_env_vars // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_JSON=$(jq -c '.gateway_env_vars // []' "$OPTIONS_FILE")
@@ -331,6 +333,7 @@ export HOME=/config
 
 # Explicitly set Hermes Agent directories to ensure they persist across add-on updates
 # This prevents loss of installed skills, configuration, and workspace state
+export HERMES_HOME=/config/.hermes
 export HERMES_CONFIG_DIR=/config/.hermes
 export HERMES_WORKSPACE_DIR=/config/hermesd
 export XDG_CONFIG_HOME=/config
@@ -432,11 +435,12 @@ initialize_skills_hub_if_enabled() {
   if [ -f "$skills_init_flag" ]; then
     return 0
   fi
-  if ! command -v hermes-agent >/dev/null 2>&1; then
+  if ! command -v hermes >/dev/null 2>&1; then
     echo "WARN: Hermes CLI is unavailable; cannot initialize Skills Hub yet."
     return 0
   fi
-  if hermes-agent skills list >/dev/null 2>&1; then
+  load_hermes_env_file
+  if hermes skills list >/dev/null 2>&1; then
     date -u +"%Y-%m-%dT%H:%M:%SZ" > "$skills_init_flag"
     echo "INFO: Skills Hub directory initialized."
   else
@@ -480,6 +484,90 @@ export_gateway_tool_env() {
   fi
   export HERMES_GATEWAY_SESSION=1
   export HERMES_INTERACTIVE=1
+}
+
+resolve_hermes_agent_npm_spec() {
+  local preset
+  preset="$(echo "${HERMES_AGENT_VERSION_PRESET:-latest}" | tr '[:upper:]' '[:lower:]')"
+  case "$preset" in
+    latest)
+      echo "latest"
+      ;;
+    custom)
+      if [ -n "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
+        echo "$HERMES_AGENT_VERSION_CUSTOM"
+      else
+        echo "WARN: hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using latest." >&2
+        echo "latest"
+      fi
+      ;;
+    *)
+      echo "$preset"
+      ;;
+  esac
+}
+
+reconcile_hermes_agent_version() {
+  local spec marker installed_marker
+  spec="$(resolve_hermes_agent_npm_spec)"
+  marker="/config/.hermes/.addon-managed-hermes-version"
+  installed_marker=""
+  if [ -f "$marker" ]; then
+    installed_marker="$(tr -d '\r\n' < "$marker" 2>/dev/null || true)"
+  fi
+
+  if [ "$installed_marker" = "$spec" ] && command -v hermes >/dev/null 2>&1; then
+    echo "INFO: Hermes Agent npm spec '${spec}' already installed."
+    return 0
+  fi
+
+  echo "INFO: Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
+  if npm install -g "hermes-agent@${spec}"; then
+    printf '%s\n' "$spec" > "$marker"
+    chmod 600 "$marker" 2>/dev/null || true
+    echo "INFO: Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
+    return 0
+  fi
+
+  echo "ERROR: Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
+  if command -v hermes >/dev/null 2>&1; then
+    echo "WARN: Continuing with previously installed hermes CLI."
+    return 0
+  fi
+  return 1
+}
+
+require_hermes_cli() {
+  if command -v hermes >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "ERROR: hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
+  return 1
+}
+
+ensure_default_hermes_profile() {
+  mkdir -p "${HERMES_HOME:-/config/.hermes}"
+  if [ ! -f "${HERMES_HOME}/config.yaml" ]; then
+    echo "INFO: No ${HERMES_HOME}/config.yaml yet; first-run bootstrap will populate it."
+  fi
+  if ! command -v hermes >/dev/null 2>&1; then
+    return 0
+  fi
+  load_hermes_env_file
+  if hermes profile >/dev/null 2>&1; then
+    echo "INFO: Hermes profile summary:"
+    hermes profile 2>/dev/null | head -8 || true
+  fi
+  if hermes gateway list >/dev/null 2>&1; then
+    echo "INFO: Hermes gateway list:"
+    hermes gateway list 2>/dev/null | head -5 || true
+  fi
+  return 0
+}
+
+run_hermes_gateway() {
+  export HERMES_GATEWAY_NO_SUPERVISE=1
+  hermes gateway run --no-supervise &
 }
 
 start_cdp_chromium_if_enabled() {
@@ -722,7 +810,18 @@ fi
 # ------------------------------------------------------------------------------
 
 gateway_running() {
-  pgrep -f "hermes-agent-gateway" >/dev/null 2>&1
+  if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ":${GATEWAY_INTERNAL_PORT} "; then
+    return 0
+  fi
+  local pid_file="${HERMES_HOME:-/config/.hermes}/gateway.pid"
+  if [ -f "$pid_file" ]; then
+    local gpid
+    gpid="$(tr -d ' \r\n' < "$pid_file" 2>/dev/null || true)"
+    if [ -n "$gpid" ] && kill -0 "$gpid" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  pgrep -f '[h]ermes.*gateway' >/dev/null 2>&1
 }
 
 cleanup_session_locks() {
@@ -848,8 +947,11 @@ shutdown() {
 
 trap shutdown INT TERM
 
-if ! command -v hermes-agent >/dev/null 2>&1; then
-  echo "ERROR: hermes-agent is not installed."
+if ! reconcile_hermes_agent_version; then
+  exit 1
+fi
+
+if ! require_hermes_cli; then
   exit 1
 fi
 
@@ -1042,7 +1144,7 @@ if [ -f "$HERMES_CONFIG_PATH" ]; then
   fi
 else
   echo "WARN: Hermes config not found at $HERMES_CONFIG_PATH, cannot apply gateway settings"
-  echo "INFO: Run 'hermes-agent onboard' first, then restart the add-on"
+  echo "INFO: Run 'hermes onboard' first, then restart the add-on"
 fi
 
 if [ "$GATEWAY_AUTH_MODE" = "trusted-proxy" ]; then
@@ -1353,14 +1455,15 @@ start_status_exporter() {
 }
 
 start_hermes_runtime() {
-  echo "Starting Hermes Agent runtime (hermes-agent)..."
+  echo "Starting Hermes Agent runtime (hermes gateway)..."
   export_gateway_tool_env
+  ensure_default_hermes_profile
   start_cdp_chromium_if_enabled
   if [ "$GATEWAY_MODE" = "remote" ]; then
     # Remote mode: do NOT start a local gateway service.
     # Start a node/client host that connects to the configured remote gateway URL.
     # Use $GATEWAY_REMOTE_URL directly from add-on options — do NOT read back via
-    # 'hermes-agent config get' may time out at startup or return redacted values.
+    # 'hermes config show' which may time out at startup or return redacted values.
     REMOTE_URL="$GATEWAY_REMOTE_URL"
     if [ -z "$REMOTE_URL" ]; then
       echo "ERROR: gateway_mode=remote but gateway_remote_url is not set in add-on options"
@@ -1390,11 +1493,16 @@ PY
       return 1
     fi
 
+    if ! hermes node run --help >/dev/null 2>&1; then
+      echo "ERROR: gateway_mode=remote requires 'hermes node run', which is unavailable in the installed Hermes version."
+      echo "ERROR: Upgrade via hermes_agent_version_preset or set gateway_mode=local."
+      return 1
+    fi
     echo "INFO: gateway_mode=remote detected; starting node host to $NODE_HOST:$NODE_PORT ${NODE_TLS_FLAG}"
     # shellcheck disable=SC2086
-    hermes-agent node run --host "$NODE_HOST" --port "$NODE_PORT" $NODE_TLS_FLAG &
+    hermes node run --host "$NODE_HOST" --port "$NODE_PORT" $NODE_TLS_FLAG &
   else
-    hermes-agent gateway run &
+    run_hermes_gateway
   fi
   GW_PID=$!
   return 0
@@ -1446,21 +1554,18 @@ stop_gw_relay() {
 }
 
 # Find a running gateway daemon's PID using multiple detection methods.
-# Used by the supervisor loop to detect self-restarts (SIGUSR1) without
-# spawning duplicate gateway instances that collide on the port.
+# Used by the supervisor loop to detect self-restarts without spawning duplicate
+# gateway instances that collide on the port.
 #
 # Three tiers, tried in order of reliability:
-#   1. Port ownership via `ss -tlnp` — authoritative, but only works once
-#      the daemon has bound the port (can take 20+ s on Pi hardware).
-#   2. Process title via `pgrep -f hermes-agent-gateway` — works after Node.js
-#      sets process.title, which also happens late during init.
-#   3. /proc cmdline scan — catches the daemon IMMEDIATELY after fork,
-#      before title or port bind, by matching "hermes-agent" in the cmdline.
-#      Excludes known PIDs (nginx, ttyd, relay, our shell, old GW_PID).
+#   1. Port ownership via `ss -tlnp` — authoritative once the daemon has bound.
+#   2. `${HERMES_HOME}/gateway.pid` — written by `hermes gateway run`.
+#   3. `pgrep` for the hermes gateway process.
 #
 # Returns the PID on stdout and exit 0, or exits with code 1 if nothing found.
 find_gateway_daemon_pid() {
   local pid=""
+  local pid_file="${HERMES_HOME:-/config/.hermes}/gateway.pid"
 
   # Tier 1: port ownership (authoritative once port is bound)
   pid=$(ss -tlnp 2>/dev/null \
@@ -1469,25 +1574,18 @@ find_gateway_daemon_pid() {
     | head -1)
   [ -n "$pid" ] && { echo "$pid"; return 0; }
 
-  # Tier 2: process title (after Node sets process.title)
-  pid=$(pgrep -f "hermes-agent-gateway" 2>/dev/null | head -1)
-  [ -n "$pid" ] && { echo "$pid"; return 0; }
-
-  # Tier 3: scan /proc for any hermes-agent process we don't already know about.
-  # The daemon's cmdline (e.g. node /usr/.../hermes-agent/...) contains "hermes-agent"
-  # from the moment it is forked, even before process.title is set.
-  local known=" ${NGINX_PID:-0} ${TTYD_PID:-0} ${GW_RELAY_PID:-0} ${GW_PID:-0} $$ "
-  local f cand
-  for f in /proc/[0-9]*/cmdline; do
-    [ -r "$f" ] || continue
-    if tr '\0' ' ' < "$f" 2>/dev/null | grep -q "hermes-agent"; then
-      cand="${f#/proc/}"
-      cand="${cand%%/*}"
-      case "$known" in *" $cand "*) continue ;; esac
-      echo "$cand"
+  # Tier 2: profile-scoped gateway.pid
+  if [ -f "$pid_file" ]; then
+    pid="$(tr -d ' \r\n' < "$pid_file" 2>/dev/null || true)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
       return 0
     fi
-  done
+  fi
+
+  # Tier 3: hermes gateway process
+  pid=$(pgrep -f '[h]ermes.*gateway' 2>/dev/null | head -1)
+  [ -n "$pid" ] && { echo "$pid"; return 0; }
 
   return 1
 }
@@ -1501,8 +1599,11 @@ start_gw_relay
 install_hermes_terminal_profile() {
   cat > /config/.hermes-terminal.bashrc <<'EOF'
 # Managed by Hermes Agent add-on — sources API keys for onboard/model/setup.
+export HOME=/config
+export HERMES_HOME=/config/.hermes
 export HERMES_CONFIG_DIR=/config/.hermes
 export HERMES_WORKSPACE_DIR=/config/hermesd
+export XDG_CONFIG_HOME=/config
 if [ -f /config/.hermes/.env ]; then
   set -a
   # shellcheck disable=SC1091
@@ -1666,7 +1767,7 @@ start_status_exporter
 
 # If the token was not available at startup (first boot / pre-onboard), schedule
 # a background re-render so the "Open Gateway Web UI" button gets the real token
-# once hermes-agent onboard writes hermes.json (typically within 30-90 s).
+# once hermes onboard writes hermes.json (typically within 30-90 s).
 (
   CONFIG_PATH="${HERMES_CONFIG_PATH:-/config/.hermes/hermes.json}"
   for _i in $(seq 1 24); do
@@ -1690,14 +1791,13 @@ except Exception:
 # If runtime exits unexpectedly, restart it while nginx/ttyd stay up.
 #
 # Design notes (issue #95):
-#   `hermes-agent gateway run` is a thin wrapper that spawns `hermes-agent-gateway` as a
-#   long-running daemon and then exits. When the gateway self-restarts (SIGUSR1 /
-#   `hermes-agent gateway restart`), the old daemon exits and a NEW daemon is forked —
-#   the new PID is NOT a child of this shell so `wait` cannot block on it.
+#   `hermes gateway run --no-supervise` runs the Python gateway under add-on supervision.
+#   When the gateway self-restarts, the old process may exit and a new one is forked —
+#   the new PID is NOT always a child of this shell so `wait` cannot block on it.
 #
 #   The new daemon can take 20-30 seconds to initialise on low-power hardware
-#   (Pi / eMMC). During that time its process.title and port binding are not yet
-#   visible, but the process itself exists in /proc with "hermes-agent" in its cmdline.
+#   (Pi / eMMC). During that time port binding may not be visible yet, but
+#   `${HERMES_HOME}/gateway.pid` and pgrep can still find the process.
 #
 #   Strategy:
 #     1. `wait` for our child (the wrapper). After it exits, use
@@ -1742,7 +1842,7 @@ while true; do
     done
   else
     sleep 2
-    RESTARTED_PID=$(pgrep -f "hermes-agent.*node.*run" 2>/dev/null | head -1 || true)
+    RESTARTED_PID=$(pgrep -f '[h]ermes.*node.*run' 2>/dev/null | head -1 || true)
   fi
 
   if [ -n "$RESTARTED_PID" ]; then

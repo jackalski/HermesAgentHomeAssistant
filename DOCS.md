@@ -136,6 +136,8 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `openrouter_api_key` / other provider keys | *(empty)* | Synced to `/config/.hermes/.env` |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
+| `hermes_agent_version_preset` | `latest` | `0.15.2`, `0.15.1`, `0.14.0`, `custom` — reconciled on restart |
+| `hermes_agent_version_custom` | *(empty)* | npm tag/semver when preset is `custom` |
 
 Provider keys: `openai_api_key`, `openrouter_api_key`, `anthropic_api_key`, `google_api_key`, `minimax_api_key`, `discord_bot_token`, `github_token`, `xai_api_key`.
 
@@ -155,6 +157,9 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Symptom | Fix |
 |---------|-----|
 | `HTTP 400: No models provided` | Set provider API key in add-on config; restart; verify model in `/config/.hermes/config.yaml` |
+| OpenRouter HTTP 402 (insufficient credits) | Add credits at [openrouter.ai/settings/credits](https://openrouter.ai/settings/credits) or use a direct provider key (`google_api_key`, `anthropic_api_key`, …) |
+| Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |
+| `no such gateway 'default'` in terminal | Use `hermes gateway run` (not `hermes-agent gateway run`); ensure `HOME=/config` and `HERMES_HOME=/config/.hermes` (ttyd sets this automatically) |
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |

@@ -68,7 +68,7 @@ Enabling `allow_insecure_auth` transmits authentication tokens over **unencrypte
 **Mitigations**:
 - Only enable on trusted networks
 - Never enable when the gateway is exposed to the internet
-- Rotate your gateway token periodically: `hermes-agent config set gateway.auth.token <new-token>`
+- Rotate your gateway token periodically: `hermes config set gateway.auth.token <new-token>`
 
 ### 4. Home Assistant Token
 

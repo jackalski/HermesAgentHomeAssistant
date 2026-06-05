@@ -159,6 +159,20 @@ configuration:
   auto_configure_mcp:
     name: Auto-Configure MCP for Home Assistant
     description: "When ON and Home Assistant Token is set, automatically registers Home Assistant in Hermes built-in MCP (mcp_servers) on each startup. This lets Hermes Agent control HA entities, services, and automations via the Model Context Protocol. Disable only if you manage Hermes MCP configuration manually."
+  hermes_agent_version_preset:
+    name: Hermes Agent Version
+    description: "npm package version installed on startup (provides the `hermes` CLI). Use a pinned release for stability; latest tracks upstream."
+    options:
+      latest: "Latest (npm @latest)"
+      0.15.2: "0.15.2 (pinned)"
+      0.15.1: "0.15.1 (pinned)"
+      0.14.0: "0.14.0 (pinned)"
+      custom: "Custom version tag"
+
+  hermes_agent_version_custom:
+    name: Hermes Agent Version (custom)
+    description: "npm dist-tag or semver when Hermes Agent Version is custom (e.g. 0.15.2 or beta). Applied on next add-on restart."
+
   tool_telegram_enabled:
     name: Enable Telegram Tool Bootstrap
     description: "When ON, startup verifies Telegram tool dependencies and auto-installs missing Python package(s) when possible (warns and continues on failure)."

@@ -150,6 +150,9 @@
         <code>jq -r '.gateway.auth.token' /config/.hermes/hermes.json</code><br>
         <small style="color:#6b7280">(If <code>hermes config show</code> redacts secrets, read the file directly instead.)</small>
       </div>
+      <div class="muted" style="margin-top:6px">
+        The add-on starts the gateway automatically. For manual debugging in the terminal use <code>hermes gateway run</code> (not <code>hermes-agent gateway run</code>). Pin a stable release via add-on option <code>hermes_agent_version_preset</code> if <code>latest</code> breaks.
+      </div>
     </details>
 
     <!-- ==================== PROXY RECIPES ==================== -->
