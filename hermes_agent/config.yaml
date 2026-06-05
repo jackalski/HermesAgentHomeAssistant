@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.6"
+version: "0.0.7"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent as a Home Assistant add-on.
@@ -45,6 +45,10 @@ options:
   # Leave empty for autodetection on HAOS (supervisor/loopback). Override for remote or custom HA URLs.
   # Example: "https://example.duckdns.org:8443"
   hass_url: ""
+
+  # Long-lived HA access token for MCP and scripts. Not shown after save (HA redacts secrets).
+  # Synced to /config/secrets/homeassistant.token and /config/.hermes/.env on restart.
+  homeassistant_token: ""
 
   # First-run preset — bundles sensible defaults for common use cases.
   # home_assistant: LAN HTTPS + auto MCP when token set + model/browser bootstrap
@@ -198,7 +202,7 @@ schema:
   terminal_port: int(1024,65535)?
   gateway_public_url: str?
   hass_url: str?
-  homeassistant_token: str?
+  homeassistant_token: password?
   setup_profile: list(home_assistant|general|advanced)?
   default_model_preset: list(auto|gemini_flash|claude_sonnet|gpt_mini|custom)?
   default_model: str?

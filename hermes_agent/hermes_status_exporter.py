@@ -47,7 +47,7 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.6"
+ADDON_VERSION = "0.0.7"
 STATUS_FILE = Path("/share/hermes/status.json")
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"

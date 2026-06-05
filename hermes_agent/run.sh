@@ -445,13 +445,74 @@ initialize_skills_hub_if_enabled() {
 }
 
 bootstrap_selected_tools() {
+  install_python_package_if_missing "edge_tts" "edge-tts"
+  install_python_package_if_missing "ddgs" "ddgs"
+
   if [ "$TOOL_TELEGRAM_ENABLED" = "true" ] || [ "$TOOL_TELEGRAM_ENABLED" = "1" ]; then
     install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]==22.6"
+  fi
+
+  if [ -n "$DISCORD_BOT_TOKEN_OPT" ]; then
+    install_python_package_if_missing "discord" "discord.py[voice]==2.7.1"
+    install_python_package_if_missing "brotlicffi" "brotlicffi==1.2.0.1"
   fi
 
   if [ "$TOOL_BROWSER_ENABLED" = "true" ] || [ "$TOOL_BROWSER_ENABLED" = "1" ]; then
     install_npm_package_if_missing "agent-browser" "agent-browser@latest"
   fi
+}
+
+load_hermes_env_file() {
+  if [ -f /config/.hermes/.env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . /config/.hermes/.env
+    set +a
+  fi
+}
+
+export_gateway_tool_env() {
+  load_hermes_env_file
+  safe_export_secret_env "HASS_TOKEN" "$HA_TOKEN"
+  if [ -n "$EFFECTIVE_HASS_URL" ]; then
+    export HASS_URL="$EFFECTIVE_HASS_URL"
+    export HOMEASSISTANT_URL="$EFFECTIVE_HASS_URL"
+  fi
+  export HERMES_GATEWAY_SESSION=1
+  export HERMES_INTERACTIVE=1
+}
+
+start_cdp_chromium_if_enabled() {
+  if [ "$TOOL_BROWSER_ENABLED" != "true" ] && [ "$TOOL_BROWSER_ENABLED" != "1" ]; then
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":9222 "; then
+    echo "INFO: CDP Chromium already listening on 127.0.0.1:9222"
+    return 0
+  fi
+
+  local chrome_bin=""
+  for candidate in chromium chromium-browser google-chrome google-chrome-stable; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      chrome_bin="$candidate"
+      break
+    fi
+  done
+  if [ -z "$chrome_bin" ]; then
+    echo "WARN: No Chromium binary found; browser-cdp tool may stay unavailable"
+    return 0
+  fi
+
+  echo "INFO: Starting headless Chromium CDP endpoint on 127.0.0.1:9222 for browser-cdp tool..."
+  "$chrome_bin" \
+    --headless=new \
+    --no-sandbox \
+    --disable-gpu \
+    --disable-dev-shm-usage \
+    --remote-debugging-address=127.0.0.1 \
+    --remote-debugging-port=9222 \
+    about:blank >/dev/null 2>&1 &
+  CDP_CHROMIUM_PID=$!
 }
 
 safe_export_secret_env "OPENAI_API_KEY" "$OPENAI_API_KEY_OPT"
@@ -739,6 +800,7 @@ GW_RELAY_PID=""
 NGINX_PID=""
 TTYD_PID=""
 STATUS_EXPORTER_PID=""
+CDP_CHROMIUM_PID=""
 SHUTTING_DOWN="false"
 
 shutdown() {
@@ -768,6 +830,11 @@ shutdown() {
   fi
 
   stop_gw_relay
+
+  if [ -n "${CDP_CHROMIUM_PID}" ] && kill -0 "${CDP_CHROMIUM_PID}" >/dev/null 2>&1; then
+    kill -TERM "${CDP_CHROMIUM_PID}" >/dev/null 2>&1 || true
+    wait "${CDP_CHROMIUM_PID}" || true
+  fi
 
   if [ -n "${STATUS_EXPORTER_PID}" ] && kill -0 "${STATUS_EXPORTER_PID}" >/dev/null 2>&1; then
     kill -TERM "${STATUS_EXPORTER_PID}" >/dev/null 2>&1 || true
@@ -907,6 +974,9 @@ bootstrap_hermes_first_run() {
     --arg default_model "$DEFAULT_MODEL_OPT" \
     --arg ha_url "$EFFECTIVE_HASS_URL" \
     --arg ha_token "$HA_TOKEN" \
+    --arg setup_profile "$SETUP_PROFILE" \
+    --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
+    --arg searxng "$SEARXNG_URL_OPT" \
     --arg bootstrap_auxiliary_title "$BOOTSTRAP_AUXILIARY_TITLE" \
     --arg enable_openai_api "$ENABLE_OPENAI_API" \
     --arg mcp_configured "$mcp_configured_json" \
@@ -926,6 +996,9 @@ bootstrap_hermes_first_run() {
       mcp_configured: $mcp_configured,
       homeassistant_url: $ha_url,
       homeassistant_token: $ha_token,
+      setup_profile: $setup_profile,
+      firecrawl_api_key: $firecrawl,
+      searxng_url: $searxng,
       api_keys: {
         OPENROUTER_API_KEY: $openrouter,
         ANTHROPIC_API_KEY: $anthropic,
@@ -1281,6 +1354,8 @@ start_status_exporter() {
 
 start_hermes_runtime() {
   echo "Starting Hermes Agent runtime (hermes-agent)..."
+  export_gateway_tool_env
+  start_cdp_chromium_if_enabled
   if [ "$GATEWAY_MODE" = "remote" ]; then
     # Remote mode: do NOT start a local gateway service.
     # Start a node/client host that connects to the configured remote gateway URL.
