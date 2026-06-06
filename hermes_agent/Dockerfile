@@ -129,22 +129,23 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
 # Install Hermes Agent globally
 RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false && npm config set audit false \
-    && npm install -g hermes-agent@latest \
+    && npm install -g hermes-agent@0.16.0 \
     && npm install -g agent-browser@latest
 
-# hermes-agent 0.15.2 wheel omits hermes_cli/dashboard_auth and hermes_cli/proxy (upstream #34701).
+# Safety net if a Hermes PyPI wheel omits hermes_cli subpackages (upstream #34701 on older releases).
 COPY repair_hermes_wheel.py /repair_hermes_wheel.py
 RUN python3 /repair_hermes_wheel.py
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
         websockets \
-        "python-telegram-bot[webhooks]==22.6" \
+        "python-telegram-bot[webhooks]==22.7" \
         edge-tts \
         ddgs \
         "discord.py[voice]==2.7.1" \
         "brotlicffi==1.2.0.1" \
-        "fastapi==0.133.1" \
-        "uvicorn[standard]==0.41.0"
+        "starlette>=1.0.1" \
+        "fastapi==0.136.3" \
+        "uvicorn[standard]==0.49.0"
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'

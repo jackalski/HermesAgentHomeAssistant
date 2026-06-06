@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch hermes-agent 0.15.2 wheel missing hermes_cli subpackages (upstream #34701)."""
+"""Patch Hermes PyPI wheels missing hermes_cli subpackages (upstream #34701 on older releases)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import tempfile
 import urllib.request
 
 SUBPACKAGES = ("dashboard_auth", "proxy")
-DEFAULT_TAG = "v2026.5.29.2"
+DEFAULT_TAG = "v2026.6.5"
 FALLBACK_ARCHIVE = "https://github.com/NousResearch/hermes-agent/archive/45b00bb49.tar.gz"
 
 

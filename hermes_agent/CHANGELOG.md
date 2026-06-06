@@ -2,6 +2,13 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.14] - 2026-06-06
+
+### Changed
+- **Hermes Agent 0.16.0** ([v2026.6.5](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.6.5)) baked into the image; default add-on config pins **0.16.0** via `hermes_agent_version_preset: custom`.
+- Version selector simplified to **`latest`** or **`custom`** (removed legacy 0.15.x / 0.14.0 presets).
+- Docker image pins **`starlette>=1.0.1`** (CVE-2026-48710) alongside dashboard deps.
+
 ## [0.0.13] - 2026-06-06
 
 ### Fixed
