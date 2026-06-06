@@ -1526,18 +1526,74 @@ update_setup_readiness_markers() {
 
 update_setup_readiness_markers
 
+fetch_mqtt_config_via_supervisor() {
+  if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
+    return 1
+  fi
+  local resp
+  resp=$(curl -fsS -m 5 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+    "http://supervisor/services/mqtt" 2>/dev/null || true)
+  if [ -z "$resp" ]; then
+    return 1
+  fi
+  local host port user password
+  host=$(echo "$resp" | jq -r '.data.host // empty' 2>/dev/null || true)
+  port=$(echo "$resp" | jq -r '.data.port // empty' 2>/dev/null || true)
+  user=$(echo "$resp" | jq -r '.data.username // empty' 2>/dev/null || true)
+  password=$(echo "$resp" | jq -r '.data.password // empty' 2>/dev/null || true)
+  if [ -z "$host" ]; then
+    return 1
+  fi
+  printf '%s\n' "$host" "${port:-1883}" "$user" "$password"
+  return 0
+}
+
 resolve_mqtt_config_json() {
-  local host="" port="" user="" password=""
-  if [ -f /etc/bashio.sh ]; then
-    # shellcheck disable=SC1091
-    . /etc/bashio.sh
-    if bashio::services.available "mqtt" 2>/dev/null; then
-      host="$(bashio::services "mqtt" "host" 2>/dev/null || true)"
-      port="$(bashio::services "mqtt" "port" 2>/dev/null || true)"
-      user="$(bashio::services "mqtt" "username" 2>/dev/null || true)"
-      password="$(bashio::services "mqtt" "password" 2>/dev/null || true)"
+  local host="" port="1883" user="" password="" source="none"
+
+  if load_bashio && bashio::services.available "mqtt" 2>/dev/null; then
+    host="$(bashio::services mqtt "host" 2>/dev/null || true)"
+    port="$(bashio::services mqtt "port" 2>/dev/null || true)"
+    user="$(bashio::services mqtt "username" 2>/dev/null || true)"
+    password="$(bashio::services mqtt "password" 2>/dev/null || true)"
+    if [ -n "$host" ]; then
+      source="bashio"
     fi
   fi
+
+  if [ -z "$host" ]; then
+    host="${MQTT_HOST:-}"
+    port="${MQTT_PORT:-1883}"
+    user="${MQTT_USER:-${MQTT_USERNAME:-}}"
+    password="${MQTT_PASSWORD:-}"
+    if [ -n "$host" ]; then
+      source="env"
+    fi
+  fi
+
+  if [ -z "$host" ]; then
+    local sup_lines sup_host sup_port sup_user sup_password
+    if sup_lines="$(fetch_mqtt_config_via_supervisor 2>/dev/null)"; then
+      sup_host=$(echo "$sup_lines" | sed -n '1p')
+      sup_port=$(echo "$sup_lines" | sed -n '2p')
+      sup_user=$(echo "$sup_lines" | sed -n '3p')
+      sup_password=$(echo "$sup_lines" | sed -n '4p')
+      if [ -n "$sup_host" ]; then
+        host="$sup_host"
+        port="${sup_port:-1883}"
+        user="$sup_user"
+        password="$sup_password"
+        source="supervisor"
+      fi
+    fi
+  fi
+
+  if [ -n "$host" ]; then
+    echo "INFO: MQTT broker resolved (${source}): ${host}:${port:-1883}"
+  else
+    echo "INFO: MQTT broker not available at startup (status exporter will retry; ensure Mosquitto add-on is running)"
+  fi
+
   jq -n \
     --arg host "$host" \
     --arg port "${port:-1883}" \
