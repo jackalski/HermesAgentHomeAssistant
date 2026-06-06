@@ -2,6 +2,15 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.12] - 2026-06-06
+
+### Fixed
+- **`enable_openai_api`** now syncs Hermes **`API_SERVER_*`** env vars (`API_SERVER_ENABLED`, `API_SERVER_KEY`, `API_SERVER_PORT`, `API_SERVER_HOST`) so the Assist API server actually starts on port **8642**.
+- **`lan_https` nginx** routes `/v1/`, `/health`, and `/api/` to the API server instead of the dashboard (fixes `Method Not Allowed` on `/v1/chat/completions`).
+
+### Changed
+- Startup logs Assist API bind status and Extended OpenAI Base URL hint (`https://<LAN-IP>:18789/v1`).
+
 ## [0.0.11] - 2026-06-06
 
 ### Fixed

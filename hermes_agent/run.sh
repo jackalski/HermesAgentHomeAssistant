@@ -58,6 +58,7 @@ GATEWAY_REMOTE_URL=$(jq -r '.gateway_remote_url // empty' "$OPTIONS_FILE")
 GATEWAY_BIND_MODE=$(jq -r '.gateway_bind_mode // "loopback"' "$OPTIONS_FILE")
 GATEWAY_PORT=$(jq -r '.gateway_port // 18789' "$OPTIONS_FILE")
 ENABLE_OPENAI_API=$(jq -r '.enable_openai_api // false' "$OPTIONS_FILE")
+API_SERVER_PORT=8642
 GATEWAY_AUTH_MODE=$(jq -r '.gateway_auth_mode // "token"' "$OPTIONS_FILE")
 GATEWAY_TRUSTED_PROXIES=$(jq -r '.gateway_trusted_proxies // empty' "$OPTIONS_FILE")
 GATEWAY_ADDITIONAL_ALLOWED_ORIGINS=$(jq -r '.gateway_additional_allowed_origins // empty' "$OPTIONS_FILE")
@@ -1270,9 +1271,17 @@ if [ -f "$HERMES_CONFIG_PATH" ]; then
       echo "ERROR: Gateway configuration may be incorrect; aborting startup."
       exit "${rc}"
     fi
+
+    if ! python3 "$HELPER_PATH" sync-api-server-env "$ENABLE_OPENAI_API" "$API_SERVER_PORT"; then
+      echo "WARN: Failed to sync Assist API server env (API_SERVER_*)."
+    fi
   else
     echo "WARN: hermes_config_helper.py not found, cannot apply gateway settings"
     echo "INFO: Ensure the add-on image includes hermes_config_helper.py and restart"
+  fi
+elif [ -f "$HELPER_PATH" ]; then
+  if ! python3 "$HELPER_PATH" sync-api-server-env "$ENABLE_OPENAI_API" "$API_SERVER_PORT"; then
+    echo "WARN: Failed to sync Assist API server env (API_SERVER_*)."
   fi
 else
   echo "WARN: Hermes config not found at $HERMES_CONFIG_PATH, cannot apply gateway settings"
@@ -1742,6 +1751,23 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
   done
   if [ "$GATEWAY_BIND_OK" = "true" ]; then
     echo "INFO: Dashboard listening on 127.0.0.1:${GATEWAY_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
+    if [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; then
+      API_BIND_OK=false
+      for _api_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${API_SERVER_PORT} "; then
+          API_BIND_OK=true
+          break
+        fi
+        sleep 2
+      done
+      if [ "$API_BIND_OK" = "true" ]; then
+        echo "INFO: Assist API server listening on 127.0.0.1:${API_SERVER_PORT} (Extended OpenAI: https://<LAN-IP>:${GATEWAY_PORT}/v1)"
+      else
+        echo "ERROR: Assist API server did not bind port ${API_SERVER_PORT} within 30s."
+        echo "ERROR: Set enable_openai_api=true, ensure gateway token exists, and restart."
+        echo "ERROR: Probe: curl -sS http://127.0.0.1:${API_SERVER_PORT}/health"
+      fi
+    fi
   else
     echo "ERROR: Dashboard did not bind port ${GATEWAY_INTERNAL_PORT} within 30s."
     echo "ERROR: https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
@@ -1890,6 +1916,7 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
   GW_PUBLIC_URL="$GW_PUBLIC_URL" GW_TOKEN="$token" TERMINAL_PORT="$TERMINAL_PORT" \
     ENABLE_HTTPS_PROXY="$ENABLE_HTTPS_PROXY" HTTPS_PROXY_PORT="$GATEWAY_PORT" \
     GATEWAY_INTERNAL_PORT="$GATEWAY_INTERNAL_PORT" ACCESS_MODE="$ACCESS_MODE" \
+    ENABLE_OPENAI_API="$ENABLE_OPENAI_API" API_SERVER_PORT="$API_SERVER_PORT" \
     DISK_TOTAL="$disk_total" DISK_USED="$disk_used" DISK_AVAIL="$disk_avail" DISK_PCT="$disk_pct" \
     NGINX_LOG_LEVEL="$NGINX_LOG_LEVEL" \
     SETUP_API_KEY="$setup_api_key" SETUP_MODEL="$setup_model" SETUP_MCP="$setup_mcp" \
@@ -1939,6 +1966,12 @@ except Exception:
     pass
 " 2>/dev/null || true)
     if [ -n "$token" ]; then
+      if [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; then
+        if [ -f "$HELPER_PATH" ]; then
+          python3 "$HELPER_PATH" sync-api-server-env true "$API_SERVER_PORT" >/dev/null 2>&1 || true
+          echo "INFO: Gateway token available; Assist API env updated. Restart add-on if port ${API_SERVER_PORT} is not listening."
+        fi
+      fi
       render_landing post-onboard
       break
     fi

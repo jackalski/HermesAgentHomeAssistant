@@ -131,7 +131,7 @@ configuration:
 
   enable_openai_api:
     name: Activar API OpenAI
-    description: Activar endpoint de Chat Completions compatible con OpenAI. Permite usar Hermes Agent como agente de conversación en HA Assist pipeline mediante Extended OpenAI Conversation (HACS) o cualquier cliente compatible con OpenAI.
+    description: "Activa la API Assist de Hermes (sync API_SERVER_ENABLED en .env; API en puerto 8642, nginx /v1/ en HTTPS del gateway). Extended OpenAI Conversation: Base URL https://<LAN-IP>:18789/v1, API key = token gateway, modelo hermes-agent."
   enable_ha_status_sensors:
     name: Sensores de estado HA
     description: "Publica configuración, salud del gateway, modelo/proveedor y métricas de uso a Home Assistant vía MQTT discovery (con Mosquitto) y un snapshot seguro /status.json en Ingress."

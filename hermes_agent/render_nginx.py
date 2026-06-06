@@ -6,12 +6,55 @@ Called by run.sh with the following env vars:
   GW_PUBLIC_URL, GW_TOKEN, TERMINAL_PORT,
   ENABLE_HTTPS_PROXY, HTTPS_PROXY_PORT,
   GATEWAY_INTERNAL_PORT, ACCESS_MODE,
+  ENABLE_OPENAI_API, API_SERVER_PORT,
   DISK_TOTAL, DISK_USED, DISK_AVAIL, DISK_PCT
 """
 
 import os
 import subprocess
 from pathlib import Path
+
+
+def _api_proxy_locations(api_port: str) -> str:
+    """Route OpenAI-compatible Assist API paths to the Hermes API server."""
+    return f"""
+        # OpenAI-compatible Assist API (hermes gateway API server)
+        location ^~ /v1/ {{
+            proxy_pass http://127.0.0.1:{api_port};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+            proxy_buffering off;
+        }}
+
+        location = /health {{
+            proxy_pass http://127.0.0.1:{api_port}/health;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }}
+
+        location ^~ /health/ {{
+            proxy_pass http://127.0.0.1:{api_port};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }}
+
+        location ^~ /api/ {{
+            proxy_pass http://127.0.0.1:{api_port};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+            proxy_buffering off;
+        }}
+"""
 
 
 def main():
@@ -24,6 +67,8 @@ def main():
     https_port = os.environ.get('HTTPS_PROXY_PORT', '')
     internal_gw_port = os.environ.get('GATEWAY_INTERNAL_PORT', '')
     access_mode = os.environ.get('ACCESS_MODE', 'custom')
+    enable_openai_api = os.environ.get('ENABLE_OPENAI_API', 'false').lower() in ('1', 'true', 'yes')
+    api_server_port = os.environ.get('API_SERVER_PORT', '8642')
 
     # Disk usage info (collected by run.sh)
     disk_total = os.environ.get('DISK_TOTAL', '')
@@ -62,6 +107,9 @@ def main():
     # Build HTTPS gateway proxy block (only for lan_https mode)
     https_block = ''
     if enable_https and https_port and internal_gw_port:
+        api_locations = ''
+        if enable_openai_api and api_server_port:
+            api_locations = _api_proxy_locations(api_server_port)
         https_block = f"""
     # --- HTTPS Gateway Proxy (lan_https mode) ---
     server {{
@@ -71,8 +119,8 @@ def main():
         ssl_certificate_key /config/certs/gateway.key;
         ssl_protocols       TLSv1.2 TLSv1.3;
         ssl_ciphers         HIGH:!aNULL:!MD5;
-
-        # Proxy all traffic to the loopback gateway with WebSocket support
+{api_locations}
+        # Dashboard Web UI and WebSocket traffic
         location / {{
             proxy_pass http://127.0.0.1:{internal_gw_port};
             proxy_http_version 1.1;
