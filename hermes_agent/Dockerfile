@@ -6,6 +6,7 @@ FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:bookworm
 
 # System-wide Python/Node tooling (Hermes 0.16+ expects managed uv + MCP SDK on PATH).
 ENV PIP_BREAK_SYSTEM_PACKAGES=1 \
+    UV_BREAK_SYSTEM_PACKAGES=1 \
     UV_SYSTEM_PYTHON=1 \
     NPM_CONFIG_PREFIX=/usr/local \
     PATH="/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
@@ -129,7 +130,7 @@ COPY repair_hermes_wheel.py /repair_hermes_wheel.py
 RUN python3 /repair_hermes_wheel.py
 
 # System-wide Python deps: MCP SDK + gateway/dashboard/tooling (uv preferred, pip fallback).
-RUN uv pip install --system --no-cache \
+RUN uv pip install --system --break-system-packages --no-cache \
         mcp \
         websockets \
         "python-telegram-bot[webhooks]>=22.7" \
