@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.15] - 2026-06-06
+
+### Fixed
+- **Mosquitto / MQTT detection** for HA status sensors: resolve broker via bashio, injected `MQTT_*` env vars, and Supervisor `GET /services/mqtt`; status exporter retries each poll instead of giving up at startup.
+
 ## [0.0.14] - 2026-06-06
 
 ### Changed

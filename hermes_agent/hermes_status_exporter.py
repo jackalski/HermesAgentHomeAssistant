@@ -47,7 +47,7 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.7"
+ADDON_VERSION = "0.0.15"
 STATUS_FILE = Path("/share/hermes/status.json")
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
@@ -369,6 +369,59 @@ def _device_block(sw_version: str) -> dict[str, Any]:
     }
 
 
+def _env_mqtt_config() -> dict[str, Any]:
+    host = (os.environ.get("MQTT_HOST") or "").strip()
+    if not host:
+        return {}
+    return {
+        "host": host,
+        "port": str(os.environ.get("MQTT_PORT") or "1883"),
+        "username": (os.environ.get("MQTT_USER") or os.environ.get("MQTT_USERNAME") or ""),
+        "password": os.environ.get("MQTT_PASSWORD") or "",
+    }
+
+
+def _supervisor_mqtt_config() -> dict[str, Any]:
+    token = (os.environ.get("SUPERVISOR_TOKEN") or "").strip()
+    if not token:
+        return {}
+    url = "http://supervisor/services/mqtt"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+        return {}
+
+    data = body.get("data") if isinstance(body, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    host = str(data.get("host") or "").strip()
+    if not host:
+        return {}
+    return {
+        "host": host,
+        "port": str(data.get("port") or "1883"),
+        "username": str(data.get("username") or ""),
+        "password": str(data.get("password") or ""),
+    }
+
+
+def resolve_mqtt_config(payload: dict) -> dict[str, Any]:
+    mqtt_cfg = payload.get("mqtt", {})
+    if not isinstance(mqtt_cfg, dict):
+        mqtt_cfg = {}
+    if mqtt_cfg.get("host"):
+        return mqtt_cfg
+
+    for resolver in (_env_mqtt_config, _supervisor_mqtt_config):
+        resolved = resolver()
+        if resolved.get("host"):
+            payload["mqtt"] = resolved
+            return resolved
+    return mqtt_cfg
+
+
 def _mqtt_pub(mqtt_cfg: dict, topic: str, payload: str, retain: bool = False) -> bool:
     host = mqtt_cfg.get("host", "")
     port = str(mqtt_cfg.get("port", "1883"))
@@ -610,9 +663,7 @@ def run_once(payload: dict) -> bool:
     snapshot = collect_status_snapshot(payload)
     ok = write_status_file(STATUS_FILE, snapshot)
 
-    mqtt_cfg = payload.get("mqtt", {})
-    if not isinstance(mqtt_cfg, dict):
-        mqtt_cfg = {}
+    mqtt_cfg = resolve_mqtt_config(payload)
     publish_discovery = str(payload.get("publish_mqtt_discovery", "true")).lower() in (
         "1",
         "true",
@@ -630,18 +681,28 @@ def run_once(payload: dict) -> bool:
 def run_loop(payload: dict) -> int:
     interval = int(payload.get("status_poll_interval_seconds", 60))
     interval = max(30, min(300, interval))
-    mqtt_logged = False
+    mqtt_unavailable_logged = False
+    mqtt_available_logged = False
 
     while True:
-        mqtt_cfg = payload.get("mqtt", {})
-        if not isinstance(mqtt_cfg, dict):
-            mqtt_cfg = {}
-        if not mqtt_cfg.get("host") and not mqtt_logged:
+        mqtt_cfg = resolve_mqtt_config(payload)
+        if mqtt_cfg.get("host"):
+            if not mqtt_available_logged:
+                print(
+                    f"INFO: MQTT broker available for status sensors: "
+                    f"{mqtt_cfg['host']}:{mqtt_cfg.get('port', '1883')}",
+                    file=sys.stderr,
+                )
+                mqtt_available_logged = True
+                mqtt_unavailable_logged = False
+        elif not mqtt_unavailable_logged:
             print(
-                "INFO: MQTT status sensors disabled (Mosquitto add-on not running)",
+                "INFO: MQTT broker not available yet; status sensors will retry each poll "
+                "(ensure Mosquitto add-on is running)",
                 file=sys.stderr,
             )
-            mqtt_logged = True
+            mqtt_unavailable_logged = True
+            mqtt_available_logged = False
 
         try:
             run_once(payload)
@@ -676,7 +737,7 @@ def main():
         sys.exit(0 if write_status_file(STATUS_FILE, snapshot) else 1)
     if cmd == "publish-mqtt":
         snapshot = collect_status_snapshot(payload)
-        mqtt_cfg = payload.get("mqtt", {})
+        mqtt_cfg = resolve_mqtt_config(payload)
         prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
         ok = True
         if str(payload.get("publish_mqtt_discovery", "true")).lower() in ("1", "true", "yes"):

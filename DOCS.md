@@ -186,6 +186,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Low disk | Run `hermes-cleanup` in terminal |
 | `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `http://<LAN-IP>:8642/v1` from HA Core (not HTTPS 18789) |
 | `Connection error` in Extended OpenAI Conversation | HA Core rejects self-signed HTTPS on 18789 — use Base URL `http://<LAN-IP>:8642/v1` (fixed in **0.0.13+**; API binds `0.0.0.0:8642`, bearer token required) |
+| MQTT status sensors missing / "MQTT broker not available" | Install and start **Mosquitto broker** add-on; fixed in **0.0.15+** (Supervisor API + retry). Check add-on log for `MQTT broker resolved` or `MQTT broker available for status sensors` |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.16.0 > /config/.hermes/.addon-managed-hermes-version` |
