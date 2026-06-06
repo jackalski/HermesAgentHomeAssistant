@@ -2,6 +2,14 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.13] - 2026-06-06
+
+### Fixed
+- **Assist API** now binds **`0.0.0.0:8642`** (was loopback-only) so Home Assistant Core can reach it for Extended OpenAI Conversation without trusting the self-signed HTTPS cert on port 18789.
+
+### Changed
+- Extended OpenAI Base URL guidance: use **`http://<LAN-IP>:8642/v1`** from HA Core (bearer token still required).
+
 ## [0.0.12] - 2026-06-06
 
 ### Fixed

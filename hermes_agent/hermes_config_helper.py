@@ -497,11 +497,12 @@ def sync_api_server_env(enable: bool, port: int = API_SERVER_DEFAULT_PORT) -> bo
     ok = upsert_env_var("API_SERVER_ENABLED", "true") and ok
     ok = upsert_env_var("API_SERVER_KEY", token) and ok
     ok = upsert_env_var("API_SERVER_PORT", str(port)) and ok
-    ok = upsert_env_var("API_SERVER_HOST", "127.0.0.1") and ok
+    ok = upsert_env_var("API_SERVER_HOST", "0.0.0.0") and ok
     if ok:
         print(
-            f"INFO: Assist API enabled (API_SERVER_ENABLED=true on 127.0.0.1:{port}; "
-            f"nginx proxies /v1/ when lan_https)."
+            f"INFO: Assist API enabled (API_SERVER_ENABLED=true on 0.0.0.0:{port}; "
+            f"Extended OpenAI from HA Core: http://<LAN-IP>:{port}/v1; "
+            f"nginx HTTPS /v1/ on gateway port when lan_https)."
         )
     return ok
 
