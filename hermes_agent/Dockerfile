@@ -130,8 +130,10 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false && npm config set audit false \
     && npm install -g hermes-agent@latest \
-    && npm install -g agent-browser@latest \
-    && python3 - <<'PY'
+    && npm install -g agent-browser@latest
+
+# hermes-agent 0.15.2 wheel omits hermes_cli/dashboard_auth and hermes_cli/proxy (upstream #34701).
+RUN python3 - <<'PY'
 import os, shutil, tarfile, tempfile, urllib.request
 import hermes_cli
 
@@ -158,7 +160,8 @@ with tempfile.TemporaryDirectory() as td:
             shutil.copytree(src, dst)
             print(f"patched hermes_cli/{sub}")
 PY
-    && python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
         websockets \
         "python-telegram-bot[webhooks]==22.6" \
         edge-tts \
