@@ -153,8 +153,8 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `openrouter_api_key` / other provider keys | *(empty)* | Synced to `/config/.hermes/.env` |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
-| `hermes_agent_version_preset` | `latest` | `0.15.2`, `0.15.1`, `0.14.0`, `custom` — reconciled on restart |
-| `hermes_agent_version_custom` | *(empty)* | npm tag/semver when preset is `custom` |
+| `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
+| `hermes_agent_version_custom` | `0.16.0` | npm tag/semver when preset is `custom` |
 
 Provider keys: `openai_api_key`, `openrouter_api_key`, `anthropic_api_key`, `google_api_key`, `minimax_api_key`, `discord_bot_token`, `github_token`, `xai_api_key`.
 
@@ -186,9 +186,9 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Low disk | Run `hermes-cleanup` in terminal |
 | `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `http://<LAN-IP>:8642/v1` from HA Core (not HTTPS 18789) |
 | `Connection error` in Extended OpenAI Conversation | HA Core rejects self-signed HTTPS on 18789 — use Base URL `http://<LAN-IP>:8642/v1` (fixed in **0.0.13+**; API binds `0.0.0.0:8642`, bearer token required) |
-| `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Known **0.15.2** PyPI wheel bug; fixed in add-on **0.0.11+** (auto-patches on startup). Until then use `latest` preset or update add-on |
+| `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
-| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo latest > /config/.hermes/.addon-managed-hermes-version` or pin `0.15.2` |
+| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.16.0 > /config/.hermes/.addon-managed-hermes-version` |
 
 Gateway token (if CLI redacts secrets):
 

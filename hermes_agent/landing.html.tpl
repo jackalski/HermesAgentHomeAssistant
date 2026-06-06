@@ -151,7 +151,7 @@
         <small style="color:#6b7280">(If <code>hermes config show</code> redacts secrets, read the file directly instead.)</small>
       </div>
       <div class="muted" style="margin-top:6px">
-        The add-on starts the gateway automatically. For manual debugging in the terminal use <code>hermes gateway run</code> (not <code>hermes-agent gateway run</code>). Pin a stable release via add-on option <code>hermes_agent_version_preset</code> if <code>latest</code> breaks.
+        The add-on starts the gateway automatically. For manual debugging in the terminal use <code>hermes gateway run</code> (not <code>hermes-agent gateway run</code>). Default Hermes Agent is <b>0.16.0</b>; set <code>hermes_agent_version_preset</code> to <b>latest</b> to track upstream npm.
       </div>
     </details>
 

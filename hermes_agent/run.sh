@@ -86,8 +86,10 @@ MINIMAX_API_KEY_OPT=$(jq -r '.minimax_api_key // empty' "$OPTIONS_FILE")
 DISCORD_BOT_TOKEN_OPT=$(jq -r '.discord_bot_token // empty' "$OPTIONS_FILE")
 GITHUB_TOKEN_OPT=$(jq -r '.github_token // empty' "$OPTIONS_FILE")
 XAI_API_KEY_OPT=$(jq -r '.xai_api_key // empty' "$OPTIONS_FILE")
-HERMES_AGENT_VERSION_PRESET=$(jq -r '.hermes_agent_version_preset // "latest"' "$OPTIONS_FILE")
-HERMES_AGENT_VERSION_CUSTOM=$(jq -r '.hermes_agent_version_custom // empty' "$OPTIONS_FILE")
+HERMES_AGENT_VERSION_PRESET=$(jq -r '.hermes_agent_version_preset // "custom"' "$OPTIONS_FILE")
+HERMES_AGENT_VERSION_CUSTOM=$(jq -r '.hermes_agent_version_custom // "0.16.0"' "$OPTIONS_FILE")
+ADDON_HERMES_DEFAULT_VERSION="0.16.0"
+IMAGE_BAKED_HERMES_SPEC="${ADDON_HERMES_DEFAULT_VERSION}"
 GW_ENV_VARS_TYPE=$(jq -r 'if .gateway_env_vars == null then "null" else (.gateway_env_vars | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.gateway_env_vars // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_JSON=$(jq -c '.gateway_env_vars // []' "$OPTIONS_FILE")
@@ -348,7 +350,7 @@ mkdir -p /config/.hermes /config/.hermes/identity /config/hermesd /config/keys /
 # ------------------------------------------------------------------------------
 resolve_hermes_agent_npm_spec() {
   local preset
-  preset="$(echo "${HERMES_AGENT_VERSION_PRESET:-latest}" | tr '[:upper:]' '[:lower:]')"
+  preset="$(echo "${HERMES_AGENT_VERSION_PRESET:-custom}" | tr '[:upper:]' '[:lower:]')"
   case "$preset" in
     latest)
       echo "latest"
@@ -357,11 +359,12 @@ resolve_hermes_agent_npm_spec() {
       if [ -n "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
         echo "$HERMES_AGENT_VERSION_CUSTOM"
       else
-        echo "WARN: hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using latest." >&2
-        echo "latest"
+        echo "WARN: hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using ${ADDON_HERMES_DEFAULT_VERSION}." >&2
+        echo "$ADDON_HERMES_DEFAULT_VERSION"
       fi
       ;;
     *)
+      # Legacy pinned presets (e.g. 0.15.2) still in saved options.json
       echo "$preset"
       ;;
   esac
@@ -403,6 +406,12 @@ reconcile_hermes_agent_version() {
     fi
     if [ "$installed_marker" = "__image_baked__" ] && [ "$spec" = "latest" ]; then
       echo "INFO: Using image-baked hermes CLI (preset: latest)."
+      printf '%s\n' "$spec" > "$marker"
+      chmod 600 "$marker" 2>/dev/null || true
+      return 0
+    fi
+    if [ -z "$installed_marker" ] && [ "$spec" = "$IMAGE_BAKED_HERMES_SPEC" ]; then
+      echo "INFO: Using image-baked hermes CLI (${IMAGE_BAKED_HERMES_SPEC}); seeding version marker."
       printf '%s\n' "$spec" > "$marker"
       chmod 600 "$marker" 2>/dev/null || true
       return 0
@@ -1773,7 +1782,7 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
     echo "ERROR: https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
     echo "ERROR: Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
     echo "ERROR: Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
-    echo "ERROR: If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (0.15.2 wheel bug) or set hermes_agent_version_preset to latest."
+    echo "ERROR: If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."
     echo "ERROR: If import fails otherwise, install Web UI deps: python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'"
   fi
 fi
