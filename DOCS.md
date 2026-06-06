@@ -10,7 +10,7 @@ Canonical setup and operations guide. This add-on is marked **Experimental** in 
 | nginx (Ingress) | 48099 | Landing page + `/status.json` |
 | ttyd (terminal) | 7681 (configurable) | Browser terminal |
 
-Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`, `.linuxbrew`, etc.).
+Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`, `.linuxbrew`, `.node_global`, etc.). System tools (`hermes`, `uv`, `mcp`) install to **`/usr/local`**; user npm skills from the dashboard go to **`/config/.node_global`**.
 
 ## Install
 
@@ -219,7 +219,7 @@ export HOME=/config HERMES_HOME=/config/.hermes
 hermes dashboard --port 18790 --host 127.0.0.1 --no-open --skip-build
 ```
 
-If import fails: `python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'`. Confirm `gateway_mode` is `local` (not `remote`).
+If import fails: `uv pip install --system 'fastapi' 'uvicorn[standard]'` (or `python3 -m pip install --break-system-packages ...`). Confirm `gateway_mode` is `local` (not `remote`).
 
 MCP connectivity probe (add-on terminal):
 

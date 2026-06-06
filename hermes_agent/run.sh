@@ -514,22 +514,23 @@ else
   echo "WARN: Built-in skills directory not found (image package: ${IMAGE_SKILLS_DIR:-unknown})"
 fi
 
-# ------------------------------------------------------------------------------
-# Persist user-installed node skills across Docker image rebuilds
-# Redirect npm/pnpm global installs to /config/.node_global (persistent storage)
-# so that skills installed via the dashboard survive container rebuilds.
+# Persist user-installed node skills across Docker image rebuilds.
+# Redirect npm global installs to PERSISTENT_NODE_GLOBAL so dashboard/skill npm
+# packages survive container rebuilds. Add-on bootstrap (hermes-agent, agent-browser)
+# still installs to /usr/local explicitly via NPM_CONFIG_PREFIX.
 # NOTE: This MUST come after the skills sync above (which needs the original npm root -g).
 # ------------------------------------------------------------------------------
 PERSISTENT_NODE_GLOBAL="/config/.node_global"
 mkdir -p "$PERSISTENT_NODE_GLOBAL"
 npm config set prefix "$PERSISTENT_NODE_GLOBAL" 2>/dev/null || true
-export PATH="${PERSISTENT_NODE_GLOBAL}/bin:${PATH}"
-export NODE_PATH="${PERSISTENT_NODE_GLOBAL}/lib/node_modules:${NODE_PATH:-}"
-
-# Also configure pnpm global dir to persistent storage
 export PNPM_HOME="${PERSISTENT_NODE_GLOBAL}/pnpm"
 mkdir -p "$PNPM_HOME"
-export PATH="${PNPM_HOME}:${PATH}"
+export PATH="${PERSISTENT_NODE_GLOBAL}/bin:/usr/local/bin:${PNPM_HOME}:${PATH}"
+export NODE_PATH="${PERSISTENT_NODE_GLOBAL}/lib/node_modules:/usr/local/lib/node_modules:${NODE_PATH:-}"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "WARN: uv not found on PATH; runtime Python installs fall back to pip."
+fi
 
 safe_export_secret_env() {
   local key="$1"
@@ -548,11 +549,15 @@ install_python_package_if_missing() {
     echo "INFO: Python dependency '${package_spec}' already available."
     return 0
   fi
-  echo "INFO: Installing missing Python dependency '${package_spec}'..."
-  if python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
-    echo "INFO: Installed Python dependency '${package_spec}'."
+  echo "INFO: Installing missing Python dependency '${package_spec}' (system-wide)..."
+  if command -v uv >/dev/null 2>&1 \
+    && uv pip install --system --no-cache "${package_spec}" >/dev/null 2>&1; then
+    echo "INFO: Installed Python dependency '${package_spec}' via uv (system)."
+  elif python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
+    echo "INFO: Installed Python dependency '${package_spec}' via pip (system)."
   else
     echo "WARN: Could not install Python dependency '${package_spec}'. Tool may stay unavailable."
+    return 1
   fi
 }
 
@@ -563,11 +568,15 @@ install_npm_package_if_missing() {
     echo "INFO: Node dependency '${package_name}' already available."
     return 0
   fi
-  echo "INFO: Installing missing Node dependency '${package_name}'..."
-  if npm install -g "${package_name}" >/dev/null 2>&1; then
-    echo "INFO: Installed Node dependency '${package_name}'."
+  echo "INFO: Installing missing Node dependency '${package_name}' (system-wide)..."
+  if HOME=/root \
+    NPM_CONFIG_PREFIX="/usr/local" \
+    NPM_CONFIG_USERCONFIG=/root/.npmrc \
+    npm install -g "${package_name}" >/dev/null 2>&1; then
+    echo "INFO: Installed Node dependency '${package_name}' (system)."
   else
     echo "WARN: Could not install Node dependency '${package_name}'. Tool may stay unavailable."
+    return 1
   fi
 }
 
@@ -593,6 +602,7 @@ initialize_skills_hub_if_enabled() {
 }
 
 bootstrap_selected_tools() {
+  install_python_package_if_missing "mcp" "mcp"
   install_python_package_if_missing "edge_tts" "edge-tts"
   install_python_package_if_missing "ddgs" "ddgs"
 
@@ -1783,7 +1793,7 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
     echo "ERROR: Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
     echo "ERROR: Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
     echo "ERROR: If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."
-    echo "ERROR: If import fails otherwise, install Web UI deps: python3 -m pip install --break-system-packages 'fastapi' 'uvicorn[standard]'"
+    echo "ERROR: If import fails otherwise, install Web UI deps: uv pip install --system 'fastapi' 'uvicorn[standard]' (or pip --break-system-packages)"
   fi
 fi
 
