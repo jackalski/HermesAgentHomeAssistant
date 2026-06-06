@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.11"
+version: "0.0.12"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent as a Home Assistant add-on.
@@ -131,9 +131,9 @@ options:
   # Set false only if you explicitly want strict per-device approvals.
   controlui_disable_device_auth: true
 
-  # Enable OpenAI-compatible Chat Completions API endpoint
-  # When enabled, Hermes Agent can be used as a conversation agent in HA Assist pipeline
-  # via Extended OpenAI Conversation (HACS) or any OpenAI-compatible client
+  # Enable OpenAI-compatible Assist API (maps to API_SERVER_ENABLED in /config/.hermes/.env).
+  # Starts Hermes API server on port 8642; nginx proxies /v1/ to it when lan_https is active.
+  # Use with Extended OpenAI Conversation (HACS): Base URL https://<LAN-IP>:18789/v1, API key = gateway token.
   enable_openai_api: false
 
   # Expose Hermes setup/runtime/usage metrics to Home Assistant (MQTT discovery + /status.json).

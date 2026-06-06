@@ -461,6 +461,51 @@ def update_readiness_markers(api_keys: dict, enable_openai_api: bool, mcp_config
     return True
 
 
+API_SERVER_DEFAULT_PORT = 8642
+
+
+def read_gateway_auth_token() -> str:
+    cfg = read_config()
+    if not cfg:
+        return ""
+    token = cfg.get("gateway", {}).get("auth", {}).get("token", "")
+    return str(token).strip() if token else ""
+
+
+def sync_api_server_env(enable: bool, port: int = API_SERVER_DEFAULT_PORT) -> bool:
+    """Map enable_openai_api to Hermes API server env vars (API_SERVER_*)."""
+    if port < 1 or port > 65535:
+        print(f"ERROR: Invalid API server port {port}", file=sys.stderr)
+        return False
+
+    if not enable:
+        if upsert_env_var("API_SERVER_ENABLED", "false"):
+            print("INFO: Assist API disabled (API_SERVER_ENABLED=false).")
+        return True
+
+    token = read_gateway_auth_token()
+    if not token:
+        print(
+            "WARN: enable_openai_api is ON but gateway.auth.token is missing; "
+            "run 'hermes onboard' then restart. Disabling API server for now.",
+            file=sys.stderr,
+        )
+        upsert_env_var("API_SERVER_ENABLED", "false")
+        return False
+
+    ok = True
+    ok = upsert_env_var("API_SERVER_ENABLED", "true") and ok
+    ok = upsert_env_var("API_SERVER_KEY", token) and ok
+    ok = upsert_env_var("API_SERVER_PORT", str(port)) and ok
+    ok = upsert_env_var("API_SERVER_HOST", "127.0.0.1") and ok
+    if ok:
+        print(
+            f"INFO: Assist API enabled (API_SERVER_ENABLED=true on 127.0.0.1:{port}; "
+            f"nginx proxies /v1/ when lan_https)."
+        )
+    return ok
+
+
 def sync_router_ssh_env(host: str, user: str, key_path: str):
     host = (host or "").strip()
     user = (user or "").strip()
@@ -780,6 +825,22 @@ def main():
         env_key = "HOMEASSISTANT_TOKEN"
         ok = upsert_env_var(env_key, token) and configure_ha_mcp(server_name, url, env_key)
         sys.exit(0 if ok else 1)
+    elif cmd == "sync-api-server-env":
+        if len(sys.argv) < 3:
+            print(
+                "Usage: hermes_config_helper.py sync-api-server-env <true|false> [port]",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        enable = sys.argv[2].lower() in ("1", "true", "yes")
+        port = API_SERVER_DEFAULT_PORT
+        if len(sys.argv) > 3:
+            try:
+                port = int(sys.argv[3])
+            except ValueError:
+                print(f"ERROR: Invalid API server port: {sys.argv[3]}", file=sys.stderr)
+                sys.exit(1)
+        sys.exit(0 if sync_api_server_env(enable, port) else 1)
     elif cmd == "sync-addon-api-keys":
         if len(sys.argv) < 3:
             print("Usage: hermes_config_helper.py sync-addon-api-keys '<json-object>'", file=sys.stderr)

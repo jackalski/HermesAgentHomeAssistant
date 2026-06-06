@@ -131,7 +131,7 @@ configuration:
 
   enable_openai_api:
     name: Włącz API OpenAI
-    description: Włącz endpoint Chat Completions kompatybilny z OpenAI. Pozwala używać Hermes Agent jako agenta konwersacji w HA Assist pipeline przez Extended OpenAI Conversation (HACS) lub dowolnego klienta kompatybilnego z OpenAI.
+    description: "Włącza API Assist Hermes (sync API_SERVER_ENABLED do .env; API na porcie 8642, nginx /v1/ na HTTPS gateway). Extended OpenAI Conversation: Base URL https://<LAN-IP>:18789/v1, klucz API = token gateway, model hermes-agent."
   enable_ha_status_sensors:
     name: Włącz sensory statusu HA
     description: "Publikuje konfigurację, stan gateway, model/dostawcę i metryki użycia do Home Assistant przez MQTT discovery (gdy Mosquitto jest zainstalowany) oraz bezpieczny snapshot /status.json przez Ingress."
