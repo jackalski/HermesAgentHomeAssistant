@@ -551,7 +551,7 @@ install_python_package_if_missing() {
   fi
   echo "INFO: Installing missing Python dependency '${package_spec}' (system-wide)..."
   if command -v uv >/dev/null 2>&1 \
-    && uv pip install --system --no-cache "${package_spec}" >/dev/null 2>&1; then
+    && uv pip install --system --break-system-packages --no-cache "${package_spec}" >/dev/null 2>&1; then
     echo "INFO: Installed Python dependency '${package_spec}' via uv (system)."
   elif python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
     echo "INFO: Installed Python dependency '${package_spec}' via pip (system)."
