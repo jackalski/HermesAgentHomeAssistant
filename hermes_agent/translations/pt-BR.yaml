@@ -131,7 +131,7 @@ configuration:
 
   enable_openai_api:
     name: Habilitar API OpenAI
-    description: "Ativa a API Assist do Hermes (sync API_SERVER_ENABLED no .env; API na porta 8642, nginx /v1/ no HTTPS do gateway). Extended OpenAI Conversation: Base URL https://<LAN-IP>:18789/v1, API key = token gateway, modelo hermes-agent."
+    description: "Ativa a API Assist do Hermes (sync API_SERVER_ENABLED no .env; HTTP em 0.0.0.0:8642, token bearer obrigatório). Extended OpenAI do HA Core: Base URL http://<LAN-IP>:8642/v1, API key = token gateway, modelo hermes-agent."
   enable_ha_status_sensors:
     name: Habilitar sensores de status HA
     description: "Publica configuração, saúde do gateway, modelo/provedor e métricas de uso no Home Assistant via MQTT discovery (com Mosquitto) e um snapshot seguro /status.json no Ingress."

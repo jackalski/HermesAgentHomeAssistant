@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.12"
+version: "0.0.13"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent as a Home Assistant add-on.
@@ -132,8 +132,8 @@ options:
   controlui_disable_device_auth: true
 
   # Enable OpenAI-compatible Assist API (maps to API_SERVER_ENABLED in /config/.hermes/.env).
-  # Starts Hermes API server on port 8642; nginx proxies /v1/ to it when lan_https is active.
-  # Use with Extended OpenAI Conversation (HACS): Base URL https://<LAN-IP>:18789/v1, API key = gateway token.
+  # Starts Hermes API server on port 8642 (HTTP, all interfaces; bearer token required).
+  # Extended OpenAI Conversation from HA Core: Base URL http://<LAN-IP>:8642/v1 (not HTTPS 18789 — self-signed cert fails in HA).
   enable_openai_api: false
 
   # Expose Hermes setup/runtime/usage metrics to Home Assistant (MQTT discovery + /status.json).

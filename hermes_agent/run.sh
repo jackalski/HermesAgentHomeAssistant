@@ -1761,7 +1761,7 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
         sleep 2
       done
       if [ "$API_BIND_OK" = "true" ]; then
-        echo "INFO: Assist API server listening on 127.0.0.1:${API_SERVER_PORT} (Extended OpenAI: https://<LAN-IP>:${GATEWAY_PORT}/v1)"
+        echo "INFO: Assist API server listening on 0.0.0.0:${API_SERVER_PORT} (Extended OpenAI from HA Core: http://<LAN-IP>:${API_SERVER_PORT}/v1)"
       else
         echo "ERROR: Assist API server did not bind port ${API_SERVER_PORT} within 30s."
         echo "ERROR: Set enable_openai_api=true, ensure gateway token exists, and restart."

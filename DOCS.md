@@ -125,9 +125,12 @@ Options: `publish_mqtt_discovery`, `status_poll_interval_seconds` (30–300), `m
 
 | Field | Value |
 |-------|-------|
-| Base URL | `https://<LAN-IP>:18789/v1` (same port as gateway HTTPS; nginx proxies to API server on 8642) |
+| Base URL | `http://<LAN-IP>:8642/v1` (HTTP from HA Core — avoids self-signed HTTPS on 18789) |
 | API Key | Gateway token: `jq -r '.gateway.auth.token' /config/.hermes/hermes.json` |
 | Model | `hermes-agent` |
+| Skip authentication | ON (optional; helps during setup) |
+
+HTTPS on port 18789 still works for browsers and `curl -k`; HA Core rejects the self-signed cert, so use **8642** for Extended OpenAI.
 
 - Restart add-on after enabling Assist API or after first `hermes onboard` (gateway reads `API_SERVER_*` at startup).
 - In **Settings → Voice assistants**, set conversation agent to Extended OpenAI Conversation and expose entities.
@@ -181,7 +184,8 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
 | HA URL / MCP failures | Set explicit `hass_url`; check add-on log for autodetection line |
 | Low disk | Run `hermes-cleanup` in terminal |
-| `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `https://<LAN-IP>:18789/v1`, not dashboard port alone |
+| `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `http://<LAN-IP>:8642/v1` from HA Core (not HTTPS 18789) |
+| `Connection error` in Extended OpenAI Conversation | HA Core rejects self-signed HTTPS on 18789 — use Base URL `http://<LAN-IP>:8642/v1` (fixed in **0.0.13+**; API binds `0.0.0.0:8642`, bearer token required) |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Known **0.15.2** PyPI wheel bug; fixed in add-on **0.0.11+** (auto-patches on startup). Until then use `latest` preset or update add-on |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo latest > /config/.hermes/.addon-managed-hermes-version` or pin `0.15.2` |
