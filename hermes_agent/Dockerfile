@@ -133,33 +133,8 @@ RUN python3 -m pip config set global.break-system-packages true \
     && npm install -g agent-browser@latest
 
 # hermes-agent 0.15.2 wheel omits hermes_cli/dashboard_auth and hermes_cli/proxy (upstream #34701).
-RUN python3 - <<'PY'
-import os, shutil, tarfile, tempfile, urllib.request
-import hermes_cli
-
-site = os.path.dirname(hermes_cli.__file__)
-missing = [s for s in ("dashboard_auth", "proxy") if not os.path.isfile(os.path.join(site, s, "__init__.py"))]
-if not missing:
-    raise SystemExit(0)
-url = "https://github.com/NousResearch/hermes-agent/archive/refs/tags/v2026.5.29.2.tar.gz"
-with tempfile.TemporaryDirectory() as td:
-    arc = os.path.join(td, "src.tgz")
-    urllib.request.urlretrieve(url, arc)
-    with tarfile.open(arc, "r:gz") as tf:
-        tf.extractall(td)
-    tops = [d for d in os.listdir(td) if d.startswith("hermes-agent-") and os.path.isdir(os.path.join(td, d))]
-    if not tops:
-        raise SystemExit("hermes-agent source archive missing top-level directory")
-    top = os.path.join(td, tops[0])
-    for sub in missing:
-        src = os.path.join(top, "hermes_cli", sub)
-        dst = os.path.join(site, sub)
-        if os.path.isdir(src):
-            if os.path.exists(dst):
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-            print(f"patched hermes_cli/{sub}")
-PY
+COPY repair_hermes_wheel.py /repair_hermes_wheel.py
+RUN python3 /repair_hermes_wheel.py
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade --force-reinstall \
         websockets \
@@ -197,7 +172,7 @@ COPY hermes-cleanup.sh /usr/local/bin/hermes-cleanup
 COPY hermes-proxy-shim.cjs /usr/local/lib/hermes-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
-RUN chmod +x /run.sh /hermes_config_helper.py /hermes_status_exporter.py /render_nginx.py /usr/local/bin/hermes-cleanup \
+RUN chmod +x /run.sh /hermes_config_helper.py /hermes_status_exporter.py /render_nginx.py /repair_hermes_wheel.py /usr/local/bin/hermes-cleanup \
     && mkdir -p /run/nginx
 
 CMD [ "/run.sh" ]

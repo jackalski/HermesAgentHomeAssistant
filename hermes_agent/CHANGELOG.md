@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.11] - 2026-06-06
+
+### Fixed
+- Docker build no longer uses Dockerfile heredocs (unsupported on some Home Assistant Supervisor builders); wheel repair runs via `repair_hermes_wheel.py` instead.
+
 ## [0.0.10] - 2026-06-06
 
 ### Fixed
