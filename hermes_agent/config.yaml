@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.18"
+version: "0.0.19"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.

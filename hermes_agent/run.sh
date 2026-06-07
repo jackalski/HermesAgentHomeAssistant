@@ -451,6 +451,14 @@ export XDG_CONFIG_HOME=/config
 
 mkdir -p /config/.hermes /config/.hermes/identity /config/hermesd /config/keys /config/secrets
 
+# Hermes npm installs expose a PyPI wheel; without this stamp upstream detects "pip"
+# and shows the unsupported pip-install banner. The add-on is a container install.
+if [ "$(tr -d '\r\n' < "${HERMES_HOME}/.install_method" 2>/dev/null || true)" != "docker" ]; then
+  printf '%s\n' docker > "${HERMES_HOME}/.install_method"
+  chmod 600 "${HERMES_HOME}/.install_method" 2>/dev/null || true
+  log_info "Stamped ${HERMES_HOME}/.install_method as docker"
+fi
+
 if [ -n "$MQTT_BROKER_PASSWORD" ]; then
   printf '%s' "$MQTT_BROKER_PASSWORD" > /config/secrets/mqtt.password
   chmod 600 /config/secrets/mqtt.password 2>/dev/null || true

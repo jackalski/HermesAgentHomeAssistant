@@ -131,6 +131,7 @@ RUN python3 /repair_hermes_wheel.py
 
 # System-wide Python deps: MCP SDK + gateway/dashboard/tooling (uv preferred, pip fallback).
 RUN uv pip install --system --break-system-packages --no-cache \
+        paho-mqtt \
         mcp \
         websockets \
         "python-telegram-bot[webhooks]>=22.7" \
