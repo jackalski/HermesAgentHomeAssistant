@@ -137,10 +137,18 @@ configuration:
           trusted-proxy: "Trusted Proxy (for reverse proxies)"
       gateway_trusted_proxies:
         name: Gateway Trusted Proxies
-        description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode.
+        description: "Trusted reverse-proxy IP/CIDR list for gateway_auth_mode trusted-proxy (one row per proxy). Required when access_mode is lan_reverse_proxy or you use an external proxy (NPM, Caddy, Traefik). If empty in lan_reverse_proxy, startup applies defaults (127.0.0.1, 172.30.0.0/16, 10.0.0.0/8). Your proxy must send X-Forwarded-User."
+        fields:
+          value:
+            name: Proxy IP or CIDR
+            description: "IPv4, IPv4/CIDR, or IPv6/CIDR of the proxy source. Examples: 127.0.0.1, 192.168.88.0/24, 172.30.0.0/16."
       gateway_additional_allowed_origins:
         name: Additional Allowed Origins
-        description: Extra Control UI origins (one per row); merged into allowedOrigins and TLS SAN in lan_https.
+        description: "Extra browser origins allowed to open the Hermes Control UI (one row per origin). Merged with built-in defaults into gateway.controlUi.allowedOrigins. In lan_https, hostnames from these URLs are also added to the TLS certificate SAN so HTTPS works for custom domains."
+        fields:
+          value:
+            name: Origin URL
+            description: "Full origin with scheme and host (include port when non-default). Examples: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost."
       controlui_disable_device_auth:
         name: Disable Control UI Device Pairing (lan_https)
         description: "Recommended ON for home LAN — skips per-device approval (avoids error 1008)."
