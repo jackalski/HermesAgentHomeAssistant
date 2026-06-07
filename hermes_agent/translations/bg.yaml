@@ -20,19 +20,28 @@ configuration:
       general: "Общ асистент"
       advanced: "Разширено (ръчни опции)"
 
+  default_provider:
+    name: Предустановен доставчик
+    description: "Основен LLM доставчик за първо стартиране. Nous Portal използва OAuth (`hermes setup --portal` или `hermes auth add nous` в терминала). Ollama съответства на Ollama Cloud (`ollama-cloud`)."
+    options:
+      nous: "Nous Portal"
+      openrouter: "OpenRouter"
+      google: "Google (Gemini API ключ)"
+      anthropic: "Anthropic"
+      ollama: "Ollama Cloud"
+      minimax: "MiniMax"
+      xai: "xAI (Grok)"
+      openai: "OpenAI"
+
   default_model_preset:
     name: Предустановка за модел
-    description: "Curated main model for first-run bootstrap. auto infers from your first API key; custom uses the Default Model (custom) field."
+    description: "Използвайте Custom и задайте ID на модела в полето Предустановен модел."
     options:
-      auto: "Auto (от API ключ)"
-      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
-      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
-      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
       custom: "Персонален model ID"
 
   default_model:
-    name: Модел (custom)
-    description: "Main model ID when Default Model Preset is custom (e.g. google/gemini-2.5-flash). Bootstrapped on first run only when no model is configured yet."
+    name: Предустановен модел
+    description: "ID на модела за избрания доставчик (напр. google/gemini-2.5-flash за OpenRouter, claude-sonnet-4-6 за Anthropic, gpt-oss:120b за Ollama Cloud). Bootstrap само при първо стартиране, ако няма конфигуриран модел."
 
   provider_api_keys:
     name: Provider API Keys
@@ -50,6 +59,9 @@ configuration:
       google_api_key:
         name: Google API Key
         description: Synced as GOOGLE_API_KEY.
+      ollama_api_key:
+        name: Ollama Cloud API Key
+        description: Synced as OLLAMA_API_KEY (from ollama.com/settings/keys).
       minimax_api_key:
         name: MiniMax API Key
         description: Synced as MINIMAX_API_KEY.

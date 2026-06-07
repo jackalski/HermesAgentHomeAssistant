@@ -2,6 +2,16 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.18] - 2026-06-07
+
+### Added
+- **`default_provider`** dropdown for first-run model bootstrap: Nous Portal, OpenRouter, Google, Anthropic, Ollama Cloud, MiniMax, xAI, OpenAI.
+- **`ollama_api_key`** in Provider API Keys (synced as `OLLAMA_API_KEY`).
+
+### Changed
+- **`default_model_preset`** is now **custom** only; set your model ID in **`default_model`**.
+- Legacy curated presets (`auto`, `gemini_flash`, etc.) are still honored if present in saved options until you save configuration again.
+
 ## [0.0.17] - 2026-06-07
 
 ### Changed

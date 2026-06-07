@@ -20,19 +20,28 @@ configuration:
       general: "Asistente general"
       advanced: "Avanzado (opciones manuales)"
 
+  default_provider:
+    name: Proveedor predeterminado
+    description: "Proveedor LLM principal para el primer arranque. Nous Portal usa OAuth (`hermes setup --portal` o `hermes auth add nous` en terminal). Ollama corresponde a Ollama Cloud (`ollama-cloud`)."
+    options:
+      nous: "Nous Portal"
+      openrouter: "OpenRouter"
+      google: "Google (clave API Gemini)"
+      anthropic: "Anthropic"
+      ollama: "Ollama Cloud"
+      minimax: "MiniMax"
+      xai: "xAI (Grok)"
+      openai: "OpenAI"
+
   default_model_preset:
     name: Preajuste de modelo
-    description: "Modelo principal curado para el primer arranque. auto infiere desde la primera clave API; custom usa el campo Modelo (custom)."
+    description: "Usa Custom y define el ID del modelo en Modelo predeterminado."
     options:
-      auto: "Auto (desde clave API)"
-      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
-      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
-      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
       custom: "ID de modelo personalizado"
 
   default_model:
-    name: Modelo (custom)
-    description: "ID de modelo cuando el preajuste es custom. Bootstrap solo en el primer arranque si no hay modelo configurado."
+    name: Modelo predeterminado
+    description: "ID del modelo para el proveedor seleccionado (p. ej. google/gemini-2.5-flash para OpenRouter, claude-sonnet-4-6 para Anthropic, gpt-oss:120b para Ollama Cloud). Bootstrap solo en el primer arranque si no hay modelo configurado."
 
   provider_api_keys:
     name: Claves API de proveedores
@@ -50,6 +59,9 @@ configuration:
       google_api_key:
         name: Clave API de Google
         description: Sincronizada como GOOGLE_API_KEY.
+      ollama_api_key:
+        name: Clave API de Ollama Cloud
+        description: Sincronizada como OLLAMA_API_KEY (desde ollama.com/settings/keys).
       minimax_api_key:
         name: Clave API de MiniMax
         description: Sincronizada como MINIMAX_API_KEY.

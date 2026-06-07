@@ -20,19 +20,28 @@ configuration:
       general: "Allgemeiner Assistent"
       advanced: "Erweitert (manuelle Optionen)"
 
+  default_provider:
+    name: Standard-Provider
+    description: "Haupt-LLM-Provider für Erststart-Bootstrap. Nous Portal nutzt OAuth (`hermes setup --portal` oder `hermes auth add nous` im Terminal). Ollama entspricht Ollama Cloud (`ollama-cloud`)."
+    options:
+      nous: "Nous Portal"
+      openrouter: "OpenRouter"
+      google: "Google (Gemini API-Schlüssel)"
+      anthropic: "Anthropic"
+      ollama: "Ollama Cloud"
+      minimax: "MiniMax"
+      xai: "xAI (Grok)"
+      openai: "OpenAI"
+
   default_model_preset:
     name: Modell-Voreinstellung
-    description: "Kuratiertes Hauptmodell für Erststart-Bootstrap. auto leitet vom ersten API-Schlüssel ab; custom nutzt das Feld Modell (custom)."
+    description: "Custom wählen und die Modell-ID unter Standardmodell setzen."
     options:
-      auto: "Auto (vom API-Schlüssel)"
-      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
-      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
-      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
       custom: "Benutzerdefinierte Modell-ID"
 
   default_model:
-    name: Modell (custom)
-    description: "Modell-ID bei Voreinstellung custom. Bootstrap nur beim Erststart, wenn kein Modell konfiguriert ist."
+    name: Standardmodell
+    description: "Modell-ID für den gewählten Provider (z. B. google/gemini-2.5-flash für OpenRouter, claude-sonnet-4-6 für Anthropic, gpt-oss:120b für Ollama Cloud). Bootstrap nur beim Erststart, wenn kein Modell konfiguriert ist."
 
   provider_api_keys:
     name: Provider-API-Schlüssel
@@ -50,6 +59,9 @@ configuration:
       google_api_key:
         name: Google API-Schlüssel
         description: Synchronisiert als GOOGLE_API_KEY.
+      ollama_api_key:
+        name: Ollama Cloud API-Schlüssel
+        description: Synchronisiert als OLLAMA_API_KEY (von ollama.com/settings/keys).
       minimax_api_key:
         name: MiniMax API-Schlüssel
         description: Synchronisiert als MINIMAX_API_KEY.
