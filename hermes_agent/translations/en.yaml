@@ -2,19 +2,19 @@ configuration:
   timezone:
     name: Timezone
     description: Timezone for the add-on (e.g., Europe/Sofia, America/New_York)
-  
+
   enable_terminal:
     name: Enable Web Terminal
     description: Enable web terminal Button inside Home Assistant (Ingress) via ttyd
-  
+
   terminal_port:
     name: Terminal Port
-    description: Port number for the web terminal (default - 7681). Change if this port conflicts with another service.
-  
+    description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
+
   gateway_public_url:
     name: Gateway Public URL
     description: Public base URL for opening the Gateway Web UI in a new tab (not embedded). Example - https://example.duckdns.org:12345 or http://192.168.1.10:18789
-  
+
   hass_url:
     name: Home Assistant URL
     description: "Home Assistant base URL for scripts/tools. Leave empty for autodetection on HAOS (recommended). Synced to HOMEASSISTANT_URL in /config/.hermes/.env when a token is set."
@@ -45,38 +45,74 @@ configuration:
     name: Default Model (custom)
     description: "Main model ID when Default Model Preset is custom (e.g. google/gemini-2.5-flash). Bootstrapped on first run only when no model is configured yet."
 
-  firecrawl_api_key:
-    name: Firecrawl API Key
-    description: "Optional web search/extract token synced to /config/.hermes/.env as FIRECRAWL_API_KEY."
+  provider_api_keys:
+    name: Provider API Keys
+    description: Optional provider and tool tokens synced to /config/.hermes/.env on restart. OAuth/device-code providers still require `hermes auth` in terminal.
+    fields:
+      openai_api_key:
+        name: OpenAI API Key
+        description: Synced as OPENAI_API_KEY.
+      openrouter_api_key:
+        name: OpenRouter API Key
+        description: Synced as OPENROUTER_API_KEY.
+      anthropic_api_key:
+        name: Anthropic API Key
+        description: Synced as ANTHROPIC_API_KEY.
+      google_api_key:
+        name: Google API Key
+        description: Synced as GOOGLE_API_KEY.
+      minimax_api_key:
+        name: MiniMax API Key
+        description: Synced as MINIMAX_API_KEY.
+      discord_bot_token:
+        name: Discord Bot Token
+        description: Synced as DISCORD_BOT_TOKEN.
+      github_token:
+        name: GitHub Token
+        description: Synced as GITHUB_TOKEN.
+      xai_api_key:
+        name: xAI API Key
+        description: Synced as XAI_API_KEY.
+      firecrawl_api_key:
+        name: Firecrawl API Key
+        description: Synced as FIRECRAWL_API_KEY.
+      searxng_url:
+        name: SearXNG URL
+        description: Synced as SEARXNG_URL.
 
-  searxng_url:
-    name: SearXNG URL
-    description: "Optional self-hosted SearXNG instance URL synced to /config/.hermes/.env as SEARXNG_URL."
+  addon_log_level:
+    name: Add-on Log Level
+    description: Startup log verbosity for the add-on container (colors and emojis when the log terminal is interactive).
+    options:
+      error: "Errors only"
+      warn: "Warnings and errors"
+      info: "Info (default)"
+      debug: "Debug (verbose)"
 
   http_proxy:
     name: Outbound HTTP Proxy
     description: Optional - Proxy URL for outbound HTTP/HTTPS requests (example - http://192.168.2.1:3128)
-  
+
   router_ssh_host:
     name: Router SSH Host
     description: Optional - Router/firewall SSH hostname or IP address
-  
+
   router_ssh_user:
     name: Router SSH User
     description: Optional - Router/firewall SSH username
-  
+
   router_ssh_key_path:
     name: Router SSH Key Path
-    description: Path to SSH private key for router access (default - /data/keys/router_ssh)
-  
+    description: Path to SSH private key for router access on persistent storage (default - /config/keys/router_ssh)
+
   clean_session_locks_on_start:
     name: Clean Session Locks on Start
     description: Cleanup stale session lock files left after crashes/restarts when add-on starts
-  
+
   clean_session_locks_on_exit:
     name: Clean Session Locks on Exit
     description: Cleanup session lock files when add-on stops gracefully
-  
+
   gateway_mode:
     name: Gateway Mode
     description: Gateway operation mode - local (run gateway locally, recommended) or remote (connect to a remote gateway)
@@ -90,7 +126,7 @@ configuration:
 
   gateway_additional_allowed_origins:
     name: Additional Allowed Origins
-    description: Comma-separated extra Control UI origins to merge into gateway.controlUi.allowedOrigins in lan_https mode (example - https://ha.example.com:8443,capacitor://localhost)
+    description: Extra Control UI origins (one per row). Merged into gateway.controlUi.allowedOrigins; in lan_https hostnames are also added to the TLS certificate SAN.
 
   controlui_disable_device_auth:
     name: Disable Control UI Device Pairing (lan_https)
@@ -106,7 +142,7 @@ configuration:
 
   gateway_port:
     name: Gateway Port
-    description: Port number for the Hermes Agent gateway to listen on (default - 18789)
+    description: Port for the Hermes Agent gateway (default 18789)
 
   access_mode:
     name: Access Mode
@@ -127,38 +163,47 @@ configuration:
 
   gateway_trusted_proxies:
     name: Gateway Trusted Proxies
-    description: Comma-separated trusted proxy IP/CIDR list for trusted-proxy mode (example - 127.0.0.1,192.168.88.0/24).
+    description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode. Example - 127.0.0.1 or 192.168.88.0/24.
 
   enable_openai_api:
     name: Enable OpenAI API
     description: "Enables Hermes Assist API (syncs API_SERVER_ENABLED to .env; HTTP on 0.0.0.0:8642, bearer token required). Extended OpenAI from HA Core: Base URL http://<LAN-IP>:8642/v1, API key = gateway token, model hermes-agent."
+
   enable_ha_status_sensors:
     name: Enable HA Status Sensors
     description: "Publish Hermes setup, gateway health, model/provider, and usage metrics to Home Assistant via MQTT discovery (when Mosquitto is installed) and a safe /status.json snapshot on Ingress."
+
   publish_mqtt_discovery:
     name: Publish MQTT Discovery
     description: "When ON and the Mosquitto add-on is running, auto-create Home Assistant entities for Hermes status sensors. Disable if you only want the /status.json API."
+
   status_poll_interval_seconds:
     name: Status Poll Interval (seconds)
     description: "How often to refresh status sensors and /share/hermes/status.json. Allowed range 30-300. Higher values reduce flash writes on SD-card installs."
+
   mqtt_state_prefix:
     name: MQTT State Topic Prefix
     description: "Prefix for MQTT state topics (default hermes). State topics look like <prefix>/status/gateway_running."
+
   force_ipv4_dns:
     name: Force IPv4 DNS Order
     description: Force IPv4-first DNS ordering for Node network calls. Most HAOS VMs lack IPv6 egress, causing web_fetch and Telegram timeouts. Recommended ON (default).
+
   nginx_log_level:
     name: Nginx Log Level
     description: "Access log verbosity for the built-in nginx proxy. 'minimal' (default) suppresses repetitive HA health-check and polling requests. 'full' logs everything."
     options:
       minimal: "Minimal (suppress HA polling noise)"
       full: "Full (log all requests)"
+
   gateway_env_vars:
     name: Gateway Environment Variables
     description: Environment variables passed to the Hermes Agent gateway process at startup (list entries with name/value in Home Assistant UI; max 50 variables, keys up to 255 characters, values up to 10,000 characters).
+
   auto_configure_mcp:
     name: Auto-Configure MCP for Home Assistant
     description: "When ON and Home Assistant Token is set, automatically registers Home Assistant in Hermes built-in MCP (mcp_servers) on each startup. This lets Hermes Agent control HA entities, services, and automations via the Model Context Protocol. Disable only if you manage Hermes MCP configuration manually."
+
   hermes_agent_version_preset:
     name: Hermes Agent Version
     description: "npm package installed on startup (provides the `hermes` CLI). Default custom pins 0.16.0; latest tracks npm @latest."
@@ -173,33 +218,11 @@ configuration:
   tool_telegram_enabled:
     name: Enable Telegram Tool Bootstrap
     description: "When ON, startup verifies Telegram tool dependencies and auto-installs missing Python package(s) when possible (warns and continues on failure)."
+
   tool_browser_enabled:
     name: Enable Browser Tool Bootstrap
     description: "When ON, startup verifies browser tool dependencies and auto-installs missing external tools (for example agent-browser) when possible."
+
   tool_skills_hub_enabled:
     name: Enable Skills Hub Bootstrap
     description: "When ON, startup initializes Skills Hub directory automatically (equivalent to first-run `hermes skills list`) to reduce doctor warnings."
-  openai_api_key:
-    name: OpenAI API Key
-    description: "Optional token synced to /config/.hermes/.env as OPENAI_API_KEY for Hermes onboard/model setup and runtime."
-  openrouter_api_key:
-    name: OpenRouter API Key
-    description: "Optional token synced to /config/.hermes/.env as OPENROUTER_API_KEY for Hermes onboard/model setup and runtime."
-  anthropic_api_key:
-    name: Anthropic API Key
-    description: "Optional token synced to /config/.hermes/.env as ANTHROPIC_API_KEY for Hermes onboard/model setup and runtime."
-  google_api_key:
-    name: Google API Key
-    description: "Optional token synced to /config/.hermes/.env as GOOGLE_API_KEY for Hermes onboard/model setup and runtime."
-  minimax_api_key:
-    name: MiniMax API Key
-    description: "Optional token synced to /config/.hermes/.env as MINIMAX_API_KEY for Hermes onboard/model setup and runtime."
-  discord_bot_token:
-    name: Discord Bot Token
-    description: "Optional token synced to /config/.hermes/.env as DISCORD_BOT_TOKEN for Discord tools."
-  github_token:
-    name: GitHub Token
-    description: "Optional token synced to /config/.hermes/.env as GITHUB_TOKEN to improve Skills Hub and GitHub API limits."
-  xai_api_key:
-    name: xAI API Key
-    description: "Optional token synced to /config/.hermes/.env as XAI_API_KEY for x_search provider."

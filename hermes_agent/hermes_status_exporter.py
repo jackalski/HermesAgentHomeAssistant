@@ -47,7 +47,7 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.15"
+ADDON_VERSION = "0.0.16"
 STATUS_FILE = Path("/share/hermes/status.json")
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
@@ -369,57 +369,19 @@ def _device_block(sw_version: str) -> dict[str, Any]:
     }
 
 
-def _env_mqtt_config() -> dict[str, Any]:
-    host = (os.environ.get("MQTT_HOST") or "").strip()
-    if not host:
-        return {}
-    return {
-        "host": host,
-        "port": str(os.environ.get("MQTT_PORT") or "1883"),
-        "username": (os.environ.get("MQTT_USER") or os.environ.get("MQTT_USERNAME") or ""),
-        "password": os.environ.get("MQTT_PASSWORD") or "",
-    }
-
-
-def _supervisor_mqtt_config() -> dict[str, Any]:
-    token = (os.environ.get("SUPERVISOR_TOKEN") or "").strip()
-    if not token:
-        return {}
-    url = "http://supervisor/services/mqtt"
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
-        return {}
-
-    data = body.get("data") if isinstance(body, dict) else {}
-    if not isinstance(data, dict):
-        return {}
-    host = str(data.get("host") or "").strip()
-    if not host:
-        return {}
-    return {
-        "host": host,
-        "port": str(data.get("port") or "1883"),
-        "username": str(data.get("username") or ""),
-        "password": str(data.get("password") or ""),
-    }
-
-
 def resolve_mqtt_config(payload: dict) -> dict[str, Any]:
-    mqtt_cfg = payload.get("mqtt", {})
-    if not isinstance(mqtt_cfg, dict):
-        mqtt_cfg = {}
-    if mqtt_cfg.get("host"):
-        return mqtt_cfg
+    try:
+        from hermes_mqtt_resolver import resolve_mqtt_broker
+    except ImportError:
+        sys.path.insert(0, "/")
+        from hermes_mqtt_resolver import resolve_mqtt_broker  # type: ignore # noqa: E402
 
-    for resolver in (_env_mqtt_config, _supervisor_mqtt_config):
-        resolved = resolver()
-        if resolved.get("host"):
-            payload["mqtt"] = resolved
-            return resolved
-    return mqtt_cfg
+    resolved = resolve_mqtt_broker(payload)
+    if resolved.get("host"):
+        payload["mqtt"] = resolved
+        return resolved
+    mqtt_cfg = payload.get("mqtt", {})
+    return mqtt_cfg if isinstance(mqtt_cfg, dict) else {}
 
 
 def _mqtt_pub(mqtt_cfg: dict, topic: str, payload: str, retain: bool = False) -> bool:
@@ -688,8 +650,9 @@ def run_loop(payload: dict) -> int:
         mqtt_cfg = resolve_mqtt_config(payload)
         if mqtt_cfg.get("host"):
             if not mqtt_available_logged:
+                source = mqtt_cfg.get("source", "resolved")
                 print(
-                    f"INFO: MQTT broker available for status sensors: "
+                    f"INFO: MQTT broker resolved ({source}): "
                     f"{mqtt_cfg['host']}:{mqtt_cfg.get('port', '1883')}",
                     file=sys.stderr,
                 )

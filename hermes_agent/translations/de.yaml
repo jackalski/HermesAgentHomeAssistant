@@ -9,7 +9,7 @@ configuration:
   
   terminal_port:
     name: Terminal-Port
-    description: Portnummer für das Web-Terminal (Standard - 7681). Ändern Sie diese, wenn dieser Port mit einem anderen Dienst in Konflikt steht.
+    description: Port für das Web-Terminal (Standard 7681). Ändern Sie diesen, wenn dieser Port mit einem anderen Dienst in Konflikt steht.
   
   gateway_public_url:
     name: Öffentliche Gateway-URL
@@ -45,13 +45,49 @@ configuration:
     name: Modell (custom)
     description: "Modell-ID bei Voreinstellung custom. Bootstrap nur beim Erststart, wenn kein Modell konfiguriert ist."
 
-  firecrawl_api_key:
-    name: Firecrawl API-Schlüssel
-    description: "Optionaler Web-Search-Token, synchronisiert als FIRECRAWL_API_KEY in /config/.hermes/.env."
+  provider_api_keys:
+    name: Provider-API-Schlüssel
+    description: Optionale Provider- und Tool-Tokens, die beim Neustart nach /config/.hermes/.env synchronisiert werden. OAuth-/Device-Code-Provider erfordern weiterhin `hermes auth` im Terminal.
+    fields:
+      openai_api_key:
+        name: OpenAI API-Schlüssel
+        description: Synchronisiert als OPENAI_API_KEY.
+      openrouter_api_key:
+        name: OpenRouter API-Schlüssel
+        description: Synchronisiert als OPENROUTER_API_KEY.
+      anthropic_api_key:
+        name: Anthropic API-Schlüssel
+        description: Synchronisiert als ANTHROPIC_API_KEY.
+      google_api_key:
+        name: Google API-Schlüssel
+        description: Synchronisiert als GOOGLE_API_KEY.
+      minimax_api_key:
+        name: MiniMax API-Schlüssel
+        description: Synchronisiert als MINIMAX_API_KEY.
+      discord_bot_token:
+        name: Discord Bot Token
+        description: Synchronisiert als DISCORD_BOT_TOKEN.
+      github_token:
+        name: GitHub Token
+        description: Synchronisiert als GITHUB_TOKEN.
+      xai_api_key:
+        name: xAI API-Schlüssel
+        description: Synchronisiert als XAI_API_KEY.
+      firecrawl_api_key:
+        name: Firecrawl API-Schlüssel
+        description: Synchronisiert als FIRECRAWL_API_KEY.
+      searxng_url:
+        name: SearXNG URL
+        description: Synchronisiert als SEARXNG_URL.
 
-  searxng_url:
-    name: SearXNG URL
-    description: "Optionale SearXNG-URL, synchronisiert als SEARXNG_URL in /config/.hermes/.env."
+  addon_log_level:
+    name: Add-on Log-Level
+    description: Start-Log-Detailgrad für den Add-on-Container (Farben und Emojis, wenn das Log-Terminal interaktiv ist).
+    options:
+      error: "Nur Fehler"
+      warn: "Warnungen und Fehler"
+      info: "Info (Standard)"
+      debug: "Debug (ausführlich)"
 
   http_proxy:
     name: Ausgehender HTTP-Proxy
@@ -67,7 +103,7 @@ configuration:
   
   router_ssh_key_path:
     name: Router SSH-Schlüsselpfad
-    description: Pfad zum privaten SSH-Schlüssel für Router-Zugriff (Standard - /data/keys/router_ssh)
+    description: Pfad zum privaten SSH-Schlüssel für Router-Zugriff auf persistentem Speicher (Standard - /config/keys/router_ssh)
   
   clean_session_locks_on_start:
     name: Sitzungssperren beim Start bereinigen
@@ -90,7 +126,7 @@ configuration:
 
   gateway_additional_allowed_origins:
     name: Zusätzliche erlaubte Origins
-    description: Kommagetrennte zusätzliche Control-UI-Origins, die bei lan_https in gateway.controlUi.allowedOrigins zusammengeführt werden (Beispiel - https://ha.example.com:8443,capacitor://localhost)
+    description: Zusätzliche Control-UI-Origins (eine pro Zeile). Werden in gateway.controlUi.allowedOrigins zusammengeführt; bei lan_https werden Hostnamen auch zum TLS-Zertifikat SAN hinzugefügt.
 
   controlui_disable_device_auth:
     name: Control-UI-Geräte-Pairing deaktivieren (lan_https)
@@ -106,7 +142,7 @@ configuration:
 
   gateway_port:
     name: Gateway-Port
-    description: Portnummer, auf der das Hermes-Agent-Gateway lauscht (Standard - 18789)
+    description: Port für das Hermes-Agent-Gateway (Standard 18789)
 
   access_mode:
     name: Zugriffsmodus
@@ -127,7 +163,7 @@ configuration:
 
   gateway_trusted_proxies:
     name: Vertrauenswürdige Gateway-Proxys
-    description: Komma-getrennte Liste vertrauenswürdiger Proxy-IPs/CIDRs für den Trusted-Proxy-Modus (Beispiel - 127.0.0.1,192.168.88.0/24).
+    description: Vertrauenswürdige Proxy-IP- oder CIDR-Einträge (eine pro Zeile) für den Trusted-Proxy-Modus. Beispiel - 127.0.0.1 oder 192.168.88.0/24.
 
   enable_openai_api:
     name: OpenAI API aktivieren
@@ -179,27 +215,3 @@ configuration:
   tool_skills_hub_enabled:
     name: Skills-Hub-Bootstrap
     description: "Wenn AN, initialisiert der Start das Skills-Hub-Verzeichnis automatisch (entspricht `hermes skills list` beim ersten Start)."
-  openai_api_key:
-    name: OpenAI API-Schlüssel
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als OPENAI_API_KEY für Hermes onboard/model setup und Laufzeit."
-  openrouter_api_key:
-    name: OpenRouter API-Schlüssel
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als OPENROUTER_API_KEY für Hermes onboard/model setup und Laufzeit."
-  anthropic_api_key:
-    name: Anthropic API-Schlüssel
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als ANTHROPIC_API_KEY für Hermes onboard/model setup und Laufzeit."
-  google_api_key:
-    name: Google API-Schlüssel
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als GOOGLE_API_KEY für Hermes onboard/model setup und Laufzeit."
-  minimax_api_key:
-    name: MiniMax API-Schlüssel
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als MINIMAX_API_KEY für Hermes onboard/model setup und Laufzeit."
-  discord_bot_token:
-    name: Discord Bot Token
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als DISCORD_BOT_TOKEN für Discord-Tools."
-  github_token:
-    name: GitHub Token
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als GITHUB_TOKEN für bessere API-Limits."
-  xai_api_key:
-    name: xAI API-Schlüssel
-    description: "Optionales Token, synchronisiert nach /config/.hermes/.env als XAI_API_KEY für x_search."

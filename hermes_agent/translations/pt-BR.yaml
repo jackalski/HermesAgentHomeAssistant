@@ -9,7 +9,7 @@ configuration:
   
   terminal_port:
     name: Porta do Terminal
-    description: Número da porta para o terminal web (padrão - 7681). Altere se esta porta conflitar com outro serviço.
+    description: Porta para o terminal web (padrão 7681). Altere se esta porta conflitar com outro serviço.
   
   gateway_public_url:
     name: URL Pública do Gateway
@@ -45,13 +45,49 @@ configuration:
     name: Modelo (custom)
     description: "ID do modelo quando a predefinição é custom. Bootstrap apenas na primeira execução quando nenhum modelo estiver configurado."
 
-  firecrawl_api_key:
-    name: Chave API Firecrawl
-    description: "Token opcional de busca web sincronizado como FIRECRAWL_API_KEY em /config/.hermes/.env."
+  provider_api_keys:
+    name: Chaves API de provedores
+    description: Tokens opcionais de provedores e ferramentas sincronizados em /config/.hermes/.env ao reiniciar. Provedores OAuth/device-code ainda exigem `hermes auth` no terminal.
+    fields:
+      openai_api_key:
+        name: Chave API OpenAI
+        description: Sincronizada como OPENAI_API_KEY.
+      openrouter_api_key:
+        name: Chave API OpenRouter
+        description: Sincronizada como OPENROUTER_API_KEY.
+      anthropic_api_key:
+        name: Chave API Anthropic
+        description: Sincronizada como ANTHROPIC_API_KEY.
+      google_api_key:
+        name: Chave API Google
+        description: Sincronizada como GOOGLE_API_KEY.
+      minimax_api_key:
+        name: Chave API MiniMax
+        description: Sincronizada como MINIMAX_API_KEY.
+      discord_bot_token:
+        name: Token de bot do Discord
+        description: Sincronizado como DISCORD_BOT_TOKEN.
+      github_token:
+        name: Token do GitHub
+        description: Sincronizado como GITHUB_TOKEN.
+      xai_api_key:
+        name: Chave API xAI
+        description: Sincronizada como XAI_API_KEY.
+      firecrawl_api_key:
+        name: Chave API Firecrawl
+        description: Sincronizada como FIRECRAWL_API_KEY.
+      searxng_url:
+        name: URL SearXNG
+        description: Sincronizada como SEARXNG_URL.
 
-  searxng_url:
-    name: URL SearXNG
-    description: "URL opcional do SearXNG sincronizada como SEARXNG_URL em /config/.hermes/.env."
+  addon_log_level:
+    name: Nível de log do add-on
+    description: Verbosidade dos logs de inicialização do contêiner do add-on (cores e emojis quando o terminal de log é interativo).
+    options:
+      error: "Somente erros"
+      warn: "Avisos e erros"
+      info: "Info (padrão)"
+      debug: "Debug (detalhado)"
 
   http_proxy:
     name: Proxy HTTP de saída
@@ -67,7 +103,7 @@ configuration:
   
   router_ssh_key_path:
     name: Caminho da Chave SSH do Roteador
-    description: Caminho para a chave privada SSH para acesso ao roteador (padrão - /data/keys/router_ssh)
+    description: Caminho para a chave privada SSH para acesso ao roteador em armazenamento persistente (padrão - /config/keys/router_ssh)
   
   clean_session_locks_on_start:
     name: Limpar Bloqueios de Sessão ao Iniciar
@@ -90,7 +126,7 @@ configuration:
 
   gateway_additional_allowed_origins:
     name: Origens permitidas adicionais
-    description: Origens extras da Control UI separadas por vírgula, mescladas em gateway.controlUi.allowedOrigins no modo lan_https (exemplo - https://ha.example.com:8443,capacitor://localhost)
+    description: Origens extras da Control UI (uma por linha). Mescladas em gateway.controlUi.allowedOrigins; em lan_https os hostnames também são adicionados ao SAN do certificado TLS.
 
   controlui_disable_device_auth:
     name: Desativar pareamento por dispositivo no Control UI (lan_https)
@@ -106,7 +142,7 @@ configuration:
 
   gateway_port:
     name: Porta do Gateway
-    description: Número da porta para o gateway do Hermes Agent escutar (padrão - 18789)
+    description: Porta do gateway do Hermes Agent (padrão 18789)
 
   access_mode:
     name: Modo de Acesso
@@ -127,7 +163,7 @@ configuration:
 
   gateway_trusted_proxies:
     name: Proxies Confiáveis do Gateway
-    description: Lista de IPs/CIDR de proxies confiáveis separados por vírgula para o modo trusted-proxy (exemplo - 127.0.0.1,192.168.88.0/24).
+    description: Entradas de IP ou CIDR de proxy confiável (uma por linha) para o modo trusted-proxy. Exemplo - 127.0.0.1 ou 192.168.88.0/24.
 
   enable_openai_api:
     name: Habilitar API OpenAI
@@ -179,27 +215,3 @@ configuration:
   tool_skills_hub_enabled:
     name: Bootstrap do Skills Hub
     description: "Quando LIGADO, a inicialização cria o diretório do Skills Hub automaticamente (equivalente ao primeiro `hermes skills list`)."
-  openai_api_key:
-    name: Chave API OpenAI
-    description: "Token opcional sincronizado em /config/.hermes/.env como OPENAI_API_KEY para configuração onboard/model e runtime do Hermes."
-  openrouter_api_key:
-    name: Chave API OpenRouter
-    description: "Token opcional sincronizado em /config/.hermes/.env como OPENROUTER_API_KEY para configuração onboard/model e runtime do Hermes."
-  anthropic_api_key:
-    name: Chave API Anthropic
-    description: "Token opcional sincronizado em /config/.hermes/.env como ANTHROPIC_API_KEY para configuração onboard/model e runtime do Hermes."
-  google_api_key:
-    name: Chave API Google
-    description: "Token opcional sincronizado em /config/.hermes/.env como GOOGLE_API_KEY para configuração onboard/model e runtime do Hermes."
-  minimax_api_key:
-    name: Chave API MiniMax
-    description: "Token opcional sincronizado em /config/.hermes/.env como MINIMAX_API_KEY para configuração onboard/model e runtime do Hermes."
-  discord_bot_token:
-    name: Token de bot do Discord
-    description: "Token opcional sincronizado em /config/.hermes/.env como DISCORD_BOT_TOKEN para ferramentas do Discord."
-  github_token:
-    name: Token do GitHub
-    description: "Token opcional sincronizado em /config/.hermes/.env como GITHUB_TOKEN para melhorar limites de API."
-  xai_api_key:
-    name: Chave API xAI
-    description: "Token opcional sincronizado em /config/.hermes/.env como XAI_API_KEY para x_search."

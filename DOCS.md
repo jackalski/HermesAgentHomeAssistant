@@ -27,7 +27,7 @@ Architectures: `amd64`, `aarch64`, `armv7`.
 | Field | What to set |
 |-------|-------------|
 | `setup_profile` | `home_assistant` (default) |
-| `openrouter_api_key` (or another provider) | Your API key |
+| `provider_api_keys` → OpenRouter (or another provider) | Your API key |
 | `homeassistant_token` | Long-lived HA token (for MCP) |
 | `hass_url` | Leave **empty** on HAOS (autodetected) |
 
@@ -87,7 +87,7 @@ ingress:
 
 > Nabu Casa remote access only proxies port 8123 — use Cloudflared or your own tunnel for Hermes.
 
-**Alternative** — `lan_reverse_proxy` only if your proxy sends `X-Forwarded-User` (e.g. NPM custom header). If `gateway_trusted_proxies` is empty, the add-on applies defaults (`127.0.0.1,172.30.0.0/16,10.0.0.0/8`) and logs a hint when Cloudflared is detected.
+**Alternative** — `lan_reverse_proxy` only if your proxy sends `X-Forwarded-User` (e.g. NPM custom header). Add proxy CIDRs under **Gateway Trusted Proxies** (one IP/CIDR per row). If the list is empty, the add-on applies defaults (`127.0.0.1,172.30.0.0/16,10.0.0.0/8`) and logs a hint when Cloudflared is detected.
 
 ### External reverse proxy (NPM)
 
@@ -150,13 +150,19 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `auto_configure_mcp` | `false` | Auto-on when profile + token set |
 | `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` on **18789** |
 | `enable_ha_status_sensors` | `true` | MQTT + status.json |
-| `openrouter_api_key` / other provider keys | *(empty)* | Synced to `/config/.hermes/.env` |
+| `provider_api_keys` | *(empty)* | Expansion panel; synced to `/config/.hermes/.env` (preserved on reinstall when HA redacts secrets) |
+| `addon_log_level` | `info` | Add-on startup log verbosity (`error` / `warn` / `info` / `debug`) |
+| `gateway_trusted_proxies` | `[]` | List of IP/CIDR rows for `trusted-proxy` mode |
+| `gateway_additional_allowed_origins` | `[]` | List of extra Control UI origins (TLS SAN in `lan_https`) |
+| `router_ssh_key_path` | `/config/keys/router_ssh` | Persistent router SSH private key path |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
 | `hermes_agent_version_custom` | `0.16.0` | npm tag/semver when preset is `custom` |
 
-Provider keys: `openai_api_key`, `openrouter_api_key`, `anthropic_api_key`, `google_api_key`, `minimax_api_key`, `discord_bot_token`, `github_token`, `xai_api_key`.
+Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG).
+
+**`enable_openai_api`** maps directly to Hermes **`API_SERVER_ENABLED`** in `/config/.hermes/.env` (with `API_SERVER_HOST`, `API_SERVER_PORT`, `API_SERVER_KEY`).
 
 ## Persistence
 
@@ -165,6 +171,7 @@ Provider keys: `openai_api_key`, `openrouter_api_key`, `anthropic_api_key`, `goo
 | `/config/.hermes/` | `hermes.json`, `config.yaml`, skills, `state.db` |
 | `/config/hermesd/` | Workspace |
 | `/config/secrets/` | `homeassistant.token` |
+| `/config/keys/` | Router SSH private keys (default `router_ssh`) |
 | `/config/certs/` | TLS certs (`lan_https`) |
 
 Hermes binary in the image is replaced on update; `/config/` data persists.
