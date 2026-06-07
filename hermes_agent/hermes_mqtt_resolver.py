@@ -33,6 +33,23 @@ def _from_env() -> dict[str, Any]:
     }
 
 
+def _from_mqtt_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    """User override from add-on mqtt_settings expansion panel."""
+    settings = payload.get("mqtt_settings")
+    if not isinstance(settings, dict):
+        settings = {}
+    host = str(settings.get("broker_host") or "").strip()
+    if not host:
+        return {}
+    return {
+        "host": host,
+        "port": str(settings.get("broker_port") or "1883"),
+        "username": str(settings.get("broker_username") or ""),
+        "password": str(settings.get("broker_password") or ""),
+        "source": "addon_options",
+    }
+
+
 def _from_options_payload(payload: dict[str, Any]) -> dict[str, Any]:
     mqtt_cfg = payload.get("mqtt")
     if not isinstance(mqtt_cfg, dict):
@@ -45,7 +62,7 @@ def _from_options_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "port": str(mqtt_cfg.get("port") or "1883"),
         "username": str(mqtt_cfg.get("username") or ""),
         "password": str(mqtt_cfg.get("password") or ""),
-        "source": "options",
+        "source": "runtime_payload",
     }
 
 
@@ -136,7 +153,13 @@ def _host_network_fallback(supervisor_cfg: dict[str, Any]) -> dict[str, Any]:
 def resolve_mqtt_broker(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload if isinstance(payload, dict) else {}
 
-    for resolver in (_from_env, lambda: _from_options_payload(payload), _from_bashio, _from_supervisor):
+    for resolver in (
+        lambda: _from_mqtt_settings(payload),
+        lambda: _from_options_payload(payload),
+        _from_env,
+        _from_bashio,
+        _from_supervisor,
+    ):
         resolved = resolver()
         if resolved.get("host"):
             return _host_network_fallback(resolved)

@@ -41,11 +41,27 @@ read_provider_option() {
   jq -r ".${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true
 }
 
-# Read list-style add-on options (array of {value: ...}) or legacy comma-separated string.
-join_list_option_csv() {
-  local field="$1"
-  jq -r --arg field "$field" '
-    .[$field] as $v
+# Read scalar from nested expansion panel with legacy flat-key fallback.
+read_nested_option() {
+  local group="$1"
+  local field="$2"
+  local flat_key="${3:-$field}"
+  local nested
+  nested=$(jq -r ".${group}.${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true)
+  if [ -n "$nested" ] && [ "$nested" != "null" ]; then
+    printf '%s' "$nested"
+    return 0
+  fi
+  jq -r ".${flat_key} // empty" "$OPTIONS_FILE" 2>/dev/null || true
+}
+
+# Read list from nested group or legacy root key (array rows or comma-separated string).
+join_nested_list_option_csv() {
+  local group="$1"
+  local field="$2"
+  local flat_key="${3:-$field}"
+  jq -r --arg group "$group" --arg field "$field" --arg flat "$flat_key" '
+    (.[$group][$field] // .[$flat]) as $v
     | if ($v | type) == "array" then
         [ $v[]? | if type == "object" then .value elif type == "string" then . else empty end
           | select(. != null and (. | tostring | length) > 0) ]
@@ -72,14 +88,14 @@ fi
 # ------------------------------------------------------------------------------
 
 TZNAME=$(jq -r '.timezone // "Europe/Sofia"' "$OPTIONS_FILE")
-GW_PUBLIC_URL=$(jq -r '.gateway_public_url // empty' "$OPTIONS_FILE")
-HA_TOKEN=$(jq -r '.homeassistant_token // empty' "$OPTIONS_FILE")
+GW_PUBLIC_URL="$(read_nested_option gateway_access gateway_public_url)"
+HA_TOKEN="$(read_nested_option home_assistant homeassistant_token)"
 # HA redacts password fields after save — reuse persisted token when the option is empty.
 if [ -z "$HA_TOKEN" ] && [ -f /config/secrets/homeassistant.token ]; then
   HA_TOKEN="$(tr -d '\r\n' < /config/secrets/homeassistant.token)"
   log_debug "Loaded homeassistant_token from /config/secrets/homeassistant.token"
 fi
-ADDON_HTTP_PROXY=$(jq -r '.http_proxy // empty' "$OPTIONS_FILE")
+ADDON_HTTP_PROXY="$(read_nested_option advanced_settings http_proxy)"
 ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
 TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
 
@@ -92,44 +108,46 @@ else
   TERMINAL_PORT="7681"
 fi
 
-# Generic router SSH settings
-ROUTER_HOST=$(jq -r '.router_ssh_host // empty' "$OPTIONS_FILE")
-ROUTER_USER=$(jq -r '.router_ssh_user // empty' "$OPTIONS_FILE")
-ROUTER_KEY=$(jq -r '.router_ssh_key_path // "/config/keys/router_ssh"' "$OPTIONS_FILE")
-if [ -z "$ROUTER_KEY" ] || [ "$ROUTER_KEY" = "/data/keys/router_ssh" ]; then
+# Router SSH (nested panel + legacy flat keys)
+ROUTER_HOST="$(read_nested_option router_ssh host router_ssh_host)"
+ROUTER_USER="$(read_nested_option router_ssh user router_ssh_user)"
+ROUTER_KEY="$(read_nested_option router_ssh key_path router_ssh_key_path)"
+if [ -z "$ROUTER_KEY" ]; then
+  ROUTER_KEY="/config/keys/router_ssh"
+fi
+if [ "$ROUTER_KEY" = "/data/keys/router_ssh" ]; then
   ROUTER_KEY="/config/keys/router_ssh"
 fi
 
-# Optional: allow disabling lock cleanup if you ever need to debug
-CLEAN_LOCKS_ON_START=$(jq -r '.clean_session_locks_on_start // true' "$OPTIONS_FILE")
-CLEAN_LOCKS_ON_EXIT=$(jq -r '.clean_session_locks_on_exit // true' "$OPTIONS_FILE")
+CLEAN_LOCKS_ON_START="$(read_nested_option advanced_settings clean_session_locks_on_start)"
+CLEAN_LOCKS_ON_EXIT="$(read_nested_option advanced_settings clean_session_locks_on_exit)"
 
-# Gateway configuration
-GATEWAY_MODE=$(jq -r '.gateway_mode // "local"' "$OPTIONS_FILE")
-GATEWAY_REMOTE_URL=$(jq -r '.gateway_remote_url // empty' "$OPTIONS_FILE")
-GATEWAY_BIND_MODE=$(jq -r '.gateway_bind_mode // "loopback"' "$OPTIONS_FILE")
-GATEWAY_PORT=$(jq -r '.gateway_port // 18789' "$OPTIONS_FILE")
-ENABLE_OPENAI_API=$(jq -r '.enable_openai_api // false' "$OPTIONS_FILE")
+# Gateway access (nested panel + legacy flat keys)
+GATEWAY_MODE="$(read_nested_option gateway_access gateway_mode)"
+GATEWAY_REMOTE_URL="$(read_nested_option gateway_access gateway_remote_url)"
+GATEWAY_BIND_MODE="$(read_nested_option gateway_access gateway_bind_mode)"
+GATEWAY_PORT="$(read_nested_option gateway_access gateway_port)"
+ENABLE_OPENAI_API="$(read_nested_option gateway_access enable_openai_api)"
 API_SERVER_PORT=8642
-GATEWAY_AUTH_MODE=$(jq -r '.gateway_auth_mode // "token"' "$OPTIONS_FILE")
-GATEWAY_TRUSTED_PROXIES="$(join_list_option_csv gateway_trusted_proxies)"
-GATEWAY_ADDITIONAL_ALLOWED_ORIGINS="$(join_list_option_csv gateway_additional_allowed_origins)"
-CONTROLUI_DISABLE_DEVICE_AUTH=$(jq -r '.controlui_disable_device_auth // true' "$OPTIONS_FILE")
-FORCE_IPV4_DNS=$(jq -r '.force_ipv4_dns // true' "$OPTIONS_FILE")
+GATEWAY_AUTH_MODE="$(read_nested_option gateway_access gateway_auth_mode)"
+GATEWAY_TRUSTED_PROXIES="$(join_nested_list_option_csv gateway_access gateway_trusted_proxies)"
+GATEWAY_ADDITIONAL_ALLOWED_ORIGINS="$(join_nested_list_option_csv gateway_access gateway_additional_allowed_origins)"
+CONTROLUI_DISABLE_DEVICE_AUTH="$(read_nested_option gateway_access controlui_disable_device_auth)"
+FORCE_IPV4_DNS="$(read_nested_option advanced_settings force_ipv4_dns)"
 SETUP_PROFILE=$(jq -r '.setup_profile // "home_assistant"' "$OPTIONS_FILE")
 DEFAULT_MODEL_PRESET=$(jq -r '.default_model_preset // "auto"' "$OPTIONS_FILE")
 DEFAULT_MODEL_OPT=$(jq -r '.default_model // empty' "$OPTIONS_FILE")
-HASS_URL=$(jq -r '.hass_url // empty' "$OPTIONS_FILE")
-ACCESS_MODE=$(jq -r '.access_mode // "lan_https"' "$OPTIONS_FILE")
+HASS_URL="$(read_nested_option home_assistant hass_url)"
+ACCESS_MODE="$(read_nested_option gateway_access access_mode)"
 FIRECRAWL_API_KEY_OPT="$(read_provider_option firecrawl_api_key)"
 SEARXNG_URL_OPT="$(read_provider_option searxng_url)"
 BOOTSTRAP_AUXILIARY_TITLE="false"
 LOG_GATEWAY_URL_HINT="false"
-NGINX_LOG_LEVEL=$(jq -r '.nginx_log_level // "minimal"' "$OPTIONS_FILE")
-AUTO_CONFIGURE_MCP=$(jq -r '.auto_configure_mcp // false' "$OPTIONS_FILE")
-TOOL_TELEGRAM_ENABLED=$(jq -r '.tool_telegram_enabled // false' "$OPTIONS_FILE")
-TOOL_BROWSER_ENABLED=$(jq -r '.tool_browser_enabled // true' "$OPTIONS_FILE")
-TOOL_SKILLS_HUB_ENABLED=$(jq -r '.tool_skills_hub_enabled // true' "$OPTIONS_FILE")
+NGINX_LOG_LEVEL="$(read_nested_option advanced_settings nginx_log_level)"
+AUTO_CONFIGURE_MCP="$(read_nested_option home_assistant auto_configure_mcp)"
+TOOL_TELEGRAM_ENABLED="$(read_nested_option tools_bootstrap tool_telegram_enabled)"
+TOOL_BROWSER_ENABLED="$(read_nested_option tools_bootstrap tool_browser_enabled)"
+TOOL_SKILLS_HUB_ENABLED="$(read_nested_option tools_bootstrap tool_skills_hub_enabled)"
 OPENAI_API_KEY_OPT="$(read_provider_option openai_api_key)"
 OPENROUTER_API_KEY_OPT="$(read_provider_option openrouter_api_key)"
 ANTHROPIC_API_KEY_OPT="$(read_provider_option anthropic_api_key)"
@@ -138,17 +156,51 @@ MINIMAX_API_KEY_OPT="$(read_provider_option minimax_api_key)"
 DISCORD_BOT_TOKEN_OPT="$(read_provider_option discord_bot_token)"
 GITHUB_TOKEN_OPT="$(read_provider_option github_token)"
 XAI_API_KEY_OPT="$(read_provider_option xai_api_key)"
-HERMES_AGENT_VERSION_PRESET=$(jq -r '.hermes_agent_version_preset // "custom"' "$OPTIONS_FILE")
-HERMES_AGENT_VERSION_CUSTOM=$(jq -r '.hermes_agent_version_custom // "0.16.0"' "$OPTIONS_FILE")
+HERMES_AGENT_VERSION_PRESET="$(read_nested_option advanced_settings hermes_agent_version_preset)"
+HERMES_AGENT_VERSION_CUSTOM="$(read_nested_option advanced_settings hermes_agent_version_custom)"
 ADDON_HERMES_DEFAULT_VERSION="0.16.0"
 IMAGE_BAKED_HERMES_SPEC="${ADDON_HERMES_DEFAULT_VERSION}"
-GW_ENV_VARS_TYPE=$(jq -r 'if .gateway_env_vars == null then "null" else (.gateway_env_vars | type) end' "$OPTIONS_FILE")
-GW_ENV_VARS_RAW=$(jq -r '.gateway_env_vars // empty' "$OPTIONS_FILE")
-GW_ENV_VARS_JSON=$(jq -c '.gateway_env_vars // []' "$OPTIONS_FILE")
-ENABLE_HA_STATUS_SENSORS=$(jq -r '.enable_ha_status_sensors // true' "$OPTIONS_FILE")
-PUBLISH_MQTT_DISCOVERY=$(jq -r '.publish_mqtt_discovery // true' "$OPTIONS_FILE")
-STATUS_POLL_INTERVAL_RAW=$(jq -r '.status_poll_interval_seconds // 60' "$OPTIONS_FILE")
-MQTT_STATE_PREFIX=$(jq -r '.mqtt_state_prefix // "hermes"' "$OPTIONS_FILE")
+GW_ENV_VARS_TYPE=$(jq -r 'if (.advanced_settings.gateway_env_vars // .gateway_env_vars) == null then "null" else ((.advanced_settings.gateway_env_vars // .gateway_env_vars) | type) end' "$OPTIONS_FILE")
+GW_ENV_VARS_RAW=$(jq -r '.advanced_settings.gateway_env_vars // .gateway_env_vars // empty' "$OPTIONS_FILE")
+GW_ENV_VARS_JSON=$(jq -c '.advanced_settings.gateway_env_vars // .gateway_env_vars // []' "$OPTIONS_FILE")
+
+# MQTT status sensors (nested panel + legacy flat keys)
+MQTT_BROKER_HOST="$(read_nested_option mqtt_settings broker_host)"
+MQTT_BROKER_PORT="$(read_nested_option mqtt_settings broker_port)"
+MQTT_BROKER_USER="$(read_nested_option mqtt_settings broker_username)"
+MQTT_BROKER_PASSWORD="$(read_nested_option mqtt_settings broker_password)"
+if [ -z "$MQTT_BROKER_PASSWORD" ] && [ -f /config/secrets/mqtt.password ]; then
+  MQTT_BROKER_PASSWORD="$(tr -d '\r\n' < /config/secrets/mqtt.password)"
+  log_debug "Loaded mqtt_settings.broker_password from /config/secrets/mqtt.password"
+fi
+ENABLE_HA_STATUS_SENSORS="$(read_nested_option mqtt_settings enable_ha_status_sensors)"
+PUBLISH_MQTT_DISCOVERY="$(read_nested_option mqtt_settings publish_mqtt_discovery)"
+STATUS_POLL_INTERVAL_RAW="$(read_nested_option mqtt_settings status_poll_interval_seconds)"
+MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_prefix)"
+
+# Defaults when nested panels are empty (fresh install or legacy options.json).
+[ -z "$GATEWAY_MODE" ] && GATEWAY_MODE="local"
+[ -z "$GATEWAY_BIND_MODE" ] && GATEWAY_BIND_MODE="loopback"
+[ -z "$GATEWAY_PORT" ] && GATEWAY_PORT="18789"
+[ -z "$GATEWAY_AUTH_MODE" ] && GATEWAY_AUTH_MODE="token"
+[ -z "$ACCESS_MODE" ] && ACCESS_MODE="lan_https"
+[ -z "$CONTROLUI_DISABLE_DEVICE_AUTH" ] && CONTROLUI_DISABLE_DEVICE_AUTH="true"
+[ -z "$ENABLE_OPENAI_API" ] && ENABLE_OPENAI_API="false"
+[ -z "$FORCE_IPV4_DNS" ] && FORCE_IPV4_DNS="true"
+[ -z "$NGINX_LOG_LEVEL" ] && NGINX_LOG_LEVEL="minimal"
+[ -z "$AUTO_CONFIGURE_MCP" ] && AUTO_CONFIGURE_MCP="false"
+[ -z "$CLEAN_LOCKS_ON_START" ] && CLEAN_LOCKS_ON_START="true"
+[ -z "$CLEAN_LOCKS_ON_EXIT" ] && CLEAN_LOCKS_ON_EXIT="true"
+[ -z "$TOOL_BROWSER_ENABLED" ] && TOOL_BROWSER_ENABLED="true"
+[ -z "$TOOL_SKILLS_HUB_ENABLED" ] && TOOL_SKILLS_HUB_ENABLED="true"
+[ -z "$TOOL_TELEGRAM_ENABLED" ] && TOOL_TELEGRAM_ENABLED="false"
+[ -z "$HERMES_AGENT_VERSION_PRESET" ] && HERMES_AGENT_VERSION_PRESET="custom"
+[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.16.0"
+[ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
+[ -z "$PUBLISH_MQTT_DISCOVERY" ] && PUBLISH_MQTT_DISCOVERY="true"
+[ -z "$STATUS_POLL_INTERVAL_RAW" ] && STATUS_POLL_INTERVAL_RAW="60"
+[ -z "$MQTT_STATE_PREFIX" ] && MQTT_STATE_PREFIX="hermes"
+[ -z "$MQTT_BROKER_PORT" ] && MQTT_BROKER_PORT="1883"
 
 # Validate status poll interval (30-300 seconds)
 if [[ "$STATUS_POLL_INTERVAL_RAW" =~ ^[0-9]+$ ]] && [ "$STATUS_POLL_INTERVAL_RAW" -ge 30 ] && [ "$STATUS_POLL_INTERVAL_RAW" -le 300 ]; then
@@ -396,6 +448,11 @@ export HERMES_WORKSPACE_DIR=/config/hermesd
 export XDG_CONFIG_HOME=/config
 
 mkdir -p /config/.hermes /config/.hermes/identity /config/hermesd /config/keys /config/secrets
+
+if [ -n "$MQTT_BROKER_PASSWORD" ]; then
+  printf '%s' "$MQTT_BROKER_PASSWORD" > /config/secrets/mqtt.password
+  chmod 600 /config/secrets/mqtt.password 2>/dev/null || true
+fi
 
 # Router SSH keys live on persistent /config storage (migrate legacy /data path once).
 LEGACY_ROUTER_KEY="/data/keys/router_ssh"
@@ -1589,92 +1646,45 @@ update_setup_readiness_markers() {
 
 update_setup_readiness_markers
 
-fetch_mqtt_config_via_supervisor() {
-  if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
-    return 1
-  fi
-  local resp
-  resp=$(curl -fsS -m 5 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-    "http://supervisor/services/mqtt" 2>/dev/null || true)
-  if [ -z "$resp" ]; then
-    return 1
-  fi
-  local host port user password
-  host=$(echo "$resp" | jq -r '.data.host // empty' 2>/dev/null || true)
-  port=$(echo "$resp" | jq -r '.data.port // empty' 2>/dev/null || true)
-  user=$(echo "$resp" | jq -r '.data.username // empty' 2>/dev/null || true)
-  password=$(echo "$resp" | jq -r '.data.password // empty' 2>/dev/null || true)
-  if [ -z "$host" ]; then
-    return 1
-  fi
-  printf '%s\n' "$host" "${port:-1883}" "$user" "$password"
-  return 0
-}
-
-resolve_mqtt_config_json() {
-  local host="" port="1883" user="" password="" source="none"
-
-  if load_bashio && bashio::services.available "mqtt" 2>/dev/null; then
-    host="$(bashio::services mqtt "host" 2>/dev/null || true)"
-    port="$(bashio::services mqtt "port" 2>/dev/null || true)"
-    user="$(bashio::services mqtt "username" 2>/dev/null || true)"
-    password="$(bashio::services mqtt "password" 2>/dev/null || true)"
-    if [ -n "$host" ]; then
-      source="bashio"
-    fi
-  fi
-
-  if [ -z "$host" ]; then
-    host="${MQTT_HOST:-}"
-    port="${MQTT_PORT:-1883}"
-    user="${MQTT_USER:-${MQTT_USERNAME:-}}"
-    password="${MQTT_PASSWORD:-}"
-    if [ -n "$host" ]; then
-      source="env"
-    fi
-  fi
-
-  if [ -z "$host" ]; then
-    local sup_lines sup_host sup_port sup_user sup_password
-    if sup_lines="$(fetch_mqtt_config_via_supervisor 2>/dev/null)"; then
-      sup_host=$(echo "$sup_lines" | sed -n '1p')
-      sup_port=$(echo "$sup_lines" | sed -n '2p')
-      sup_user=$(echo "$sup_lines" | sed -n '3p')
-      sup_password=$(echo "$sup_lines" | sed -n '4p')
-      if [ -n "$sup_host" ]; then
-        host="$sup_host"
-        port="${sup_port:-1883}"
-        user="$sup_user"
-        password="$sup_password"
-        source="supervisor"
-      fi
-    fi
-  fi
-
-  if [ -n "$host" ]; then
-    log_info "MQTT broker resolved (${source}): ${host}:${port:-1883}"
-  else
-    log_info "MQTT broker not available at startup (status exporter will retry; ensure Mosquitto add-on is running)"
-  fi
-
+build_mqtt_settings_json() {
   jq -n \
-    --arg host "$host" \
-    --arg port "${port:-1883}" \
-    --arg username "$user" \
-    --arg password "$password" \
+    --arg broker_host "$MQTT_BROKER_HOST" \
+    --arg broker_port "$MQTT_BROKER_PORT" \
+    --arg broker_username "$MQTT_BROKER_USER" \
+    --arg broker_password "$MQTT_BROKER_PASSWORD" \
     '{
-      host: (if ($host | length) > 0 then $host else null end),
-      port: (if ($port | length) > 0 then $port else "1883" end),
-      username: $username,
-      password: $password
+      broker_host: $broker_host,
+      broker_port: (if ($broker_port | length) > 0 then $broker_port else "1883" end),
+      broker_username: $broker_username,
+      broker_password: $broker_password
     }'
 }
 
+log_resolved_mqtt_broker() {
+  local settings_json resolved host port source
+  settings_json="$(build_mqtt_settings_json)"
+  resolved="$(python3 -c "
+import json, sys
+sys.path.insert(0, '/')
+from hermes_mqtt_resolver import resolve_mqtt_broker
+payload = {'mqtt_settings': json.loads(sys.argv[1])}
+print(json.dumps(resolve_mqtt_broker(payload)))
+" "$settings_json")"
+  host="$(echo "$resolved" | jq -r '.host // empty')"
+  port="$(echo "$resolved" | jq -r '.port // "1883"')"
+  source="$(echo "$resolved" | jq -r '.source // "none"')"
+  if [ -n "$host" ]; then
+    log_ok "MQTT broker resolved (${source}): ${host}:${port}"
+  else
+    log_info "MQTT broker not configured yet (status exporter will autodetect Mosquitto each poll)"
+  fi
+}
+
 build_status_exporter_payload() {
-  local mqtt_json
-  mqtt_json="$(resolve_mqtt_config_json)"
+  local mqtt_settings_json
+  mqtt_settings_json="$(build_mqtt_settings_json)"
   jq -n \
-    --argjson mqtt "$mqtt_json" \
+    --argjson mqtt_settings "$mqtt_settings_json" \
     --arg gateway_internal_port "$GATEWAY_INTERNAL_PORT" \
     --arg gateway_mode "$GATEWAY_MODE" \
     --arg access_mode "$ACCESS_MODE" \
@@ -1692,7 +1702,7 @@ build_status_exporter_payload() {
     --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
     --arg searxng "$SEARXNG_URL_OPT" \
     '{
-      mqtt: $mqtt,
+      mqtt_settings: $mqtt_settings,
       gateway_internal_port: ($gateway_internal_port | tonumber),
       gateway_mode: $gateway_mode,
       access_mode: $access_mode,
@@ -1729,6 +1739,7 @@ start_status_exporter() {
   local payload
   payload="$(build_status_exporter_payload)"
 
+  log_resolved_mqtt_broker
   log_info "Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE})"
   python3 "$EXPORTER_PATH" run-loop "$payload" &
   STATUS_EXPORTER_PID=$!

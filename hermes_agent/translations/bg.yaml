@@ -2,30 +2,19 @@ configuration:
   timezone:
     name: Часова зона
     description: Часова зона за добавката (напр. Europe/Sofia, America/New_York)
-  
-  enable_terminal:
-    name: Активиране на уеб терминал
-    description: Активиране на уеб терминал бутона в Home Assistant (Ingress) чрез ttyd
-  
-  terminal_port:
-    name: Порт на терминал
-    description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
-  
-  gateway_public_url:
-    name: Публичен URL на Gateway
-    description: Публичен базов URL за отваряне на Gateway уеб интерфейса в нов таб (не вграден). Пример - https://example.duckdns.org:12345 или http://192.168.1.10:18789
-  
-  hass_url:
-    name: Home Assistant URL
-    description: "Базов URL на Home Assistant за скриптове/инструменти. Оставете празно за автоматично откриване на HAOS (препоръчително). Синхронизира се като HOMEASSISTANT_URL в /config/.hermes/.env при зададен токен."
 
-  homeassistant_token:
-    name: Home Assistant токен
-    description: Дълготраен токен за MCP и HA скриптове. Скрит след запис. Синхронизира се в /config/secrets/homeassistant.token и /config/.hermes/.env при рестарт.
+  addon_log_level:
+    name: Add-on Log Level
+    description: Startup log verbosity for the add-on container (colors and emojis when the log terminal is interactive).
+    options:
+      error: "Errors only"
+      warn: "Warnings and errors"
+      info: "Info (default)"
+      debug: "Debug (verbose)"
 
   setup_profile:
     name: Профил за настройка
-    description: "Предустановка за първо стартиране. home_assistant включва LAN HTTPS, auto MCP при зададен токен и bootstrap на model/browser/timezone. general използва local-only. advanced използва само отделните опции."
+    description: "First-run preset. home_assistant enables LAN HTTPS, auto MCP when token is set, and bootstraps model/browser/timezone. general uses local-only access. advanced uses individual options only."
     options:
       home_assistant: "Home Assistant (препоръчително)"
       general: "Общ асистент"
@@ -33,7 +22,7 @@ configuration:
 
   default_model_preset:
     name: Предустановка за модел
-    description: "Куриран основен модел за първо стартиране. auto извежда от първия API ключ; custom използва полето Модел (custom)."
+    description: "Curated main model for first-run bootstrap. auto infers from your first API key; custom uses the Default Model (custom) field."
     options:
       auto: "Auto (от API ключ)"
       gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
@@ -43,7 +32,7 @@ configuration:
 
   default_model:
     name: Модел (custom)
-    description: "Model ID при предустановка custom. Bootstrap само при първо стартиране, ако няма конфигуриран модел."
+    description: "Main model ID when Default Model Preset is custom (e.g. google/gemini-2.5-flash). Bootstrapped on first run only when no model is configured yet."
 
   provider_api_keys:
     name: Provider API Keys
@@ -80,138 +69,170 @@ configuration:
         name: SearXNG URL
         description: Synced as SEARXNG_URL.
 
-  addon_log_level:
-    name: Add-on Log Level
-    description: Startup log verbosity for the add-on container (colors and emojis when the log terminal is interactive).
-    options:
-      error: "Errors only"
-      warn: "Warnings and errors"
-      info: "Info (default)"
-      debug: "Debug (verbose)"
+  home_assistant:
+    name: Home Assistant Integration
+    description: Connect Hermes to your Home Assistant instance for MCP, scripts, and autodetection.
+    fields:
+      hass_url:
+        name: Home Assistant URL
+        description: "Leave empty for autodetection on HAOS (recommended). Synced to HOMEASSISTANT_URL in /config/.hermes/.env when a token is set."
+      homeassistant_token:
+        name: Home Assistant Token
+        description: Long-lived access token for MCP and HA scripts. Masked after save; persisted under /config/secrets/homeassistant.token.
+      auto_configure_mcp:
+        name: Auto-Configure MCP for Home Assistant
+        description: "When ON and token is set, registers Home Assistant in Hermes MCP (mcp_servers) on each startup."
 
-  http_proxy:
-    name: Изходящ HTTP прокси
-    description: Опционално - URL на прокси за изходящи HTTP/HTTPS заявки (пример - http://192.168.2.1:3128)
-  
-  router_ssh_host:
-    name: SSH хост на рутер
-    description: Опционално - SSH име на хост или IP адрес на рутер/защитна стена
-  
-  router_ssh_user:
-    name: SSH потребител на рутер
-    description: Опционално - SSH потребителско име за рутер/защитна стена
-  
-  router_ssh_key_path:
-    name: Път до SSH ключ на рутер
-    description: Path to SSH private key for router access on persistent storage (default - /config/keys/router_ssh)
-  
-  clean_session_locks_on_start:
-    name: Изчистване на заключвания при стартиране
-    description: Изчистване на остарели заключващи файлове на сесии след срив/рестарт при стартиране на добавката
-  
-  clean_session_locks_on_exit:
-    name: Изчистване на заключвания при изход
-    description: Изчистване на заключващи файлове на сесии при нормално спиране на добавката
-  
-  gateway_mode:
-    name: Режим на Gateway
-    description: Режим на работа на Gateway - local (локално изпълнение на gateway, препоръчително) или remote (свързване към отдалечен gateway)
-    options:
-      local: "Локален (препоръчително)"
-      remote: "Отдалечен"
+  enable_terminal:
+    name: Активиране на уеб терминал
+    description: Активиране на уеб терминал бутона в Home Assistant (Ingress) чрез ttyd
 
-  gateway_remote_url:
-    name: URL на отдалечен Gateway
-    description: WebSocket URL на отдалечения gateway, използван когато Gateway Mode е remote (пример - ws://192.168.1.20:18789 или wss://gateway.example.com:443)
+  terminal_port:
+    name: Порт на терминал
+    description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
 
-  gateway_additional_allowed_origins:
-    name: Допълнителни разрешени origins
-    description: Extra Control UI origins (one per row). Merged into gateway.controlUi.allowedOrigins; in lan_https hostnames are also added to the TLS certificate SAN.
+  gateway_access:
+    name: Gateway Access
+    description: Network access, authentication, and Assist API settings for the Hermes gateway.
+    fields:
+      access_mode:
+        name: Режим на достъп
+        description: "Simplifies secure access. Overrides bind/auth settings when not Custom."
+        options:
+          custom: "Потребителски (индивидуални настройки)"
+          local_only: "Само локален (loopback + token, само Ingress)"
+          lan_https: "LAN HTTPS (вграден HTTPS прокси — препоръчително за телефони)"
+          lan_reverse_proxy: "LAN Reverse Proxy (външен прокси с trusted-proxy удостоверяване)"
+          tailnet_https: "Tailscale HTTPS (Tailscale + token)"
+      gateway_port:
+        name: Порт на Gateway
+        description: Port for the Hermes gateway (default 18789).
+      gateway_public_url:
+        name: Публичен URL на Gateway
+        description: Public base URL for opening the Gateway Web UI in a new tab (not embedded).
+      enable_openai_api:
+        name: Активиране на OpenAI API
+        description: "Enables Hermes Assist API (API_SERVER_ENABLED). Extended OpenAI from HA Core: http://<LAN-IP>:8642/v1."
+      gateway_mode:
+        name: Режим на Gateway
+        description: Local (run gateway in add-on) or remote (connect to external gateway).
+        options:
+          local: "Локален (препоръчително)"
+          remote: "Отдалечен"
+      gateway_remote_url:
+        name: URL на отдалечен Gateway
+        description: WebSocket URL when Gateway Mode is Remote.
+      gateway_bind_mode:
+        name: Режим на свързване на Gateway
+        description: Loopback, LAN, or Tailscale bind. Overridden by Access Mode presets.
+        options:
+          loopback: "Loopback (само 127.0.0.1, най-сигурен)"
+          lan: "LAN (всички интерфейси)"
+          tailnet: "Tailnet (само Tailscale)"
+      gateway_auth_mode:
+        name: Режим на удостоверяване на Gateway
+        description: Token (default) or trusted-proxy for reverse proxies.
+        options:
+          token: "Token (по подразбиране)"
+          trusted-proxy: "Доверен прокси (за reverse proxy)"
+      gateway_trusted_proxies:
+        name: Доверени прокси на Gateway
+        description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode.
+      gateway_additional_allowed_origins:
+        name: Допълнителни разрешени origins
+        description: Extra Control UI origins (one per row); merged into allowedOrigins and TLS SAN in lan_https.
+      controlui_disable_device_auth:
+        name: Изключи device pairing за Control UI (lan_https)
+        description: "Recommended ON for home LAN — skips per-device approval (avoids error 1008)."
 
-  controlui_disable_device_auth:
-    name: Изключи device pairing за Control UI (lan_https)
-    description: "Когато е ВКЛ. (препоръчително), задава gateway.controlUi.dangerouslyDisableDeviceAuth=true и пропуска одобрението по устройство, за да избегне error 1008 в LAN HTTPS режим. Остави ВКЛ. за домашна/доверена мрежа. Изключи само ако искаш стриктно pairing потвърждение за всеки нов браузър/устройство."
+  mqtt_settings:
+    name: MQTT Status Sensors
+    description: Broker connection and Home Assistant status sensor publishing (MQTT discovery + /status.json).
+    fields:
+      broker_host:
+        name: MQTT Broker Host
+        description: "Broker IP or hostname. Leave empty to autodetect Mosquitto (supervisor/bashio/loopback)."
+      broker_port:
+        name: MQTT Broker Port
+        description: MQTT broker port (default 1883).
+      broker_username:
+        name: MQTT Username
+        description: Optional Mosquitto username (leave empty when auth is disabled).
+      broker_password:
+        name: MQTT Password
+        description: Optional Mosquitto password. Masked after save; persisted under /config/secrets/mqtt.password.
+      enable_ha_status_sensors:
+        name: HA статус сензори
+        description: Publish setup, gateway health, model/provider, and usage metrics to Home Assistant.
+      publish_mqtt_discovery:
+        name: MQTT discovery
+        description: Auto-create HA entities when Mosquitto is available. Disable to use /status.json only.
+      status_poll_interval_seconds:
+        name: Интервал на статус (секунди)
+        description: Refresh interval for sensors and /share/hermes/status.json (30-300).
+      state_prefix:
+        name: MQTT префикс на topics
+        description: "Prefix for state topics (default hermes). Example: hermes/status/gateway_running."
 
-  gateway_bind_mode:
-    name: Режим на свързване на Gateway
-    description: Режим на мрежово свързване - loopback (само 127.0.0.1, най-сигурен), lan (всички интерфейси) или tailnet (само Tailscale интерфейс). Пренебрегва се от предварителните режими на достъп.
-    options:
-      loopback: "Loopback (само 127.0.0.1, най-сигурен)"
-      lan: "LAN (всички интерфейси)"
-      tailnet: "Tailnet (само Tailscale)"
+  router_ssh:
+    name: Router SSH
+    description: Optional SSH access to a router or network device reachable from the HA host LAN.
+    fields:
+      host:
+        name: SSH хост на рутер
+        description: Router/firewall SSH hostname or IP address.
+      user:
+        name: SSH потребител на рутер
+        description: SSH username for router access.
+      key_path:
+        name: Път до SSH ключ на рутер
+        description: Path to private key on persistent storage (default /config/keys/router_ssh).
 
-  gateway_port:
-    name: Порт на Gateway
-    description: Port for the Hermes Agent gateway (default 18789)
+  tools_bootstrap:
+    name: Tool Bootstrap
+    description: Verify and auto-install optional Hermes tool dependencies on startup.
+    fields:
+      tool_telegram_enabled:
+        name: Enable Telegram Tool Bootstrap
+        description: Auto-install Telegram Python dependencies when missing.
+      tool_browser_enabled:
+        name: Enable Browser Tool Bootstrap
+        description: Auto-install browser tool dependencies (e.g. agent-browser) when missing.
+      tool_skills_hub_enabled:
+        name: Enable Skills Hub Bootstrap
+        description: Initialize Skills Hub directory on startup (like first-run `hermes skills list`).
 
-  access_mode:
-    name: Режим на достъп
-    description: "Опростява настройката на сигурен достъп. Пренебрегва gateway_bind_mode и gateway_auth_mode, когато не е зададен на Потребителски."
-    options:
-      custom: "Потребителски (индивидуални настройки)"
-      local_only: "Само локален (loopback + token, само Ingress)"
-      lan_https: "LAN HTTPS (вграден HTTPS прокси — препоръчително за телефони)"
-      lan_reverse_proxy: "LAN Reverse Proxy (външен прокси с trusted-proxy удостоверяване)"
-      tailnet_https: "Tailscale HTTPS (Tailscale + token)"
-
-  gateway_auth_mode:
-    name: Режим на удостоверяване на Gateway
-    description: Режим на удостоверяване - token (по подразбиране) или trusted-proxy (за HTTPS reverse proxy). Пренебрегва се, когато access_mode не е Потребителски.
-    options:
-      token: "Token (по подразбиране)"
-      trusted-proxy: "Доверен прокси (за reverse proxy)"
-
-  gateway_trusted_proxies:
-    name: Доверени прокси на Gateway
-    description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode. Example - 127.0.0.1 or 192.168.88.0/24.
-
-  enable_openai_api:
-    name: Активиране на OpenAI API
-    description: "Enables Hermes Assist API (sync API_SERVER_ENABLED to .env; HTTP on 0.0.0.0:8642, bearer token required). Extended OpenAI from HA Core: Base URL http://<LAN-IP>:8642/v1, API key = gateway token, model hermes-agent."
-  enable_ha_status_sensors:
-    name: HA статус сензори
-    description: "Публикува настройка, здраве на gateway, модел/доставчик и метрики за употреба към Home Assistant чрез MQTT discovery (при Mosquitto) и безопасен /status.json snapshot през Ingress."
-  publish_mqtt_discovery:
-    name: MQTT discovery
-    description: "Когато е ВКЛ и Mosquitto add-on работи, автоматично създава HA entities за Hermes статус. Изключете, ако искате само /status.json API."
-  status_poll_interval_seconds:
-    name: Интервал на статус (секунди)
-    description: "Колко често да се обновяват сензорите и /share/hermes/status.json. Диапазон 30-300. По-високи стойности намаляват записи на флаш при SD карти."
-  mqtt_state_prefix:
-    name: MQTT префикс на topics
-    description: "Префикс за MQTT state topics (по подразбиране hermes). Пример: <prefix>/status/gateway_running."
-  force_ipv4_dns:
-    name: Принудителен IPv4 DNS ред
-    description: Принудително задава IPv4-приоритет при DNS резолв. Повечето HAOS VM нямат IPv6 изход — предизвиква web_fetch и Telegram грешки. Препоръчително ВКЛЮЧЕНО (по подразбиране).
-  nginx_log_level:
-    name: Nginx ниво на логове
-    description: "Подробност на логовете на nginx проксито. 'minimal' (по подразбиране) потиска повтарящи се HA health-check заявки. 'full' логва всичко."
-    options:
-      minimal: "Минимално (потискане на HA polling шум)"
-      full: "Пълно (логване на всички заявки)"
-  gateway_env_vars:
-    name: Променливи на средата за Gateway
-    description: Променливи на средата, предавани на Hermes Agent gateway процеса при стартиране (списък от записи name/value в Home Assistant UI; макс. 50 променливи, ключове до 255 знака, стойности до 10000 знака).
-  auto_configure_mcp:
-    name: Автоматично конфигуриране на MCP за Home Assistant
-    description: "Когато е ВКЛ. и Home Assistant Token е зададен, автоматично регистрира Home Assistant във вграденото MCP на Hermes (mcp_servers) при всяко стартиране. Това позволява на Hermes Agent да контролира HA устройства, услуги и автоматизации чрез Model Context Protocol. Изключете само ако управлявате MCP конфигурацията на Hermes ръчно."
-  hermes_agent_version_preset:
-    name: Hermes Agent version
-    description: "npm package installed on startup (provides the `hermes` CLI). Default custom pins 0.16.0; latest tracks npm @latest."
-    options:
-      latest: "Latest (npm @latest)"
-      custom: "Custom version (default 0.16.0)"
-
-  hermes_agent_version_custom:
-    name: Hermes Agent version (custom)
-    description: "npm dist-tag or semver when Hermes Agent Version is custom (default 0.16.0). Applied on next add-on restart."
-
-  tool_telegram_enabled:
-    name: Telegram tool bootstrap
-    description: "When ON, startup verifies Telegram dependencies and auto-installs missing python-telegram-bot package when possible."
-  tool_browser_enabled:
-    name: Browser tool bootstrap
-    description: "When ON, startup verifies browser dependencies and auto-installs missing external tools (for example agent-browser) when possible."
-  tool_skills_hub_enabled:
-    name: Skills Hub bootstrap
-    description: "When ON, startup initializes Skills Hub directory automatically (equivalent to first-run `hermes skills list`)."
+  advanced_settings:
+    name: Advanced Settings
+    description: Proxy, DNS, nginx logging, gateway env vars, Hermes version, and session lock cleanup.
+    fields:
+      http_proxy:
+        name: Изходящ HTTP прокси
+        description: Optional proxy URL for outbound HTTP/HTTPS (example http://192.168.2.1:3128).
+      force_ipv4_dns:
+        name: Принудителен IPv4 DNS ред
+        description: Recommended ON on HAOS — avoids IPv6 egress timeouts for web_fetch and Telegram.
+      nginx_log_level:
+        name: Nginx ниво на логове
+        description: Access log verbosity for the built-in HTTPS proxy.
+        options:
+          minimal: "Минимално (потискане на HA polling шум)"
+          full: "Пълно (логване на всички заявки)"
+      gateway_env_vars:
+        name: Променливи на средата за Gateway
+        description: Extra env vars passed to the gateway process (max 50 entries).
+      hermes_agent_version_preset:
+        name: Hermes Agent Version
+        description: npm package for the `hermes` CLI — latest or custom pin.
+        options:
+          latest: "Latest (npm @latest)"
+          custom: "Custom version (default 0.16.0)"
+      hermes_agent_version_custom:
+        name: Hermes Agent Version (custom)
+        description: npm dist-tag or semver when preset is custom (default 0.16.0).
+      clean_session_locks_on_start:
+        name: Изчистване на заключвания при стартиране
+        description: Remove stale session lock files when the add-on starts.
+      clean_session_locks_on_exit:
+        name: Изчистване на заключвания при изход
+        description: Remove session lock files on graceful shutdown.

@@ -5,6 +5,8 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 ## [0.0.16] - 2026-06-07
 
 ### Added
+- **`mqtt_settings`** expansion panel: manual **broker host, port, username, password** plus all status-sensor options (enable sensors, discovery, poll interval, topic prefix). Empty host autodetects Mosquitto.
+- Logical configuration groups: **`home_assistant`**, **`gateway_access`**, **`mqtt_settings`**, **`router_ssh`**, **`tools_bootstrap`**, **`advanced_settings`**.
 - **`addon_log_level`** option (error / warn / info / debug) with unified startup logging (colors + emojis on TTY).
 - **`provider_api_keys`** expansion panel in add-on configuration — groups all provider/tool tokens.
 - **List-style UI** for `gateway_trusted_proxies` and `gateway_additional_allowed_origins` (add-row like Gateway Environment Variables); trusted proxies validated as IP/CIDR.
@@ -15,6 +17,8 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 - Add-on API keys and HA token **preserve existing `/config/.hermes/.env` values** when options are empty after reinstall (HA secret redaction).
 - `terminal_port` and `gateway_port` use **`port`** schema for clearer HA UI defaults.
 - Startup logs use **`addon_log.sh`** helpers instead of raw `echo INFO/WARN/ERROR`.
+- MQTT broker password persisted under `/config/secrets/mqtt.password` when HA redacts the password field after save.
+- `run.sh` reads nested panels with **legacy flat-key fallback** for existing `options.json` files.
 
 ### Fixed
 - MQTT status sensors retry broker resolution each poll when Mosquitto starts after the add-on.

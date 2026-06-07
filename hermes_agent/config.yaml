@@ -28,42 +28,15 @@ map:
   - share:rw
   - media:rw
 options:
+  # --- General ---
   timezone: "Europe/Sofia"
+  addon_log_level: info
 
-  # Enable web terminal inside Home Assistant (Ingress) via ttyd
-  enable_terminal: true
-
-  # Terminal port (change if 7681 conflicts with another service)
-  terminal_port: 7681
-
-  # Public base URL for opening the Gateway Web UI in a new tab (not embedded).
-  # Recommended: NO trailing slash.
-  # Example: "https://example.duckdns.org:12345" or "http://192.168.1.10:18789"
-  gateway_public_url: ""
-
-  # Home Assistant base URL for scripts/tools and HOMEASSISTANT_URL in .env.
-  # Leave empty for autodetection on HAOS (supervisor/loopback). Override for remote or custom HA URLs.
-  # Example: "https://example.duckdns.org:8443"
-  hass_url: ""
-
-  # Long-lived HA access token for MCP and scripts. Not shown after save (HA redacts secrets).
-  # Synced to /config/secrets/homeassistant.token and /config/.hermes/.env on restart.
-  homeassistant_token: ""
-
-  # First-run preset — bundles sensible defaults for common use cases.
-  # home_assistant: LAN HTTPS + auto MCP when token set + model/browser bootstrap
-  # general: local-only access + model/browser bootstrap
-  # advanced: use individual options only (no profile overrides)
+  # --- First-run setup ---
   setup_profile: home_assistant
-
-  # Default main model preset for first-run bootstrap (when config.yaml has no model yet).
-  # auto: infer from first API key; custom: use default_model field below.
   default_model_preset: auto
-
-  # Custom model ID when default_model_preset is custom (e.g. google/gemini-2.5-flash).
   default_model: ""
 
-  # Provider and tool API keys (expansion panel in Home Assistant UI).
   provider_api_keys:
     openai_api_key: ""
     openrouter_api_key: ""
@@ -76,132 +49,67 @@ options:
     firecrawl_api_key: ""
     searxng_url: ""
 
-  # Add-on startup log verbosity (colors + emojis when terminal is a TTY).
-  addon_log_level: info
+  # --- Home Assistant integration ---
+  home_assistant:
+    hass_url: ""
+    homeassistant_token: ""
+    auto_configure_mcp: false
 
-  # Optional: outbound HTTP/HTTPS proxy for Hermes Agent network access.
-  # Example: "http://192.168.2.1:3128"
-  http_proxy: ""
+  # --- Web terminal (Ingress) ---
+  enable_terminal: true
+  terminal_port: 7681
 
-  # Optional: Router SSH defaults (leave empty if you don't need router automation)
-  # This is a generic SSH configuration intended for a router/firewall or any network device
-  # reachable from inside the HA host LAN.
-  router_ssh_host: ""
-  router_ssh_user: ""
-  router_ssh_key_path: "/config/keys/router_ssh"
+  # --- Gateway access ---
+  gateway_access:
+    access_mode: lan_https
+    gateway_port: 18789
+    gateway_public_url: ""
+    enable_openai_api: false
+    gateway_mode: local
+    gateway_remote_url: ""
+    gateway_bind_mode: loopback
+    gateway_auth_mode: token
+    gateway_trusted_proxies: []
+    gateway_additional_allowed_origins: []
+    controlui_disable_device_auth: true
 
-  # Cleanup stale session lock files left after crashes/restarts
-  clean_session_locks_on_start: true
-  clean_session_locks_on_exit: true
+  # --- MQTT status sensors ---
+  mqtt_settings:
+    broker_host: ""
+    broker_port: 1883
+    broker_username: ""
+    broker_password: ""
+    enable_ha_status_sensors: true
+    publish_mqtt_discovery: true
+    status_poll_interval_seconds: 60
+    state_prefix: "hermes"
 
-  # Gateway mode:
-  # - local: Run gateway locally (recommended for most users)
-  # - remote: Connect to a remote gateway
-  # Default is local.
-  gateway_mode: local
+  # --- Optional router SSH ---
+  router_ssh:
+    host: ""
+    user: ""
+    key_path: "/config/keys/router_ssh"
 
-  # Remote gateway URL (used when gateway_mode=remote)
-  # Example: "ws://192.168.1.20:18789" or "wss://gateway.example.com:443"
-  gateway_remote_url: ""
+  # --- Tool bootstrap ---
+  tools_bootstrap:
+    tool_telegram_enabled: false
+    tool_browser_enabled: true
+    tool_skills_hub_enabled: true
 
-  # Gateway network bind mode:
-  # - loopback: bind to 127.0.0.1 only (local access only, most secure)
-  # - lan: bind to all interfaces (accessible from local network)
-  # - tailnet: bind to Tailscale IP only (accessible only via Tailscale — recommended for remote access)
-  # Default is loopback for security.
-  gateway_bind_mode: loopback
-
-  # Gateway port to listen on
-  gateway_port: 18789
-
-  # Access mode preset — simplifies secure access configuration.
-  # custom: use individual gateway_bind_mode / auth_mode settings (backward compatible)
-  # local_only: loopback + token auth (Ingress / terminal only, most secure)
-  # lan_https: Built-in HTTPS reverse proxy for LAN access (recommended for phones/tablets)
-  # lan_reverse_proxy: LAN bind + trusted-proxy for an external reverse proxy (NPM, Caddy, …)
-  # tailnet_https: Tailscale interface bind + token auth
-  access_mode: lan_https
-
-  # Gateway authentication mode:
-  # - token: standard token auth (default)
-  # - trusted-proxy: trust auth headers from configured reverse proxies
-  gateway_auth_mode: token
-
-  # Trusted proxy IP/CIDR entries for trusted-proxy mode (one per row in UI).
-  gateway_trusted_proxies: []
-
-  # Additional Control UI origins (one per row). Merged with built-in defaults.
-  # In lan_https mode, hostnames/IPs are also added to the TLS certificate SAN.
-  gateway_additional_allowed_origins: []
-
-  # In lan_https mode, disable per-device Control UI auth ceremony.
-  # Default true (recommended) to avoid interactive pairing error 1008 on LAN.
-  # Set false only if you explicitly want strict per-device approvals.
-  controlui_disable_device_auth: true
-
-  # Enable OpenAI-compatible Assist API (maps to API_SERVER_ENABLED in /config/.hermes/.env).
-  # Starts Hermes API server on port 8642 (HTTP, all interfaces; bearer token required).
-  # Extended OpenAI Conversation from HA Core: Base URL http://<LAN-IP>:8642/v1 (not HTTPS 18789 — self-signed cert fails in HA).
-  enable_openai_api: false
-
-  # Expose Hermes setup/runtime/usage metrics to Home Assistant (MQTT discovery + /status.json).
-  enable_ha_status_sensors: true
-
-  # Publish MQTT discovery configs when the Mosquitto add-on is available.
-  publish_mqtt_discovery: true
-
-  # How often to refresh status sensors and /share/hermes/status.json (30-300 seconds).
-  status_poll_interval_seconds: 60
-
-  # Prefix for MQTT state topics (e.g. hermes/status/gateway_running).
-  mqtt_state_prefix: "hermes"
-
-  # Force IPv4-first DNS result ordering for Node fetch/network calls.
-  # Most HAOS VMs lack IPv6 egress, causing web_fetch / Telegram timeouts.
-  # Default: true (recommended). Set to false only if you need IPv6.
-  force_ipv4_dns: true
-
-  # Nginx access log verbosity:
-  # full: log all requests (useful for debugging)
-  # minimal: suppress repetitive HA health-check and polling requests (default)
-  nginx_log_level: minimal
-
-  # Environment variables to pass to the gateway process at startup.
-  # Format: list of objects with name/value fields.
-  # Example:
-  #   gateway_env_vars:
-  #     - name: OPENAI_API_KEY
-  #       value: "sk-abc123"
-  #     - name: LOG_LEVEL
-  #       value: "debug"
-  # Reserved keys are blocked to protect runtime/security
-  # (e.g. PATH, HOME, NODE_OPTIONS, NODE_PATH, HERMES_*, proxy vars).
-  # Limits: max 50 variables, max key length 255 chars, max value length 10000 chars
-  gateway_env_vars: []
-
-  # Auto-configure MCP (Model Context Protocol) for Home Assistant.
-  # When enabled and homeassistant_token is set, registers HA in Hermes built-in MCP
-  # (mcp_servers in /config/.hermes/config.yaml) so the AI can control HA entities/services.
-  auto_configure_mcp: false
-
-  # Hermes Agent npm package version (installs the `hermes` CLI). Reconciled on startup when changed.
-  # latest: track npm @latest; custom: use hermes_agent_version_custom (default 0.16.0).
-  hermes_agent_version_preset: custom
-  hermes_agent_version_custom: "0.16.0"
-
-  # Tool bootstrap toggles.
-  # When enabled, run.sh verifies dependencies and auto-installs missing ones when possible.
-  tool_telegram_enabled: false
-  tool_browser_enabled: true
-  tool_skills_hub_enabled: true
+  # --- Advanced ---
+  advanced_settings:
+    http_proxy: ""
+    force_ipv4_dns: true
+    nginx_log_level: minimal
+    gateway_env_vars: []
+    hermes_agent_version_preset: custom
+    hermes_agent_version_custom: "0.16.0"
+    clean_session_locks_on_start: true
+    clean_session_locks_on_exit: true
 
 schema:
   timezone: str
-  enable_terminal: bool?
-  terminal_port: port?
-  gateway_public_url: str?
-  hass_url: str?
-  homeassistant_token: password?
+  addon_log_level: list(error|warn|info|debug)?
   setup_profile: list(home_assistant|general|advanced)?
   default_model_preset: list(auto|gemini_flash|claude_sonnet|gpt_mini|custom)?
   default_model: str?
@@ -216,39 +124,51 @@ schema:
     xai_api_key: str?
     firecrawl_api_key: str?
     searxng_url: str?
-  addon_log_level: list(error|warn|info|debug)?
-  http_proxy: str?
-
-  router_ssh_host: str
-  router_ssh_user: str
-  router_ssh_key_path: str
-
-  clean_session_locks_on_start: bool?
-  clean_session_locks_on_exit: bool?
-  gateway_mode: list(local|remote)?
-  gateway_remote_url: str?
-  gateway_bind_mode: list(loopback|lan|tailnet)?
-  gateway_port: port?
-  access_mode: list(custom|local_only|lan_https|lan_reverse_proxy|tailnet_https)?
-  gateway_auth_mode: list(token|trusted-proxy)?
-  gateway_trusted_proxies:
-    - value: 'match(^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/([0-9]|[1-2][0-9]|3[0-2]))?|([0-9a-fA-F:]+)(\/\d{1,3})?)$)'
-  gateway_additional_allowed_origins:
-    - value: str
-  controlui_disable_device_auth: bool?
-  enable_openai_api: bool?
-  enable_ha_status_sensors: bool?
-  publish_mqtt_discovery: bool?
-  status_poll_interval_seconds: int(30,300)?
-  mqtt_state_prefix: str?
-  force_ipv4_dns: bool?
-  gateway_env_vars:
-    - name: "match(^[A-Z_][A-Z0-9_]*$)"
-      value: str
-  nginx_log_level: list(full|minimal)?
-  auto_configure_mcp: bool?
-  hermes_agent_version_preset: list(latest|custom)?
-  hermes_agent_version_custom: str?
-  tool_telegram_enabled: bool?
-  tool_browser_enabled: bool?
-  tool_skills_hub_enabled: bool?
+  home_assistant:
+    hass_url: str?
+    homeassistant_token: password?
+    auto_configure_mcp: bool?
+  enable_terminal: bool?
+  terminal_port: port?
+  gateway_access:
+    access_mode: list(custom|local_only|lan_https|lan_reverse_proxy|tailnet_https)?
+    gateway_port: port?
+    gateway_public_url: str?
+    enable_openai_api: bool?
+    gateway_mode: list(local|remote)?
+    gateway_remote_url: str?
+    gateway_bind_mode: list(loopback|lan|tailnet)?
+    gateway_auth_mode: list(token|trusted-proxy)?
+    gateway_trusted_proxies:
+      - value: 'match(^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/([0-9]|[1-2][0-9]|3[0-2]))?|([0-9a-fA-F:]+)(\/\d{1,3})?)$)'
+    gateway_additional_allowed_origins:
+      - value: str
+    controlui_disable_device_auth: bool?
+  mqtt_settings:
+    broker_host: str?
+    broker_port: port?
+    broker_username: str?
+    broker_password: password?
+    enable_ha_status_sensors: bool?
+    publish_mqtt_discovery: bool?
+    status_poll_interval_seconds: int(30,300)?
+    state_prefix: str?
+  router_ssh:
+    host: str
+    user: str
+    key_path: str
+  tools_bootstrap:
+    tool_telegram_enabled: bool?
+    tool_browser_enabled: bool?
+    tool_skills_hub_enabled: bool?
+  advanced_settings:
+    http_proxy: str?
+    force_ipv4_dns: bool?
+    nginx_log_level: list(full|minimal)?
+    gateway_env_vars:
+      - name: "match(^[A-Z_][A-Z0-9_]*$)"
+        value: str
+    hermes_agent_version_preset: list(latest|custom)?
+    hermes_agent_version_custom: str?
+    clean_session_locks_on_start: bool?
+    clean_session_locks_on_exit: bool?

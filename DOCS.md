@@ -27,7 +27,7 @@ Architectures: `amd64`, `aarch64`, `armv7`.
 | Field | What to set |
 |-------|-------------|
 | `setup_profile` | `home_assistant` (default) |
-| `provider_api_keys` → OpenRouter (or another provider) | Your API key |
+| **Provider API Keys** → OpenRouter (or another provider) | Your API key |
 | `homeassistant_token` | Long-lived HA token (for MCP) |
 | `hass_url` | Leave **empty** on HAOS (autodetected) |
 
@@ -150,11 +150,14 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `auto_configure_mcp` | `false` | Auto-on when profile + token set |
 | `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` on **18789** |
 | `enable_ha_status_sensors` | `true` | MQTT + status.json |
-| `provider_api_keys` | *(empty)* | Expansion panel; synced to `/config/.hermes/.env` (preserved on reinstall when HA redacts secrets) |
-| `addon_log_level` | `info` | Add-on startup log verbosity (`error` / `warn` / `info` / `debug`) |
-| `gateway_trusted_proxies` | `[]` | List of IP/CIDR rows for `trusted-proxy` mode |
-| `gateway_additional_allowed_origins` | `[]` | List of extra Control UI origins (TLS SAN in `lan_https`) |
-| `router_ssh_key_path` | `/config/keys/router_ssh` | Persistent router SSH private key path |
+| **Home Assistant** panel | — | `hass_url`, `homeassistant_token`, `auto_configure_mcp` |
+| **Gateway Access** panel | `lan_https` | `access_mode`, `gateway_port`, trusted proxies, Assist API, etc. |
+| **MQTT Status Sensors** panel | autodetect | `broker_host` / `broker_port` / `broker_username` / `broker_password`; leave host empty for Mosquitto autodetect |
+| **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |
+| **Router SSH** panel | — | `host`, `user`, `key_path` (default `/config/keys/router_ssh`) |
+| **Tool Bootstrap** panel | browser ON | Telegram / browser / Skills Hub auto-install toggles |
+| **Advanced Settings** panel | — | `http_proxy`, `nginx_log_level`, `gateway_env_vars`, Hermes version |
+| `addon_log_level` | `info` | Add-on startup log verbosity |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
@@ -172,6 +175,7 @@ Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenR
 | `/config/hermesd/` | Workspace |
 | `/config/secrets/` | `homeassistant.token` |
 | `/config/keys/` | Router SSH private keys (default `router_ssh`) |
+| `/config/secrets/mqtt.password` | Persisted MQTT broker password (when set in add-on config) |
 | `/config/certs/` | TLS certs (`lan_https`) |
 
 Hermes binary in the image is replaced on update; `/config/` data persists.

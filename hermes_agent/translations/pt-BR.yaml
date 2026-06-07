@@ -2,26 +2,15 @@ configuration:
   timezone:
     name: Fuso Horário
     description: Fuso horário do add-on (ex., America/Sao_Paulo, America/Fortaleza)
-  
-  enable_terminal:
-    name: Habilitar Terminal Web
-    description: Habilitar botão do terminal web dentro do Home Assistant (Ingress) via ttyd
-  
-  terminal_port:
-    name: Porta do Terminal
-    description: Porta para o terminal web (padrão 7681). Altere se esta porta conflitar com outro serviço.
-  
-  gateway_public_url:
-    name: URL Pública do Gateway
-    description: URL base pública para abrir a interface web do Gateway em uma nova aba (não incorporada). Exemplo - https://exemplo.duckdns.org:12345 ou http://192.168.1.10:18789
-  
-  hass_url:
-    name: URL do Home Assistant
-    description: "URL base do Home Assistant para scripts/ferramentas. Deixe vazio para autodetecção no HAOS (recomendado). Sincronizada como HOMEASSISTANT_URL em /config/.hermes/.env quando o token estiver definido."
 
-  homeassistant_token:
-    name: Token do Home Assistant
-    description: Token de longa duração para MCP e scripts do HA. Mascarado após salvar. Sincronizado para /config/secrets/homeassistant.token e /config/.hermes/.env ao reiniciar.
+  addon_log_level:
+    name: Nível de log do add-on
+    description: Verbosidade dos logs de inicialização do contêiner do add-on (cores e emojis quando o terminal de log é interativo).
+    options:
+      error: "Somente erros"
+      warn: "Avisos e erros"
+      info: "Info (padrão)"
+      debug: "Debug (detalhado)"
 
   setup_profile:
     name: Perfil de configuração
@@ -80,138 +69,170 @@ configuration:
         name: URL SearXNG
         description: Sincronizada como SEARXNG_URL.
 
-  addon_log_level:
-    name: Nível de log do add-on
-    description: Verbosidade dos logs de inicialização do contêiner do add-on (cores e emojis quando o terminal de log é interativo).
-    options:
-      error: "Somente erros"
-      warn: "Avisos e erros"
-      info: "Info (padrão)"
-      debug: "Debug (detalhado)"
+  home_assistant:
+    name: Integração com Home Assistant
+    description: Conecta o Hermes à sua instância do Home Assistant para MCP, scripts e autodetecção.
+    fields:
+      hass_url:
+        name: URL do Home Assistant
+        description: "Deixe vazio para autodetecção no HAOS (recomendado). Sincronizada como HOMEASSISTANT_URL em /config/.hermes/.env quando o token estiver definido."
+      homeassistant_token:
+        name: Token do Home Assistant
+        description: Token de longa duração para MCP e scripts do HA. Mascarado após salvar. Persistido em /config/secrets/homeassistant.token.
+      auto_configure_mcp:
+        name: Configurar MCP automaticamente para o Home Assistant
+        description: "Quando LIGADO e o token estiver definido, registra o Home Assistant no MCP do Hermes (mcp_servers) a cada inicialização."
 
-  http_proxy:
-    name: Proxy HTTP de saída
-    description: Opcional - URL de proxy para requisições HTTP/HTTPS de saída (exemplo - http://192.168.2.1:3128)
-  
-  router_ssh_host:
-    name: Host SSH do Roteador
-    description: Opcional - Nome do host ou endereço IP do roteador/firewall via SSH
-  
-  router_ssh_user:
-    name: Usuário SSH do Roteador
-    description: Opcional - Nome de usuário SSH do roteador/firewall
-  
-  router_ssh_key_path:
-    name: Caminho da Chave SSH do Roteador
-    description: Caminho para a chave privada SSH para acesso ao roteador em armazenamento persistente (padrão - /config/keys/router_ssh)
-  
-  clean_session_locks_on_start:
-    name: Limpar Bloqueios de Sessão ao Iniciar
-    description: Limpar arquivos de bloqueio de sessão obsoletos deixados após falhas/reinicializações quando o add-on iniciar
-  
-  clean_session_locks_on_exit:
-    name: Limpar Bloqueios de Sessão ao Sair
-    description: Limpar arquivos de bloqueio de sessão quando o add-on parar normalmente
-  
-  gateway_mode:
-    name: Modo do Gateway
-    description: Modo de operação do gateway - local (executar gateway localmente, recomendado) ou remote (conectar a um gateway remoto)
-    options:
-      local: "Local (recomendado)"
-      remote: "Remoto"
+  enable_terminal:
+    name: Habilitar Terminal Web
+    description: Habilitar botão do terminal web dentro do Home Assistant (Ingress) via ttyd
 
-  gateway_remote_url:
-    name: URL do Gateway Remoto
-    description: URL WebSocket do gateway remoto usada quando Gateway Mode está em Remote (exemplo - ws://192.168.1.20:18789 ou wss://gateway.example.com:443)
+  terminal_port:
+    name: Porta do Terminal
+    description: Porta para o terminal web (padrão 7681). Altere se esta porta conflitar com outro serviço.
 
-  gateway_additional_allowed_origins:
-    name: Origens permitidas adicionais
-    description: Origens extras da Control UI (uma por linha). Mescladas em gateway.controlUi.allowedOrigins; em lan_https os hostnames também são adicionados ao SAN do certificado TLS.
+  gateway_access:
+    name: Acesso ao Gateway
+    description: Acesso de rede, autenticação e configurações da API Assist para o gateway Hermes.
+    fields:
+      access_mode:
+        name: Modo de Acesso
+        description: "Simplifica a configuração de acesso seguro. Substitui bind/auth quando não é Personalizado."
+        options:
+          custom: "Personalizado (configurações individuais)"
+          local_only: "Apenas local (loopback + token, apenas Ingress)"
+          lan_https: "LAN HTTPS (proxy HTTPS integrado — recomendado para celulares)"
+          lan_reverse_proxy: "LAN Reverse Proxy (proxy externo com auth trusted-proxy)"
+          tailnet_https: "Tailscale HTTPS (Tailscale + token)"
+      gateway_port:
+        name: Porta do Gateway
+        description: Porta do gateway Hermes (padrão 18789).
+      gateway_public_url:
+        name: URL Pública do Gateway
+        description: URL base pública para abrir a interface web do Gateway em uma nova aba (não incorporada).
+      enable_openai_api:
+        name: Habilitar API OpenAI
+        description: "Ativa a API Assist do Hermes (API_SERVER_ENABLED). Extended OpenAI do HA Core: http://<LAN-IP>:8642/v1."
+      gateway_mode:
+        name: Modo do Gateway
+        description: Local (gateway no add-on) ou remoto (conexão a gateway externo).
+        options:
+          local: "Local (recomendado)"
+          remote: "Remoto"
+      gateway_remote_url:
+        name: URL do Gateway Remoto
+        description: URL WebSocket quando o Modo do Gateway é Remoto.
+      gateway_bind_mode:
+        name: Modo de Vinculação do Gateway
+        description: Vinculação loopback, LAN ou Tailscale. Substituído pelas predefinições do modo de acesso.
+        options:
+          loopback: "Loopback (somente 127.0.0.1, mais seguro)"
+          lan: "LAN (todas as interfaces)"
+          tailnet: "Tailnet (somente Tailscale)"
+      gateway_auth_mode:
+        name: Modo de Autenticação do Gateway
+        description: Token (padrão) ou trusted-proxy para reverse proxies.
+        options:
+          token: "Token (padrão)"
+          trusted-proxy: "Proxy Confiável (para reverse proxies)"
+      gateway_trusted_proxies:
+        name: Proxies Confiáveis do Gateway
+        description: Entradas de IP ou CIDR de proxy confiável (uma por linha) para o modo trusted-proxy.
+      gateway_additional_allowed_origins:
+        name: Origens permitidas adicionais
+        description: Origens extras da Control UI (uma por linha); mescladas em allowedOrigins e TLS SAN em lan_https.
+      controlui_disable_device_auth:
+        name: Desativar pareamento por dispositivo no Control UI (lan_https)
+        description: "Recomendado LIGADO para LAN doméstica — pula aprovação por dispositivo (evita erro 1008)."
 
-  controlui_disable_device_auth:
-    name: Desativar pareamento por dispositivo no Control UI (lan_https)
-    description: "Quando LIGADO (recomendado), define gateway.controlUi.dangerouslyDisableDeviceAuth=true para pular aprovação por dispositivo e evitar erro 1008 no modo LAN HTTPS. Mantenha LIGADO em rede doméstica/confiável. Desligue apenas se quiser pareamento estrito para cada novo navegador/dispositivo."
+  mqtt_settings:
+    name: Sensores de status MQTT
+    description: Conexão com o broker e publicação de sensores de status do Home Assistant (MQTT discovery + /status.json).
+    fields:
+      broker_host:
+        name: Host do broker MQTT
+        description: "IP ou nome do host do broker. Deixe vazio para autodetectar Mosquitto (supervisor/bashio/loopback)."
+      broker_port:
+        name: Porta do broker MQTT
+        description: Porta do broker MQTT (padrão 1883).
+      broker_username:
+        name: Usuário MQTT
+        description: Usuário Mosquitto opcional (deixe vazio quando a autenticação estiver desativada).
+      broker_password:
+        name: Senha MQTT
+        description: Senha Mosquitto opcional. Mascarada após salvar. Persistida em /config/secrets/mqtt.password.
+      enable_ha_status_sensors:
+        name: Habilitar sensores de status HA
+        description: Publica configuração, saúde do gateway, modelo/provedor e métricas de uso no Home Assistant.
+      publish_mqtt_discovery:
+        name: Publicar MQTT discovery
+        description: Criar entidades HA automaticamente quando Mosquitto estiver disponível. Desative para usar apenas /status.json.
+      status_poll_interval_seconds:
+        name: Intervalo de status (segundos)
+        description: Intervalo de atualização para sensores e /share/hermes/status.json (30-300).
+      state_prefix:
+        name: Prefixo de tópicos MQTT
+        description: "Prefixo para tópicos de estado (padrão hermes). Exemplo: hermes/status/gateway_running."
 
-  gateway_bind_mode:
-    name: Modo de Vinculação do Gateway
-    description: Modo de vinculação de rede - loopback (somente 127.0.0.1, mais seguro), lan (todas as interfaces) ou tailnet (somente interface Tailscale). Substituído pelas predefinições do modo de acesso.
-    options:
-      loopback: "Loopback (somente 127.0.0.1, mais seguro)"
-      lan: "LAN (todas as interfaces)"
-      tailnet: "Tailnet (somente Tailscale)"
+  router_ssh:
+    name: SSH do roteador
+    description: Acesso SSH opcional a um roteador ou dispositivo de rede acessível na LAN do host HA.
+    fields:
+      host:
+        name: Host SSH do Roteador
+        description: Nome do host ou endereço IP do roteador/firewall.
+      user:
+        name: Usuário SSH do Roteador
+        description: Nome de usuário SSH para acesso ao roteador.
+      key_path:
+        name: Caminho da Chave SSH do Roteador
+        description: Caminho para a chave privada em armazenamento persistente (padrão /config/keys/router_ssh).
 
-  gateway_port:
-    name: Porta do Gateway
-    description: Porta do gateway do Hermes Agent (padrão 18789)
+  tools_bootstrap:
+    name: Bootstrap de ferramentas
+    description: Verificar e instalar automaticamente dependências opcionais de ferramentas Hermes na inicialização.
+    fields:
+      tool_telegram_enabled:
+        name: Habilitar bootstrap da ferramenta Telegram
+        description: Instalar automaticamente dependências Python do Telegram quando ausentes.
+      tool_browser_enabled:
+        name: Habilitar bootstrap da ferramenta Browser
+        description: Instalar automaticamente dependências de browser (ex. agent-browser) quando ausentes.
+      tool_skills_hub_enabled:
+        name: Habilitar bootstrap do Skills Hub
+        description: Inicializar o diretório do Skills Hub na inicialização (como `hermes skills list` na primeira execução).
 
-  access_mode:
-    name: Modo de Acesso
-    description: "Simplifica a configuração de acesso seguro. Substitui gateway_bind_mode e gateway_auth_mode quando não definido como Personalizado."
-    options:
-      custom: "Personalizado (configurações individuais)"
-      local_only: "Apenas local (loopback + token, apenas Ingress)"
-      lan_https: "LAN HTTPS (proxy HTTPS integrado — recomendado para celulares)"
-      lan_reverse_proxy: "LAN Reverse Proxy (proxy externo com auth trusted-proxy)"
-      tailnet_https: "Tailscale HTTPS (Tailscale + token)"
-
-  gateway_auth_mode:
-    name: Modo de Autenticação do Gateway
-    description: Modo de autenticação - token (padrão) ou trusted-proxy (para reverse proxies HTTPS). Substituído quando access_mode não é Personalizado.
-    options:
-      token: "Token (padrão)"
-      trusted-proxy: "Proxy Confiável (para reverse proxies)"
-
-  gateway_trusted_proxies:
-    name: Proxies Confiáveis do Gateway
-    description: Entradas de IP ou CIDR de proxy confiável (uma por linha) para o modo trusted-proxy. Exemplo - 127.0.0.1 ou 192.168.88.0/24.
-
-  enable_openai_api:
-    name: Habilitar API OpenAI
-    description: "Ativa a API Assist do Hermes (sync API_SERVER_ENABLED no .env; HTTP em 0.0.0.0:8642, token bearer obrigatório). Extended OpenAI do HA Core: Base URL http://<LAN-IP>:8642/v1, API key = token gateway, modelo hermes-agent."
-  enable_ha_status_sensors:
-    name: Habilitar sensores de status HA
-    description: "Publica configuração, saúde do gateway, modelo/provedor e métricas de uso no Home Assistant via MQTT discovery (com Mosquitto) e um snapshot seguro /status.json no Ingress."
-  publish_mqtt_discovery:
-    name: Publicar MQTT discovery
-    description: "Quando ATIVADO e o Mosquitto está em execução, cria entidades HA para o status do Hermes. Desative se quiser apenas a API /status.json."
-  status_poll_interval_seconds:
-    name: Intervalo de status (segundos)
-    description: "Com que frequência atualizar sensores e /share/hermes/status.json. Faixa 30-300. Valores maiores reduzem gravações em flash em cartões SD."
-  mqtt_state_prefix:
-    name: Prefixo de tópicos MQTT
-    description: "Prefixo para tópicos de estado MQTT (padrão hermes). Exemplo: <prefix>/status/gateway_running."
-  force_ipv4_dns:
-    name: Forçar ordem DNS IPv4
-    description: Força prioridade IPv4 no DNS. A maioria das VMs HAOS não tem saída IPv6 — causa erros em web_fetch e Telegram. Recomendado LIGADO (padrão).
-  nginx_log_level:
-    name: Nível de log Nginx
-    description: "Detalhamento do log de acesso do nginx. 'minimal' (padrão) suprime requisições repetitivas de health-check e polling do HA. 'full' registra tudo."
-    options:
-      minimal: "Mínimo (suprimir ruído de polling HA)"
-      full: "Completo (registrar todas as requisições)"
-  gateway_env_vars:
-    name: Variáveis de Ambiente do Gateway
-    description: Variaveis de ambiente passadas para o processo do gateway Hermes Agent na inicializacao (lista de entradas name/value na UI do Home Assistant; maximo de 50 variaveis, chaves com ate 255 caracteres, valores com ate 10.000 caracteres).
-  auto_configure_mcp:
-    name: Configurar MCP automaticamente para o Home Assistant
-    description: "Quando LIGADO e o token do Home Assistant estiver definido, registra automaticamente o Home Assistant no MCP integrado do Hermes (mcp_servers) a cada inicialização. Isso permite que o Hermes Agent controle entidades, serviços e automações do HA via Model Context Protocol. Desative apenas se você gerencia a configuração MCP do Hermes manualmente."
-  hermes_agent_version_preset:
-    name: Versão do Hermes Agent
-    description: "Pacote npm instalado na inicialização (CLI `hermes`). Padrão custom com 0.16.0; latest acompanha npm @latest."
-    options:
-      latest: "Latest (npm @latest)"
-      custom: "Versão personalizada (padrão 0.16.0)"
-
-  hermes_agent_version_custom:
-    name: Versão do Hermes Agent (personalizada)
-    description: "Tag npm ou semver quando a versão é personalizada (padrão 0.16.0). Aplicada no próximo reinício do add-on."
-
-  tool_telegram_enabled:
-    name: Bootstrap da ferramenta Telegram
-    description: "Quando LIGADO, a inicialização verifica dependências do Telegram e instala automaticamente pacotes python-telegram-bot ausentes quando possível."
-  tool_browser_enabled:
-    name: Bootstrap da ferramenta Browser
-    description: "Quando LIGADO, a inicialização verifica dependências de browser e instala ferramentas externas ausentes (por exemplo agent-browser) quando possível."
-  tool_skills_hub_enabled:
-    name: Bootstrap do Skills Hub
-    description: "Quando LIGADO, a inicialização cria o diretório do Skills Hub automaticamente (equivalente ao primeiro `hermes skills list`)."
+  advanced_settings:
+    name: Configurações avançadas
+    description: Proxy, DNS, logs do nginx, variáveis de ambiente do gateway, versão do Hermes e limpeza de bloqueios de sessão.
+    fields:
+      http_proxy:
+        name: Proxy HTTP de saída
+        description: URL de proxy opcional para HTTP/HTTPS de saída (exemplo http://192.168.2.1:3128).
+      force_ipv4_dns:
+        name: Forçar ordem DNS IPv4
+        description: Recomendado LIGADO no HAOS — evita timeouts de saída IPv6 para web_fetch e Telegram.
+      nginx_log_level:
+        name: Nível de log Nginx
+        description: Verbosidade do log de acesso do proxy HTTPS integrado.
+        options:
+          minimal: "Mínimo (suprimir ruído de polling HA)"
+          full: "Completo (registrar todas as requisições)"
+      gateway_env_vars:
+        name: Variáveis de Ambiente do Gateway
+        description: Variáveis de ambiente adicionais passadas ao processo do gateway (máx. 50 entradas).
+      hermes_agent_version_preset:
+        name: Versão do Hermes Agent
+        description: Pacote npm para a CLI `hermes` — latest ou versão personalizada.
+        options:
+          latest: "Latest (npm @latest)"
+          custom: "Versão personalizada (padrão 0.16.0)"
+      hermes_agent_version_custom:
+        name: Versão do Hermes Agent (personalizada)
+        description: dist-tag npm ou semver quando a predefinição é personalizada (padrão 0.16.0).
+      clean_session_locks_on_start:
+        name: Limpar Bloqueios de Sessão ao Iniciar
+        description: Remover arquivos de bloqueio de sessão obsoletos quando o add-on iniciar.
+      clean_session_locks_on_exit:
+        name: Limpar Bloqueios de Sessão ao Sair
+        description: Remover arquivos de bloqueio de sessão no encerramento normal.

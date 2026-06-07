@@ -2,26 +2,15 @@ configuration:
   timezone:
     name: Zeitzone
     description: Zeitzone für das Add-on (z.B. Europe/Sofia, America/New_York)
-  
-  enable_terminal:
-    name: Web-Terminal aktivieren
-    description: Web-Terminal-Schaltfläche in Home Assistant (Ingress) über ttyd aktivieren
-  
-  terminal_port:
-    name: Terminal-Port
-    description: Port für das Web-Terminal (Standard 7681). Ändern Sie diesen, wenn dieser Port mit einem anderen Dienst in Konflikt steht.
-  
-  gateway_public_url:
-    name: Öffentliche Gateway-URL
-    description: Öffentliche Basis-URL zum Öffnen der Gateway-Weboberfläche in einem neuen Tab (nicht eingebettet). Beispiel - https://example.duckdns.org:12345 oder http://192.168.1.10:18789
-  
-  hass_url:
-    name: Home Assistant URL
-    description: "Home Assistant Basis-URL für Skripte/Tools. Leer lassen für Autodetektion auf HAOS (empfohlen). Wird als HOMEASSISTANT_URL in /config/.hermes/.env synchronisiert, wenn ein Token gesetzt ist."
 
-  homeassistant_token:
-    name: Home Assistant Token
-    description: Langlebiger Zugriffstoken für MCP und HA-Skripte. Nach dem Speichern maskiert. Wird beim Neustart nach /config/secrets/homeassistant.token und /config/.hermes/.env synchronisiert.
+  addon_log_level:
+    name: Add-on Log-Level
+    description: Start-Log-Detailgrad für den Add-on-Container (Farben und Emojis, wenn das Log-Terminal interaktiv ist).
+    options:
+      error: "Nur Fehler"
+      warn: "Warnungen und Fehler"
+      info: "Info (Standard)"
+      debug: "Debug (ausführlich)"
 
   setup_profile:
     name: Setup-Profil
@@ -80,138 +69,170 @@ configuration:
         name: SearXNG URL
         description: Synchronisiert als SEARXNG_URL.
 
-  addon_log_level:
-    name: Add-on Log-Level
-    description: Start-Log-Detailgrad für den Add-on-Container (Farben und Emojis, wenn das Log-Terminal interaktiv ist).
-    options:
-      error: "Nur Fehler"
-      warn: "Warnungen und Fehler"
-      info: "Info (Standard)"
-      debug: "Debug (ausführlich)"
+  home_assistant:
+    name: Home Assistant Integration
+    description: Verbindet Hermes mit Ihrer Home Assistant-Instanz für MCP, Skripte und Autodetektion.
+    fields:
+      hass_url:
+        name: Home Assistant URL
+        description: "Leer lassen für Autodetektion auf HAOS (empfohlen). Wird als HOMEASSISTANT_URL in /config/.hermes/.env synchronisiert, wenn ein Token gesetzt ist."
+      homeassistant_token:
+        name: Home Assistant Token
+        description: Langlebiger Zugriffstoken für MCP und HA-Skripte. Nach dem Speichern maskiert. Gespeichert unter /config/secrets/homeassistant.token.
+      auto_configure_mcp:
+        name: MCP für Home Assistant automatisch konfigurieren
+        description: "Wenn AN und Token gesetzt ist, wird Home Assistant bei jedem Start in Hermes MCP (mcp_servers) registriert."
 
-  http_proxy:
-    name: Ausgehender HTTP-Proxy
-    description: Optional - Proxy-URL für ausgehende HTTP/HTTPS-Anfragen (Beispiel - http://192.168.2.1:3128)
-  
-  router_ssh_host:
-    name: Router SSH-Host
-    description: Optional - SSH-Hostname oder IP-Adresse des Routers/der Firewall
-  
-  router_ssh_user:
-    name: Router SSH-Benutzer
-    description: Optional - SSH-Benutzername für Router/Firewall
-  
-  router_ssh_key_path:
-    name: Router SSH-Schlüsselpfad
-    description: Pfad zum privaten SSH-Schlüssel für Router-Zugriff auf persistentem Speicher (Standard - /config/keys/router_ssh)
-  
-  clean_session_locks_on_start:
-    name: Sitzungssperren beim Start bereinigen
-    description: Veraltete Sitzungssperrdateien nach Abstürzen/Neustarts beim Start des Add-ons bereinigen
-  
-  clean_session_locks_on_exit:
-    name: Sitzungssperren beim Beenden bereinigen
-    description: Sitzungssperrdateien beim ordnungsgemäßen Stoppen des Add-ons bereinigen
-  
-  gateway_mode:
-    name: Gateway-Modus
-    description: Gateway-Betriebsmodus - local (Gateway lokal ausführen, empfohlen) oder remote (mit einem entfernten Gateway verbinden)
-    options:
-      local: "Lokal (empfohlen)"
-      remote: "Remote"
+  enable_terminal:
+    name: Web-Terminal aktivieren
+    description: Web-Terminal-Schaltfläche in Home Assistant (Ingress) über ttyd aktivieren
 
-  gateway_remote_url:
-    name: Remote Gateway-URL
-    description: Remote-Gateway-WebSocket-URL, verwendet wenn Gateway-Modus auf Remote steht (Beispiel - ws://192.168.1.20:18789 oder wss://gateway.example.com:443)
+  terminal_port:
+    name: Terminal-Port
+    description: Port für das Web-Terminal (Standard 7681). Ändern Sie diesen, wenn dieser Port mit einem anderen Dienst in Konflikt steht.
 
-  gateway_additional_allowed_origins:
-    name: Zusätzliche erlaubte Origins
-    description: Zusätzliche Control-UI-Origins (eine pro Zeile). Werden in gateway.controlUi.allowedOrigins zusammengeführt; bei lan_https werden Hostnamen auch zum TLS-Zertifikat SAN hinzugefügt.
+  gateway_access:
+    name: Gateway-Zugriff
+    description: Netzwerkzugriff, Authentifizierung und Assist-API-Einstellungen für das Hermes-Gateway.
+    fields:
+      access_mode:
+        name: Zugriffsmodus
+        description: "Vereinfacht die sichere Zugriffskonfiguration. Überschreibt Bind-/Auth-Einstellungen wenn nicht Benutzerdefiniert."
+        options:
+          custom: "Benutzerdefiniert (individuelle Einstellungen)"
+          local_only: "Nur lokal (Loopback + Token, nur Ingress)"
+          lan_https: "LAN HTTPS (eingebauter HTTPS-Proxy — empfohlen für Smartphones)"
+          lan_reverse_proxy: "LAN Reverse-Proxy (externer Proxy mit Trusted-Proxy-Auth)"
+          tailnet_https: "Tailscale HTTPS (Tailscale-Bindung + Token)"
+      gateway_port:
+        name: Gateway-Port
+        description: Port für das Hermes-Gateway (Standard 18789).
+      gateway_public_url:
+        name: Öffentliche Gateway-URL
+        description: Öffentliche Basis-URL zum Öffnen der Gateway-Weboberfläche in einem neuen Tab (nicht eingebettet).
+      enable_openai_api:
+        name: OpenAI API aktivieren
+        description: "Aktiviert Hermes Assist API (API_SERVER_ENABLED). Extended OpenAI von HA Core: http://<LAN-IP>:8642/v1."
+      gateway_mode:
+        name: Gateway-Modus
+        description: Lokal (Gateway im Add-on) oder remote (Verbindung zu externem Gateway).
+        options:
+          local: "Lokal (empfohlen)"
+          remote: "Remote"
+      gateway_remote_url:
+        name: Remote Gateway-URL
+        description: WebSocket-URL wenn Gateway-Modus Remote ist.
+      gateway_bind_mode:
+        name: Gateway-Bindungsmodus
+        description: Loopback-, LAN- oder Tailscale-Bindung. Wird durch Zugriffsmodus-Voreinstellungen überschrieben.
+        options:
+          loopback: "Loopback (nur 127.0.0.1, am sichersten)"
+          lan: "LAN (alle Schnittstellen)"
+          tailnet: "Tailnet (nur Tailscale)"
+      gateway_auth_mode:
+        name: Gateway-Authentifizierungsmodus
+        description: Token (Standard) oder trusted-proxy für Reverse-Proxys.
+        options:
+          token: "Token (Standard)"
+          trusted-proxy: "Vertrauenswürdiger Proxy (für Reverse-Proxys)"
+      gateway_trusted_proxies:
+        name: Vertrauenswürdige Gateway-Proxys
+        description: Vertrauenswürdige Proxy-IP- oder CIDR-Einträge (eine pro Zeile) für den Trusted-Proxy-Modus.
+      gateway_additional_allowed_origins:
+        name: Zusätzliche erlaubte Origins
+        description: Zusätzliche Control-UI-Origins (eine pro Zeile); zusammengeführt in allowedOrigins und TLS SAN in lan_https.
+      controlui_disable_device_auth:
+        name: Control-UI-Geräte-Pairing deaktivieren (lan_https)
+        description: "Empfohlen EIN für Heim-LAN — überspringt Gerätefreigabe (vermeidet Fehler 1008)."
 
-  controlui_disable_device_auth:
-    name: Control-UI-Geräte-Pairing deaktivieren (lan_https)
-    description: "Wenn EIN (empfohlen), setzt dies gateway.controlUi.dangerouslyDisableDeviceAuth=true, überspringt die Gerätefreigabe und vermeidet Fehler 1008 im LAN-HTTPS-Modus. Für Heim-/vertrauenswürdiges LAN eingeschaltet lassen. Nur AUS schalten, wenn du striktes Geräte-Pairing für jeden neuen Browser/jedes neue Gerät willst."
+  mqtt_settings:
+    name: MQTT-Status-Sensoren
+    description: Broker-Verbindung und Veröffentlichung von Home Assistant-Status-Sensoren (MQTT Discovery + /status.json).
+    fields:
+      broker_host:
+        name: MQTT-Broker-Host
+        description: "Broker-IP oder Hostname. Leer lassen für Mosquitto-Autodetektion (supervisor/bashio/loopback)."
+      broker_port:
+        name: MQTT-Broker-Port
+        description: MQTT-Broker-Port (Standard 1883).
+      broker_username:
+        name: MQTT-Benutzername
+        description: Optionaler Mosquitto-Benutzername (leer lassen wenn Auth deaktiviert ist).
+      broker_password:
+        name: MQTT-Passwort
+        description: Optionales Mosquitto-Passwort. Nach dem Speichern maskiert. Gespeichert unter /config/secrets/mqtt.password.
+      enable_ha_status_sensors:
+        name: HA-Status-Sensoren aktivieren
+        description: Veröffentlicht Setup, Gateway-Status, Modell/Provider und Nutzungsmetriken an Home Assistant.
+      publish_mqtt_discovery:
+        name: MQTT Discovery veröffentlichen
+        description: HA-Entities automatisch erstellen wenn Mosquitto verfügbar ist. Deaktivieren für nur /status.json.
+      status_poll_interval_seconds:
+        name: Status-Aktualisierungsintervall (Sekunden)
+        description: Aktualisierungsintervall für Sensoren und /share/hermes/status.json (30-300).
+      state_prefix:
+        name: MQTT State-Topic-Präfix
+        description: "Präfix für State-Topics (Standard hermes). Beispiel: hermes/status/gateway_running."
 
-  gateway_bind_mode:
-    name: Gateway-Bindungsmodus
-    description: Netzwerk-Bindungsmodus - loopback (nur 127.0.0.1, am sichersten), lan (alle Schnittstellen) oder tailnet (nur Tailscale-Schnittstelle). Wird durch Zugriffsmodus-Voreinstellungen überschrieben.
-    options:
-      loopback: "Loopback (nur 127.0.0.1, am sichersten)"
-      lan: "LAN (alle Schnittstellen)"
-      tailnet: "Tailnet (nur Tailscale)"
+  router_ssh:
+    name: Router SSH
+    description: Optionaler SSH-Zugriff auf einen Router oder ein Netzwerkgerät im LAN des HA-Hosts.
+    fields:
+      host:
+        name: Router SSH-Host
+        description: SSH-Hostname oder IP-Adresse des Routers/der Firewall.
+      user:
+        name: Router SSH-Benutzer
+        description: SSH-Benutzername für Router-Zugriff.
+      key_path:
+        name: Router SSH-Schlüsselpfad
+        description: Pfad zum privaten Schlüssel auf persistentem Speicher (Standard /config/keys/router_ssh).
 
-  gateway_port:
-    name: Gateway-Port
-    description: Port für das Hermes-Agent-Gateway (Standard 18789)
+  tools_bootstrap:
+    name: Tool-Bootstrap
+    description: Optionale Hermes-Tool-Abhängigkeiten beim Start prüfen und automatisch installieren.
+    fields:
+      tool_telegram_enabled:
+        name: Telegram-Tool-Bootstrap aktivieren
+        description: Telegram-Python-Abhängigkeiten automatisch installieren wenn fehlend.
+      tool_browser_enabled:
+        name: Browser-Tool-Bootstrap aktivieren
+        description: Browser-Tool-Abhängigkeiten automatisch installieren (z.B. agent-browser) wenn fehlend.
+      tool_skills_hub_enabled:
+        name: Skills-Hub-Bootstrap aktivieren
+        description: Skills-Hub-Verzeichnis beim Start initialisieren (wie `hermes skills list` beim Erststart).
 
-  access_mode:
-    name: Zugriffsmodus
-    description: "Vereinfacht die sichere Zugriffskonfiguration. Überschreibt gateway_bind_mode und gateway_auth_mode wenn nicht auf Benutzerdefiniert gesetzt."
-    options:
-      custom: "Benutzerdefiniert (individuelle Einstellungen)"
-      local_only: "Nur lokal (Loopback + Token, nur Ingress)"
-      lan_https: "LAN HTTPS (eingebauter HTTPS-Proxy — empfohlen für Smartphones)"
-      lan_reverse_proxy: "LAN Reverse-Proxy (externer Proxy mit Trusted-Proxy-Auth)"
-      tailnet_https: "Tailscale HTTPS (Tailscale-Bindung + Token)"
-
-  gateway_auth_mode:
-    name: Gateway-Authentifizierungsmodus
-    description: Gateway-Auth-Modus - token (Standard) oder trusted-proxy (für HTTPS-Reverse-Proxys). Wird überschrieben wenn access_mode nicht Benutzerdefiniert ist.
-    options:
-      token: "Token (Standard)"
-      trusted-proxy: "Vertrauenswürdiger Proxy (für Reverse-Proxys)"
-
-  gateway_trusted_proxies:
-    name: Vertrauenswürdige Gateway-Proxys
-    description: Vertrauenswürdige Proxy-IP- oder CIDR-Einträge (eine pro Zeile) für den Trusted-Proxy-Modus. Beispiel - 127.0.0.1 oder 192.168.88.0/24.
-
-  enable_openai_api:
-    name: OpenAI API aktivieren
-    description: "Aktiviert Hermes Assist API (sync API_SERVER_ENABLED in .env; HTTP auf 0.0.0.0:8642, Bearer-Token erforderlich). Extended OpenAI von HA Core: Base URL http://<LAN-IP>:8642/v1, API-Key = Gateway-Token, Modell hermes-agent."
-  enable_ha_status_sensors:
-    name: HA-Status-Sensoren aktivieren
-    description: "Veröffentlicht Hermes-Setup, Gateway-Status, Modell/Provider und Nutzungsmetriken an Home Assistant via MQTT Discovery (wenn Mosquitto installiert ist) und einen sicheren /status.json-Snapshot über Ingress."
-  publish_mqtt_discovery:
-    name: MQTT Discovery veröffentlichen
-    description: "Wenn EIN und Mosquitto läuft, werden HA-Entities für Hermes-Status automatisch erstellt. Deaktivieren, wenn nur die /status.json-API gewünscht ist."
-  status_poll_interval_seconds:
-    name: Status-Aktualisierungsintervall (Sekunden)
-    description: "Wie oft Status-Sensoren und /share/hermes/status.json aktualisiert werden. Bereich 30-300. Höhere Werte reduzieren Flash-Schreibvorgänge auf SD-Karten."
-  mqtt_state_prefix:
-    name: MQTT State-Topic-Präfix
-    description: "Präfix für MQTT State-Topics (Standard hermes). Beispiel: <prefix>/status/gateway_running."
-  force_ipv4_dns:
-    name: IPv4-DNS-Reihenfolge erzwingen
-    description: Erzwingt IPv4-vorrangige DNS-Auflösung. Die meisten HAOS-VMs haben keinen IPv6-Ausgang — verursacht web_fetch- und Telegram-Timeouts. Empfohlen EIN (Standard).
-  nginx_log_level:
-    name: Nginx Log-Level
-    description: "Ausführlichkeit des Nginx-Zugriffslogs. 'minimal' (Standard) unterdrückt wiederholte HA-Healthcheck- und Polling-Anfragen. 'full' protokolliert alles."
-    options:
-      minimal: "Minimal (HA-Polling-Rauschen unterdrücken)"
-      full: "Vollständig (alle Anfragen protokollieren)"
-  gateway_env_vars:
-    name: Gateway-Umgebungsvariablen
-    description: Umgebungsvariablen, die beim Start an den Hermes-Agent-Gateway-Prozess übergeben werden (Liste mit name/value-Einträgen in der Home Assistant UI; max. 50 Variablen, Schlüssel bis 255 Zeichen, Werte bis 10.000 Zeichen).
-  auto_configure_mcp:
-    name: MCP für Home Assistant automatisch konfigurieren
-    description: "Wenn AN und Home Assistant Token gesetzt ist, wird Home Assistant bei jedem Start automatisch in Hermes integriertem MCP (mcp_servers) registriert. Das erlaubt Hermes Agent, HA-Geräte, -Dienste und -Automatisierungen über das Model Context Protocol zu steuern. Nur deaktivieren, wenn Sie die Hermes-MCP-Konfiguration manuell verwalten."
-  hermes_agent_version_preset:
-    name: Hermes-Agent-Version
-    description: "npm-Paket beim Start (stellt die `hermes`-CLI bereit). Standard custom mit 0.16.0; latest folgt npm @latest."
-    options:
-      latest: "Latest (npm @latest)"
-      custom: "Benutzerdefinierte Version (Standard 0.16.0)"
-
-  hermes_agent_version_custom:
-    name: Hermes-Agent-Version (benutzerdefiniert)
-    description: "npm-Tag oder Semver bei benutzerdefinierter Version (Standard 0.16.0). Wird beim nächsten Add-on-Neustart angewendet."
-
-  tool_telegram_enabled:
-    name: Telegram-Tool-Bootstrap
-    description: "Wenn AN, prüft der Start Telegram-Abhängigkeiten und installiert fehlende python-telegram-bot Pakete automatisch, wenn möglich."
-  tool_browser_enabled:
-    name: Browser-Tool-Bootstrap
-    description: "Wenn AN, prüft der Start Browser-Abhängigkeiten und installiert fehlende externe Tools (z.B. agent-browser), wenn möglich."
-  tool_skills_hub_enabled:
-    name: Skills-Hub-Bootstrap
-    description: "Wenn AN, initialisiert der Start das Skills-Hub-Verzeichnis automatisch (entspricht `hermes skills list` beim ersten Start)."
+  advanced_settings:
+    name: Erweiterte Einstellungen
+    description: Proxy, DNS, Nginx-Logging, Gateway-Umgebungsvariablen, Hermes-Version und Sitzungssperren-Bereinigung.
+    fields:
+      http_proxy:
+        name: Ausgehender HTTP-Proxy
+        description: Optionale Proxy-URL für ausgehende HTTP/HTTPS (Beispiel http://192.168.2.1:3128).
+      force_ipv4_dns:
+        name: IPv4-DNS-Reihenfolge erzwingen
+        description: Empfohlen EIN auf HAOS — vermeidet IPv6-Ausgangs-Timeouts für web_fetch und Telegram.
+      nginx_log_level:
+        name: Nginx Log-Level
+        description: Zugriffslog-Detailgrad für den eingebauten HTTPS-Proxy.
+        options:
+          minimal: "Minimal (HA-Polling-Rauschen unterdrücken)"
+          full: "Vollständig (alle Anfragen protokollieren)"
+      gateway_env_vars:
+        name: Gateway-Umgebungsvariablen
+        description: Zusätzliche Umgebungsvariablen für den Gateway-Prozess (max. 50 Einträge).
+      hermes_agent_version_preset:
+        name: Hermes-Agent-Version
+        description: npm-Paket für die `hermes`-CLI — latest oder benutzerdefinierte Version.
+        options:
+          latest: "Latest (npm @latest)"
+          custom: "Benutzerdefinierte Version (Standard 0.16.0)"
+      hermes_agent_version_custom:
+        name: Hermes-Agent-Version (benutzerdefiniert)
+        description: npm dist-tag oder Semver wenn Voreinstellung custom ist (Standard 0.16.0).
+      clean_session_locks_on_start:
+        name: Sitzungssperren beim Start bereinigen
+        description: Veraltete Sitzungssperrdateien beim Start des Add-ons entfernen.
+      clean_session_locks_on_exit:
+        name: Sitzungssperren beim Beenden bereinigen
+        description: Sitzungssperrdateien beim ordnungsgemäßen Herunterfahren entfernen.

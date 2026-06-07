@@ -116,7 +116,7 @@
           (HACS) for chat card, voice mode, and tool services.
         </div>
         <div style="margin-top:6px">
-          <b>Status sensors</b> (when <code>enable_ha_status_sensors</code> is ON):
+          <b>Status sensors</b> (when <code>mqtt_settings → Enable HA Status Sensors</code> is ON):
           MQTT entities auto-appear if the <b>Mosquitto</b> add-on is installed; otherwise use
           <code>/status.json</code> on this Ingress page.
         </div>
@@ -166,7 +166,7 @@
           <li>Create a <b>Long-Lived Access Token</b> in HA: click your profile avatar → scroll to <b>Long-Lived Access Tokens</b> → <b>Create Token</b></li>
           <li>Paste it into add-on option <code>homeassistant_token</code> in <b>Settings → Add-ons → Configuration</b></li>
           <li>Set <code>auto_configure_mcp</code> to <b>ON</b> in add-on Configuration</li>
-          <li>Leave <code>hass_url</code> empty on HAOS (autodetected) and restart — MCP is configured automatically</li>
+          <li>Leave <code>home_assistant → Home Assistant URL</code> empty on HAOS (autodetected) and restart — MCP is configured automatically</li>
         </ol>
 
         <b>Manual (Hermes built-in MCP)</b>

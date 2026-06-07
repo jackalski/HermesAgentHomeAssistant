@@ -3,25 +3,14 @@ configuration:
     name: Timezone
     description: Timezone for the add-on (e.g., Europe/Sofia, America/New_York)
 
-  enable_terminal:
-    name: Enable Web Terminal
-    description: Enable web terminal Button inside Home Assistant (Ingress) via ttyd
-
-  terminal_port:
-    name: Terminal Port
-    description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
-
-  gateway_public_url:
-    name: Gateway Public URL
-    description: Public base URL for opening the Gateway Web UI in a new tab (not embedded). Example - https://example.duckdns.org:12345 or http://192.168.1.10:18789
-
-  hass_url:
-    name: Home Assistant URL
-    description: "Home Assistant base URL for scripts/tools. Leave empty for autodetection on HAOS (recommended). Synced to HOMEASSISTANT_URL in /config/.hermes/.env when a token is set."
-
-  homeassistant_token:
-    name: Home Assistant Token
-    description: Long-lived access token for MCP and HA scripts. Masked after save. Synced to /config/secrets/homeassistant.token and /config/.hermes/.env on restart.
+  addon_log_level:
+    name: Add-on Log Level
+    description: Startup log verbosity for the add-on container (colors and emojis when the log terminal is interactive).
+    options:
+      error: "Errors only"
+      warn: "Warnings and errors"
+      info: "Info (default)"
+      debug: "Debug (verbose)"
 
   setup_profile:
     name: Setup Profile
@@ -80,149 +69,170 @@ configuration:
         name: SearXNG URL
         description: Synced as SEARXNG_URL.
 
-  addon_log_level:
-    name: Add-on Log Level
-    description: Startup log verbosity for the add-on container (colors and emojis when the log terminal is interactive).
-    options:
-      error: "Errors only"
-      warn: "Warnings and errors"
-      info: "Info (default)"
-      debug: "Debug (verbose)"
+  home_assistant:
+    name: Home Assistant Integration
+    description: Connect Hermes to your Home Assistant instance for MCP, scripts, and autodetection.
+    fields:
+      hass_url:
+        name: Home Assistant URL
+        description: "Leave empty for autodetection on HAOS (recommended). Synced to HOMEASSISTANT_URL in /config/.hermes/.env when a token is set."
+      homeassistant_token:
+        name: Home Assistant Token
+        description: Long-lived access token for MCP and HA scripts. Masked after save; persisted under /config/secrets/homeassistant.token.
+      auto_configure_mcp:
+        name: Auto-Configure MCP for Home Assistant
+        description: "When ON and token is set, registers Home Assistant in Hermes MCP (mcp_servers) on each startup."
 
-  http_proxy:
-    name: Outbound HTTP Proxy
-    description: Optional - Proxy URL for outbound HTTP/HTTPS requests (example - http://192.168.2.1:3128)
+  enable_terminal:
+    name: Enable Web Terminal
+    description: Enable web terminal Button inside Home Assistant (Ingress) via ttyd
 
-  router_ssh_host:
-    name: Router SSH Host
-    description: Optional - Router/firewall SSH hostname or IP address
+  terminal_port:
+    name: Terminal Port
+    description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
 
-  router_ssh_user:
-    name: Router SSH User
-    description: Optional - Router/firewall SSH username
+  gateway_access:
+    name: Gateway Access
+    description: Network access, authentication, and Assist API settings for the Hermes gateway.
+    fields:
+      access_mode:
+        name: Access Mode
+        description: "Simplifies secure access. Overrides bind/auth settings when not Custom."
+        options:
+          custom: "Custom (use individual settings)"
+          local_only: "Local Only (loopback + token, Ingress only)"
+          lan_https: "LAN HTTPS (built-in HTTPS proxy — recommended for phones)"
+          lan_reverse_proxy: "LAN Reverse Proxy (external proxy with trusted-proxy auth)"
+          tailnet_https: "Tailscale HTTPS (Tailscale bind + token)"
+      gateway_port:
+        name: Gateway Port
+        description: Port for the Hermes gateway (default 18789).
+      gateway_public_url:
+        name: Gateway Public URL
+        description: Public base URL for opening the Gateway Web UI in a new tab (not embedded).
+      enable_openai_api:
+        name: Enable OpenAI API
+        description: "Enables Hermes Assist API (API_SERVER_ENABLED). Extended OpenAI from HA Core: http://<LAN-IP>:8642/v1."
+      gateway_mode:
+        name: Gateway Mode
+        description: Local (run gateway in add-on) or remote (connect to external gateway).
+        options:
+          local: "Local (recommended)"
+          remote: "Remote"
+      gateway_remote_url:
+        name: Remote Gateway URL
+        description: WebSocket URL when Gateway Mode is Remote.
+      gateway_bind_mode:
+        name: Gateway Bind Mode
+        description: Loopback, LAN, or Tailscale bind. Overridden by Access Mode presets.
+        options:
+          loopback: "Loopback (127.0.0.1 only, most secure)"
+          lan: "LAN (all interfaces)"
+          tailnet: "Tailnet (Tailscale only)"
+      gateway_auth_mode:
+        name: Gateway Auth Mode
+        description: Token (default) or trusted-proxy for reverse proxies.
+        options:
+          token: "Token (default)"
+          trusted-proxy: "Trusted Proxy (for reverse proxies)"
+      gateway_trusted_proxies:
+        name: Gateway Trusted Proxies
+        description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode.
+      gateway_additional_allowed_origins:
+        name: Additional Allowed Origins
+        description: Extra Control UI origins (one per row); merged into allowedOrigins and TLS SAN in lan_https.
+      controlui_disable_device_auth:
+        name: Disable Control UI Device Pairing (lan_https)
+        description: "Recommended ON for home LAN — skips per-device approval (avoids error 1008)."
 
-  router_ssh_key_path:
-    name: Router SSH Key Path
-    description: Path to SSH private key for router access on persistent storage (default - /config/keys/router_ssh)
+  mqtt_settings:
+    name: MQTT Status Sensors
+    description: Broker connection and Home Assistant status sensor publishing (MQTT discovery + /status.json).
+    fields:
+      broker_host:
+        name: MQTT Broker Host
+        description: "Broker IP or hostname. Leave empty to autodetect Mosquitto (supervisor/bashio/loopback)."
+      broker_port:
+        name: MQTT Broker Port
+        description: MQTT broker port (default 1883).
+      broker_username:
+        name: MQTT Username
+        description: Optional Mosquitto username (leave empty when auth is disabled).
+      broker_password:
+        name: MQTT Password
+        description: Optional Mosquitto password. Masked after save; persisted under /config/secrets/mqtt.password.
+      enable_ha_status_sensors:
+        name: Enable HA Status Sensors
+        description: Publish setup, gateway health, model/provider, and usage metrics to Home Assistant.
+      publish_mqtt_discovery:
+        name: Publish MQTT Discovery
+        description: Auto-create HA entities when Mosquitto is available. Disable to use /status.json only.
+      status_poll_interval_seconds:
+        name: Status Poll Interval (seconds)
+        description: Refresh interval for sensors and /share/hermes/status.json (30-300).
+      state_prefix:
+        name: MQTT State Topic Prefix
+        description: "Prefix for state topics (default hermes). Example: hermes/status/gateway_running."
 
-  clean_session_locks_on_start:
-    name: Clean Session Locks on Start
-    description: Cleanup stale session lock files left after crashes/restarts when add-on starts
+  router_ssh:
+    name: Router SSH
+    description: Optional SSH access to a router or network device reachable from the HA host LAN.
+    fields:
+      host:
+        name: Router SSH Host
+        description: Router/firewall SSH hostname or IP address.
+      user:
+        name: Router SSH User
+        description: SSH username for router access.
+      key_path:
+        name: Router SSH Key Path
+        description: Path to private key on persistent storage (default /config/keys/router_ssh).
 
-  clean_session_locks_on_exit:
-    name: Clean Session Locks on Exit
-    description: Cleanup session lock files when add-on stops gracefully
+  tools_bootstrap:
+    name: Tool Bootstrap
+    description: Verify and auto-install optional Hermes tool dependencies on startup.
+    fields:
+      tool_telegram_enabled:
+        name: Enable Telegram Tool Bootstrap
+        description: Auto-install Telegram Python dependencies when missing.
+      tool_browser_enabled:
+        name: Enable Browser Tool Bootstrap
+        description: Auto-install browser tool dependencies (e.g. agent-browser) when missing.
+      tool_skills_hub_enabled:
+        name: Enable Skills Hub Bootstrap
+        description: Initialize Skills Hub directory on startup (like first-run `hermes skills list`).
 
-  gateway_mode:
-    name: Gateway Mode
-    description: Gateway operation mode - local (run gateway locally, recommended) or remote (connect to a remote gateway)
-    options:
-      local: "Local (recommended)"
-      remote: "Remote"
-
-  gateway_remote_url:
-    name: Remote Gateway URL
-    description: Remote gateway WebSocket URL used when Gateway Mode is Remote (example - ws://192.168.1.20:18789 or wss://gateway.example.com:443)
-
-  gateway_additional_allowed_origins:
-    name: Additional Allowed Origins
-    description: Extra Control UI origins (one per row). Merged into gateway.controlUi.allowedOrigins; in lan_https hostnames are also added to the TLS certificate SAN.
-
-  controlui_disable_device_auth:
-    name: Disable Control UI Device Pairing (lan_https)
-    description: "When ON (recommended), sets gateway.controlUi.dangerouslyDisableDeviceAuth=true to skip per-device approval and avoid error 1008 in LAN HTTPS mode. Keep ON for home/trusted LAN. Turn OFF only when you want strict per-device pairing prompts on every new browser/device."
-
-  gateway_bind_mode:
-    name: Gateway Bind Mode
-    description: Network bind mode - loopback (127.0.0.1 only, most secure), lan (all interfaces), or tailnet (Tailscale interface only). Overridden by access_mode presets.
-    options:
-      loopback: "Loopback (127.0.0.1 only, most secure)"
-      lan: "LAN (all interfaces)"
-      tailnet: "Tailnet (Tailscale only)"
-
-  gateway_port:
-    name: Gateway Port
-    description: Port for the Hermes Agent gateway (default 18789)
-
-  access_mode:
-    name: Access Mode
-    description: "Simplifies secure access setup. Overrides gateway_bind_mode and gateway_auth_mode when not set to Custom."
-    options:
-      custom: "Custom (use individual settings)"
-      local_only: "Local Only (loopback + token, Ingress only)"
-      lan_https: "LAN HTTPS (built-in HTTPS proxy — recommended for phones)"
-      lan_reverse_proxy: "LAN Reverse Proxy (external proxy with trusted-proxy auth)"
-      tailnet_https: "Tailscale HTTPS (Tailscale bind + token)"
-
-  gateway_auth_mode:
-    name: Gateway Auth Mode
-    description: Gateway auth mode - token (default) or trusted-proxy (for HTTPS reverse proxies). Overridden when access_mode is not Custom.
-    options:
-      token: "Token (default)"
-      trusted-proxy: "Trusted Proxy (for reverse proxies)"
-
-  gateway_trusted_proxies:
-    name: Gateway Trusted Proxies
-    description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode. Example - 127.0.0.1 or 192.168.88.0/24.
-
-  enable_openai_api:
-    name: Enable OpenAI API
-    description: "Enables Hermes Assist API (syncs API_SERVER_ENABLED to .env; HTTP on 0.0.0.0:8642, bearer token required). Extended OpenAI from HA Core: Base URL http://<LAN-IP>:8642/v1, API key = gateway token, model hermes-agent."
-
-  enable_ha_status_sensors:
-    name: Enable HA Status Sensors
-    description: "Publish Hermes setup, gateway health, model/provider, and usage metrics to Home Assistant via MQTT discovery (when Mosquitto is installed) and a safe /status.json snapshot on Ingress."
-
-  publish_mqtt_discovery:
-    name: Publish MQTT Discovery
-    description: "When ON and the Mosquitto add-on is running, auto-create Home Assistant entities for Hermes status sensors. Disable if you only want the /status.json API."
-
-  status_poll_interval_seconds:
-    name: Status Poll Interval (seconds)
-    description: "How often to refresh status sensors and /share/hermes/status.json. Allowed range 30-300. Higher values reduce flash writes on SD-card installs."
-
-  mqtt_state_prefix:
-    name: MQTT State Topic Prefix
-    description: "Prefix for MQTT state topics (default hermes). State topics look like <prefix>/status/gateway_running."
-
-  force_ipv4_dns:
-    name: Force IPv4 DNS Order
-    description: Force IPv4-first DNS ordering for Node network calls. Most HAOS VMs lack IPv6 egress, causing web_fetch and Telegram timeouts. Recommended ON (default).
-
-  nginx_log_level:
-    name: Nginx Log Level
-    description: "Access log verbosity for the built-in nginx proxy. 'minimal' (default) suppresses repetitive HA health-check and polling requests. 'full' logs everything."
-    options:
-      minimal: "Minimal (suppress HA polling noise)"
-      full: "Full (log all requests)"
-
-  gateway_env_vars:
-    name: Gateway Environment Variables
-    description: Environment variables passed to the Hermes Agent gateway process at startup (list entries with name/value in Home Assistant UI; max 50 variables, keys up to 255 characters, values up to 10,000 characters).
-
-  auto_configure_mcp:
-    name: Auto-Configure MCP for Home Assistant
-    description: "When ON and Home Assistant Token is set, automatically registers Home Assistant in Hermes built-in MCP (mcp_servers) on each startup. This lets Hermes Agent control HA entities, services, and automations via the Model Context Protocol. Disable only if you manage Hermes MCP configuration manually."
-
-  hermes_agent_version_preset:
-    name: Hermes Agent Version
-    description: "npm package installed on startup (provides the `hermes` CLI). Default custom pins 0.16.0; latest tracks npm @latest."
-    options:
-      latest: "Latest (npm @latest)"
-      custom: "Custom version (default 0.16.0)"
-
-  hermes_agent_version_custom:
-    name: Hermes Agent Version (custom)
-    description: "npm dist-tag or semver when Hermes Agent Version is custom (default 0.16.0). Applied on next add-on restart."
-
-  tool_telegram_enabled:
-    name: Enable Telegram Tool Bootstrap
-    description: "When ON, startup verifies Telegram tool dependencies and auto-installs missing Python package(s) when possible (warns and continues on failure)."
-
-  tool_browser_enabled:
-    name: Enable Browser Tool Bootstrap
-    description: "When ON, startup verifies browser tool dependencies and auto-installs missing external tools (for example agent-browser) when possible."
-
-  tool_skills_hub_enabled:
-    name: Enable Skills Hub Bootstrap
-    description: "When ON, startup initializes Skills Hub directory automatically (equivalent to first-run `hermes skills list`) to reduce doctor warnings."
+  advanced_settings:
+    name: Advanced Settings
+    description: Proxy, DNS, nginx logging, gateway env vars, Hermes version, and session lock cleanup.
+    fields:
+      http_proxy:
+        name: Outbound HTTP Proxy
+        description: Optional proxy URL for outbound HTTP/HTTPS (example http://192.168.2.1:3128).
+      force_ipv4_dns:
+        name: Force IPv4 DNS Order
+        description: Recommended ON on HAOS — avoids IPv6 egress timeouts for web_fetch and Telegram.
+      nginx_log_level:
+        name: Nginx Log Level
+        description: Access log verbosity for the built-in HTTPS proxy.
+        options:
+          minimal: "Minimal (suppress HA polling noise)"
+          full: "Full (log all requests)"
+      gateway_env_vars:
+        name: Gateway Environment Variables
+        description: Extra env vars passed to the gateway process (max 50 entries).
+      hermes_agent_version_preset:
+        name: Hermes Agent Version
+        description: npm package for the `hermes` CLI — latest or custom pin.
+        options:
+          latest: "Latest (npm @latest)"
+          custom: "Custom version (default 0.16.0)"
+      hermes_agent_version_custom:
+        name: Hermes Agent Version (custom)
+        description: npm dist-tag or semver when preset is custom (default 0.16.0).
+      clean_session_locks_on_start:
+        name: Clean Session Locks on Start
+        description: Remove stale session lock files when the add-on starts.
+      clean_session_locks_on_exit:
+        name: Clean Session Locks on Exit
+        description: Remove session lock files on graceful shutdown.
