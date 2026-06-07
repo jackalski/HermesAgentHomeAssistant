@@ -186,7 +186,7 @@ configuration:
         description: Publikuje konfigurację, stan gateway, model/dostawcę i metryki użycia do Home Assistant.
       publish_mqtt_discovery:
         name: Publikuj MQTT discovery
-        description: Automatycznie twórz encje HA gdy Mosquitto jest dostępny. Wyłącz, aby używać tylko /status.json.
+        description: Twórz encje HA raz na wersję dodatku (znacznik /config/.hermes/.mqtt_discovery_published). Wyłącz, aby używać tylko /status.json.
       status_poll_interval_seconds:
         name: Interwał odświeżania statusu (sekundy)
         description: Interwał odświeżania dla sensorów i /share/hermes/status.json (30-300).

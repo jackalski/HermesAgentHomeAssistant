@@ -2,6 +2,16 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.19] - 2026-06-07
+
+### Fixed
+- Add-on startup now stamps `/config/.hermes/.install_method` as **docker** so Hermes CLI no longer mis-detects the npm/wheel layout as an unsupported `pip install`.
+- MQTT sensor **Auxiliary Title Model** now mirrors the configured **main** `model.provider` / `model.default` as `provider/model` (ignores bootstrapped `auxiliary.title_generation` defaults).
+
+### Changed
+- MQTT status exporter uses a **persistent `paho-mqtt` client** (one broker connection per poll cycle instead of one `mosquitto_pub` per message).
+- **MQTT discovery is one-shot** — published once per add-on version + topic prefix (marker: `/config/.hermes/.mqtt_discovery_published`). Delete that file to force re-discovery.
+
 ## [0.0.18] - 2026-06-07
 
 ### Added

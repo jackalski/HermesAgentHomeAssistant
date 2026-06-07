@@ -47,8 +47,9 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.18"
+ADDON_VERSION = "0.0.19"
 STATUS_FILE = Path("/share/hermes/status.json")
+DISCOVERY_MARKER = HERMES_STATE_DIR / ".mqtt_discovery_published"
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
 
@@ -240,6 +241,41 @@ def _query_state_db() -> dict[str, Any]:
         return defaults
 
 
+def _format_provider_model(
+    provider: str,
+    model: str,
+    *,
+    fallback_provider: str = "",
+    fallback_model: str = "",
+) -> str:
+    """Render a stable provider/model label for MQTT status sensors."""
+    provider = (provider or "").strip()
+    model = (model or "").strip()
+    fallback_provider = (fallback_provider or "").strip()
+    fallback_model = (fallback_model or "").strip()
+    prov_lower = provider.lower()
+
+    if prov_lower in ("", "auto"):
+        if model:
+            if "/" in model:
+                return model
+            if fallback_provider:
+                return f"{fallback_provider}/{model}"
+            return model
+        if fallback_provider and fallback_model:
+            return _format_provider_model(fallback_provider, fallback_model)
+        return ""
+
+    if not model:
+        return provider
+
+    if "/" in model:
+        prefix = model.split("/", 1)[0].lower()
+        if prefix == prov_lower:
+            return model
+    return f"{provider}/{model}"
+
+
 def _model_fields(cfg: dict | None) -> tuple[str, str, str]:
     if not cfg:
         return "", "", ""
@@ -252,14 +288,8 @@ def _model_fields(cfg: dict | None) -> tuple[str, str, str]:
     elif isinstance(model, str):
         main_model = model.strip()
 
-    aux_model = ""
-    auxiliary = cfg.get("auxiliary")
-    if isinstance(auxiliary, dict):
-        title = auxiliary.get("title_generation")
-        if isinstance(title, dict):
-            tp = str(title.get("provider", "") or "").strip()
-            tm = str(title.get("model", "") or "").strip()
-            aux_model = f"{tp}/{tm}".strip("/") if tp or tm else ""
+    # Reflect the configured main model (not bootstrapped auxiliary.title_generation).
+    aux_model = _format_provider_model(main_provider, main_model)
 
     return main_provider, main_model, aux_model
 
@@ -386,46 +416,130 @@ def resolve_mqtt_config(payload: dict) -> dict[str, Any]:
     return mqtt_cfg if isinstance(mqtt_cfg, dict) else {}
 
 
-def _mqtt_pub(mqtt_cfg: dict, topic: str, payload: str, retain: bool = False) -> bool:
-    host = mqtt_cfg.get("host", "")
-    port = str(mqtt_cfg.get("port", "1883"))
-    user = mqtt_cfg.get("username", "")
-    password = mqtt_cfg.get("password", "")
-    if not host:
-        return False
+def _discovery_marker_key(prefix: str) -> str:
+    return f"{ADDON_VERSION}:{prefix.rstrip('/')}"
 
-    cmd = [
-        "mosquitto_pub",
-        "-h",
-        host,
-        "-p",
-        port,
-        "-t",
-        topic,
-        "-m",
-        payload,
-    ]
-    if user:
-        cmd.extend(["-u", user])
-    if password:
-        cmd.extend(["-P", password])
-    if retain:
-        cmd.append("-r")
 
+def discovery_needs_publish(prefix: str) -> bool:
+    expected = _discovery_marker_key(prefix)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
-        if proc.returncode != 0:
-            err = (proc.stderr or proc.stdout or "").strip()
-            print(f"WARN: mosquitto_pub failed for {topic}: {err}", file=sys.stderr)
-            return False
+        return DISCOVERY_MARKER.read_text(encoding="utf-8").strip() != expected
+    except OSError:
         return True
-    except (OSError, subprocess.TimeoutExpired) as e:
-        print(f"WARN: mosquitto_pub error for {topic}: {e}", file=sys.stderr)
-        return False
 
 
-def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str) -> bool:
-    if not mqtt_cfg.get("host"):
+def mark_discovery_published(prefix: str) -> None:
+    try:
+        DISCOVERY_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        DISCOVERY_MARKER.write_text(_discovery_marker_key(prefix) + "\n", encoding="utf-8")
+    except OSError as e:
+        print(f"WARN: Failed to write MQTT discovery marker: {e}", file=sys.stderr)
+
+
+class MqttPublisher:
+    """Persistent MQTT client — one broker connection per poll cycle."""
+
+    CLIENT_ID = "hermes-agent-integration"
+    KEEPALIVE = 60
+    CONNECT_TIMEOUT = 15
+    PUBLISH_TIMEOUT = 10
+
+    def __init__(self) -> None:
+        self._client: Any = None
+        self._cfg_key: str | None = None
+        self._loop_running = False
+
+    def _cfg_key_from(self, mqtt_cfg: dict) -> str:
+        host = str(mqtt_cfg.get("host", "") or "").strip()
+        port = str(mqtt_cfg.get("port", "1883") or "1883")
+        user = str(mqtt_cfg.get("username", "") or "")
+        return f"{host}:{port}:{user}"
+
+    def is_ready(self) -> bool:
+        if self._client is None:
+            return False
+        try:
+            return bool(self._client.is_connected())
+        except Exception:
+            return False
+
+    def disconnect(self) -> None:
+        if self._client is not None:
+            try:
+                if self._loop_running:
+                    self._client.loop_stop()
+                    self._loop_running = False
+                self._client.disconnect()
+            except Exception:
+                pass
+        self._client = None
+        self._cfg_key = None
+
+    def _make_client(self) -> Any:
+        import paho.mqtt.client as mqtt
+
+        try:
+            return mqtt.Client(
+                mqtt.CallbackAPIVersion.VERSION1,
+                client_id=self.CLIENT_ID,
+                protocol=mqtt.MQTTv311,
+            )
+        except (AttributeError, TypeError):
+            return mqtt.Client(client_id=self.CLIENT_ID, protocol=mqtt.MQTTv311)
+
+    def ensure_connected(self, mqtt_cfg: dict) -> bool:
+        host = str(mqtt_cfg.get("host", "") or "").strip()
+        if not host:
+            self.disconnect()
+            return False
+
+        port = int(str(mqtt_cfg.get("port", "1883") or "1883"))
+        user = str(mqtt_cfg.get("username", "") or "")
+        password = str(mqtt_cfg.get("password", "") or "")
+        cfg_key = self._cfg_key_from(mqtt_cfg)
+
+        if self._client is not None and self._cfg_key == cfg_key and self.is_ready():
+            return True
+
+        self.disconnect()
+        try:
+            client = self._make_client()
+            if user:
+                client.username_pw_set(user, password or None)
+            client.connect(host, port, keepalive=self.KEEPALIVE)
+            client.loop_start()
+            for _ in range(50):
+                if client.is_connected():
+                    break
+                time.sleep(0.1)
+            if not client.is_connected():
+                raise RuntimeError("broker did not acknowledge connection")
+            self._client = client
+            self._cfg_key = cfg_key
+            self._loop_running = True
+            return True
+        except Exception as e:
+            print(f"WARN: MQTT connect failed ({host}:{port}): {e}", file=sys.stderr)
+            self.disconnect()
+            return False
+
+    def publish(self, topic: str, payload: str, retain: bool = False) -> bool:
+        if not self.is_ready():
+            return False
+        try:
+            info = self._client.publish(topic, payload, qos=1, retain=retain)
+            if not info.wait_for_publish(timeout=self.PUBLISH_TIMEOUT):
+                print(f"WARN: MQTT publish timed out for {topic}", file=sys.stderr)
+                return False
+            return True
+        except Exception as e:
+            print(f"WARN: MQTT publish failed for {topic}: {e}", file=sys.stderr)
+            self.disconnect()
+            return False
+
+
+def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, prefix: str) -> bool:
+    if not publisher.is_ready():
         return False
 
     device = _device_block(str(snapshot.get("hermes_agent_version", "unknown")))
@@ -455,7 +569,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str
         if device_class:
             cfg["device_class"] = device_class
         topic = f"homeassistant/binary_sensor/hermes_agent/{name}/config"
-        _mqtt_pub(mqtt_cfg, topic, json.dumps(cfg), retain=True)
+        publisher.publish(topic, json.dumps(cfg), retain=True)
 
     for prov_name, _ in PROVIDER_SENSOR_NAMES:
         cfg = {
@@ -470,7 +584,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str
             "device": device,
         }
         topic = f"homeassistant/binary_sensor/hermes_agent/provider_{prov_name}/config"
-        _mqtt_pub(mqtt_cfg, topic, json.dumps(cfg), retain=True)
+        publisher.publish(topic, json.dumps(cfg), retain=True)
 
     text_sensors = [
         ("main_provider", "Main Provider"),
@@ -493,7 +607,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str
             "device": device,
         }
         topic = f"homeassistant/sensor/hermes_agent/{key}/config"
-        _mqtt_pub(mqtt_cfg, topic, json.dumps(cfg), retain=True)
+        publisher.publish(topic, json.dumps(cfg), retain=True)
 
     numeric_sensors = [
         ("input_tokens_total", "Input Tokens Total", None),
@@ -524,7 +638,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str
         if key == "estimated_cost_usd":
             cfg["unit_of_measurement"] = "USD"
         topic = f"homeassistant/sensor/hermes_agent/{key}/config"
-        _mqtt_pub(mqtt_cfg, topic, json.dumps(cfg), retain=True)
+        publisher.publish(topic, json.dumps(cfg), retain=True)
 
     usage_summary_cfg = {
         "name": "Hermes Usage Summary",
@@ -536,8 +650,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str
         "payload_not_available": "offline",
         "device": device,
     }
-    _mqtt_pub(
-        mqtt_cfg,
+    publisher.publish(
         "homeassistant/sensor/hermes_agent/usage_summary/config",
         json.dumps(usage_summary_cfg),
         retain=True,
@@ -545,15 +658,15 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str
     return True
 
 
-def publish_mqtt_state(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str) -> bool:
-    if not mqtt_cfg.get("host"):
+def publish_mqtt_state(snapshot: dict[str, Any], publisher: MqttPublisher, prefix: str) -> bool:
+    if not publisher.is_ready():
         return False
 
     base = prefix.rstrip("/")
-    _mqtt_pub(mqtt_cfg, f"{base}/status/availability", "online", retain=True)
+    publisher.publish(f"{base}/status/availability", "online", retain=True)
 
     def pub_bool(key: str, value: bool):
-        _mqtt_pub(mqtt_cfg, f"{base}/status/{key}", "true" if value else "false")
+        publisher.publish(f"{base}/status/{key}", "true" if value else "false")
 
     pub_bool("gateway_running", bool(snapshot.get("gateway_running")))
     pub_bool("api_key_configured", bool(snapshot.get("api_key_configured")))
@@ -577,7 +690,7 @@ def publish_mqtt_state(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str) ->
         "access_mode",
         "gateway_mode",
     ):
-        _mqtt_pub(mqtt_cfg, f"{base}/status/{key}", str(snapshot.get(key, "unknown")))
+        publisher.publish(f"{base}/status/{key}", str(snapshot.get(key, "unknown")))
 
     usage = snapshot.get("usage", {})
     if not isinstance(usage, dict):
@@ -586,9 +699,9 @@ def publish_mqtt_state(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str) ->
     def pub_num(key: str, src_key: str):
         val = usage.get(src_key) if src_key in usage else snapshot.get(src_key)
         if val is None:
-            _mqtt_pub(mqtt_cfg, f"{base}/status/{key}", "unknown")
+            publisher.publish(f"{base}/status/{key}", "unknown")
         else:
-            _mqtt_pub(mqtt_cfg, f"{base}/status/{key}", str(val))
+            publisher.publish(f"{base}/status/{key}", str(val))
 
     pub_num("input_tokens_total", "input_tokens_total")
     pub_num("output_tokens_total", "output_tokens_total")
@@ -600,8 +713,7 @@ def publish_mqtt_state(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str) ->
     pub_num("tool_call_count_total", "tool_call_count_total")
 
     disk = snapshot.get("disk_usage_percent")
-    _mqtt_pub(
-        mqtt_cfg,
+    publisher.publish(
         f"{base}/status/disk_usage_percent",
         "unknown" if disk is None else str(disk),
     )
@@ -613,32 +725,51 @@ def publish_mqtt_state(snapshot: dict[str, Any], mqtt_cfg: dict, prefix: str) ->
         "gateway_health_probe_at": snapshot.get("gateway_health_probe_at"),
         "updated_at": snapshot.get("updated_at"),
     }
-    _mqtt_pub(mqtt_cfg, f"{base}/status/usage_attributes", json.dumps(attrs))
+    publisher.publish(f"{base}/status/usage_attributes", json.dumps(attrs))
     total = usage.get("total_tokens")
-    _mqtt_pub(
-        mqtt_cfg,
+    publisher.publish(
         f"{base}/status/usage_summary_state",
         "unknown" if total is None else str(total),
     )
     return True
 
 
-def run_once(payload: dict) -> bool:
-    snapshot = collect_status_snapshot(payload)
-    ok = write_status_file(STATUS_FILE, snapshot)
-
-    mqtt_cfg = resolve_mqtt_config(payload)
-    publish_discovery = str(payload.get("publish_mqtt_discovery", "true")).lower() in (
+def _publish_mqtt_discovery_enabled(payload: dict) -> bool:
+    return str(payload.get("publish_mqtt_discovery", "true")).lower() in (
         "1",
         "true",
         "yes",
     )
-    prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
 
-    if mqtt_cfg.get("host"):
-        if publish_discovery:
-            publish_mqtt_discovery(snapshot, mqtt_cfg, prefix)
-        publish_mqtt_state(snapshot, mqtt_cfg, prefix)
+
+def publish_mqtt_updates(
+    snapshot: dict[str, Any],
+    payload: dict,
+    publisher: MqttPublisher,
+) -> bool:
+    mqtt_cfg = resolve_mqtt_config(payload)
+    if not mqtt_cfg.get("host"):
+        publisher.disconnect()
+        return False
+    if not publisher.ensure_connected(mqtt_cfg):
+        return False
+
+    prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
+    if _publish_mqtt_discovery_enabled(payload) and discovery_needs_publish(prefix):
+        if publish_mqtt_discovery(snapshot, publisher, prefix):
+            mark_discovery_published(prefix)
+            print(
+                f"INFO: MQTT discovery published once (prefix={prefix}, addon={ADDON_VERSION})",
+                file=sys.stderr,
+            )
+    return publish_mqtt_state(snapshot, publisher, prefix)
+
+
+def run_once(payload: dict, publisher: MqttPublisher | None = None) -> bool:
+    snapshot = collect_status_snapshot(payload)
+    ok = write_status_file(STATUS_FILE, snapshot)
+    if publisher is not None:
+        publish_mqtt_updates(snapshot, payload, publisher)
     return ok
 
 
@@ -647,34 +778,40 @@ def run_loop(payload: dict) -> int:
     interval = max(30, min(300, interval))
     mqtt_unavailable_logged = False
     mqtt_available_logged = False
+    publisher = MqttPublisher()
 
-    while True:
-        mqtt_cfg = resolve_mqtt_config(payload)
-        if mqtt_cfg.get("host"):
-            if not mqtt_available_logged:
-                source = mqtt_cfg.get("source", "resolved")
+    try:
+        while True:
+            mqtt_cfg = resolve_mqtt_config(payload)
+            if mqtt_cfg.get("host"):
+                if not mqtt_available_logged:
+                    source = mqtt_cfg.get("source", "resolved")
+                    print(
+                        f"INFO: MQTT broker resolved ({source}): "
+                        f"{mqtt_cfg['host']}:{mqtt_cfg.get('port', '1883')}",
+                        file=sys.stderr,
+                    )
+                    mqtt_available_logged = True
+                    mqtt_unavailable_logged = False
+            elif not mqtt_unavailable_logged:
                 print(
-                    f"INFO: MQTT broker resolved ({source}): "
-                    f"{mqtt_cfg['host']}:{mqtt_cfg.get('port', '1883')}",
+                    "INFO: MQTT broker not available yet; status sensors will retry each poll "
+                    "(ensure Mosquitto add-on is running)",
                     file=sys.stderr,
                 )
-                mqtt_available_logged = True
-                mqtt_unavailable_logged = False
-        elif not mqtt_unavailable_logged:
-            print(
-                "INFO: MQTT broker not available yet; status sensors will retry each poll "
-                "(ensure Mosquitto add-on is running)",
-                file=sys.stderr,
-            )
-            mqtt_unavailable_logged = True
-            mqtt_available_logged = False
+                publisher.disconnect()
+                mqtt_unavailable_logged = True
+                mqtt_available_logged = False
 
-        try:
-            run_once(payload)
-        except Exception as e:
-            print(f"WARN: Status exporter cycle failed: {e}", file=sys.stderr)
+            try:
+                run_once(payload, publisher)
+            except Exception as e:
+                print(f"WARN: Status exporter cycle failed: {e}", file=sys.stderr)
 
-        time.sleep(interval)
+            time.sleep(interval)
+    finally:
+        publisher.disconnect()
+    return 0
 
 
 def main():
@@ -702,12 +839,11 @@ def main():
         sys.exit(0 if write_status_file(STATUS_FILE, snapshot) else 1)
     if cmd == "publish-mqtt":
         snapshot = collect_status_snapshot(payload)
-        mqtt_cfg = resolve_mqtt_config(payload)
-        prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
-        ok = True
-        if str(payload.get("publish_mqtt_discovery", "true")).lower() in ("1", "true", "yes"):
-            ok = publish_mqtt_discovery(snapshot, mqtt_cfg, prefix) and ok
-        ok = publish_mqtt_state(snapshot, mqtt_cfg, prefix) and ok
+        publisher = MqttPublisher()
+        try:
+            ok = publish_mqtt_updates(snapshot, payload, publisher)
+        finally:
+            publisher.disconnect()
         sys.exit(0 if ok else 1)
     if cmd == "run-loop":
         sys.exit(run_loop(payload))

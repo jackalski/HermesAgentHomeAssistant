@@ -186,7 +186,7 @@ configuration:
         description: Publish setup, gateway health, model/provider, and usage metrics to Home Assistant.
       publish_mqtt_discovery:
         name: Publish MQTT Discovery
-        description: Auto-create HA entities when Mosquitto is available. Disable to use /status.json only.
+        description: Auto-create HA entities once per add-on version (marker /config/.hermes/.mqtt_discovery_published). Disable to use /status.json only.
       status_poll_interval_seconds:
         name: Status Poll Interval (seconds)
         description: Refresh interval for sensors and /share/hermes/status.json (30-300).
