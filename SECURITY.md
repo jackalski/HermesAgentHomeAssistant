@@ -103,7 +103,7 @@ Hermes Agent supports installing skills from community sources and via npm. Thes
 
 ### 6. Router SSH Access
 
-The `router_ssh_*` options allow the add-on to SSH into your router or network devices. This grants **direct access to your network infrastructure**.
+The `router_ssh_*` options allow the add-on to SSH into your router or network devices. Private keys should live on persistent storage (default `/config/keys/router_ssh`). This grants **direct access to your network infrastructure**.
 
 **Risks**:
 - A compromised add-on could reconfigure your router

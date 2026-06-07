@@ -89,7 +89,12 @@ def apply_gateway_settings(mode: str, remote_url: str, bind_mode: str, port: int
     remote_cfg = gateway.setdefault("remote", {})
     auth = gateway.setdefault("auth", {})
     chat_completions = gateway.setdefault("http", {}).setdefault("endpoints", {}).setdefault("chatCompletions", {})
-    trusted_proxies = [p.strip() for p in trusted_proxies_csv.split(",") if p.strip()]
+    trusted_proxies = []
+    for p in [x.strip() for x in trusted_proxies_csv.split(",") if x.strip()]:
+        if is_valid_ip_cidr(p):
+            trusted_proxies.append(p)
+        else:
+            print(f"WARN: Skipping invalid trusted proxy entry (expected IP/CIDR): {p!r}", file=sys.stderr)
 
     gateway["mode"] = mode
     remote_cfg["url"] = remote_url
@@ -166,6 +171,48 @@ ADDON_API_KEY_ENV_MAP = {
     "FIRECRAWL_API_KEY": "firecrawl_api_key",
     "SEARXNG_URL": "searxng_url",
 }
+
+
+IP_CIDR_RE = re.compile(
+    r"^("
+    r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}"
+    r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\/(?:[0-9]|[1-2][0-9]|3[0-2]))?"
+    r"|"
+    r"(?:[0-9a-fA-F:]+)(?:\/\d{1,3})?"
+    r")$"
+)
+
+
+def is_valid_ip_cidr(value: str) -> bool:
+    return bool(IP_CIDR_RE.match((value or "").strip()))
+
+
+def read_env_var(key: str) -> str:
+    if not HERMES_ENV_PATH.exists():
+        return ""
+    prefix = f"{key}="
+    try:
+        for line in HERMES_ENV_PATH.read_text(encoding="utf-8").splitlines():
+            if line.startswith(prefix):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        return ""
+    return ""
+
+
+def merge_addon_secrets_with_persisted(secrets: dict) -> dict:
+    """Keep persisted /config/.hermes/.env values when add-on options are empty (e.g. after reinstall)."""
+    if not isinstance(secrets, dict):
+        return {}
+    merged = dict(secrets)
+    for env_key in ADDON_API_KEY_ENV_MAP:
+        value = merged.get(env_key, "")
+        if isinstance(value, str) and value.strip():
+            continue
+        persisted = read_env_var(env_key)
+        if persisted:
+            merged[env_key] = persisted
+    return merged
 
 
 def upsert_env_var(key: str, value: str):
@@ -733,6 +780,7 @@ def sync_addon_api_keys(secrets: dict):
         print("ERROR: sync-addon-api-keys expects a JSON object", file=sys.stderr)
         return False
 
+    secrets = merge_addon_secrets_with_persisted(secrets)
     synced = []
     for env_key in ADDON_API_KEY_ENV_MAP:
         value = secrets.get(env_key, "")

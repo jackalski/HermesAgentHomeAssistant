@@ -2,6 +2,23 @@
 
 All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
 
+## [0.0.16] - 2026-06-07
+
+### Added
+- **`addon_log_level`** option (error / warn / info / debug) with unified startup logging (colors + emojis on TTY).
+- **`provider_api_keys`** expansion panel in add-on configuration — groups all provider/tool tokens.
+- **List-style UI** for `gateway_trusted_proxies` and `gateway_additional_allowed_origins` (add-row like Gateway Environment Variables); trusted proxies validated as IP/CIDR.
+- **`hermes_mqtt_resolver.py`** — improved Mosquitto detection (env, supervisor, bashio, host-network loopback fallback).
+
+### Changed
+- Router SSH keys default to **`/config/keys/router_ssh`** (persistent); legacy `/data/keys/router_ssh` migrated on startup.
+- Add-on API keys and HA token **preserve existing `/config/.hermes/.env` values** when options are empty after reinstall (HA secret redaction).
+- `terminal_port` and `gateway_port` use **`port`** schema for clearer HA UI defaults.
+- Startup logs use **`addon_log.sh`** helpers instead of raw `echo INFO/WARN/ERROR`.
+
+### Fixed
+- MQTT status sensors retry broker resolution each poll when Mosquitto starts after the add-on.
+
 ## [0.0.15] - 2026-06-06
 
 ### Fixed

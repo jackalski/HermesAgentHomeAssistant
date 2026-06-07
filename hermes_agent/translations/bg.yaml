@@ -9,7 +9,7 @@ configuration:
   
   terminal_port:
     name: Порт на терминал
-    description: Номер на порт за уеб терминала (по подразбиране - 7681). Променете, ако този порт е в конфликт с друга услуга.
+    description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
   
   gateway_public_url:
     name: Публичен URL на Gateway
@@ -45,13 +45,49 @@ configuration:
     name: Модел (custom)
     description: "Model ID при предустановка custom. Bootstrap само при първо стартиране, ако няма конфигуриран модел."
 
-  firecrawl_api_key:
-    name: Firecrawl API ключ
-    description: "Опционален токен за web search, синхронизиран като FIRECRAWL_API_KEY в /config/.hermes/.env."
+  provider_api_keys:
+    name: Provider API Keys
+    description: Optional provider and tool tokens synced to /config/.hermes/.env on restart. OAuth/device-code providers still require `hermes auth` in terminal.
+    fields:
+      openai_api_key:
+        name: OpenAI API Key
+        description: Synced as OPENAI_API_KEY.
+      openrouter_api_key:
+        name: OpenRouter API Key
+        description: Synced as OPENROUTER_API_KEY.
+      anthropic_api_key:
+        name: Anthropic API Key
+        description: Synced as ANTHROPIC_API_KEY.
+      google_api_key:
+        name: Google API Key
+        description: Synced as GOOGLE_API_KEY.
+      minimax_api_key:
+        name: MiniMax API Key
+        description: Synced as MINIMAX_API_KEY.
+      discord_bot_token:
+        name: Discord Bot Token
+        description: Synced as DISCORD_BOT_TOKEN.
+      github_token:
+        name: GitHub Token
+        description: Synced as GITHUB_TOKEN.
+      xai_api_key:
+        name: xAI API Key
+        description: Synced as XAI_API_KEY.
+      firecrawl_api_key:
+        name: Firecrawl API Key
+        description: Synced as FIRECRAWL_API_KEY.
+      searxng_url:
+        name: SearXNG URL
+        description: Synced as SEARXNG_URL.
 
-  searxng_url:
-    name: SearXNG URL
-    description: "Опционален SearXNG URL, синхронизиран като SEARXNG_URL в /config/.hermes/.env."
+  addon_log_level:
+    name: Add-on Log Level
+    description: Startup log verbosity for the add-on container (colors and emojis when the log terminal is interactive).
+    options:
+      error: "Errors only"
+      warn: "Warnings and errors"
+      info: "Info (default)"
+      debug: "Debug (verbose)"
 
   http_proxy:
     name: Изходящ HTTP прокси
@@ -67,7 +103,7 @@ configuration:
   
   router_ssh_key_path:
     name: Път до SSH ключ на рутер
-    description: Път до SSH частен ключ за достъп до рутер (по подразбиране - /data/keys/router_ssh)
+    description: Path to SSH private key for router access on persistent storage (default - /config/keys/router_ssh)
   
   clean_session_locks_on_start:
     name: Изчистване на заключвания при стартиране
@@ -90,7 +126,7 @@ configuration:
 
   gateway_additional_allowed_origins:
     name: Допълнителни разрешени origins
-    description: Допълнителни origins за Control UI, разделени със запетая; сливат се в gateway.controlUi.allowedOrigins при lan_https (пример - https://ha.example.com:8443,capacitor://localhost)
+    description: Extra Control UI origins (one per row). Merged into gateway.controlUi.allowedOrigins; in lan_https hostnames are also added to the TLS certificate SAN.
 
   controlui_disable_device_auth:
     name: Изключи device pairing за Control UI (lan_https)
@@ -106,7 +142,7 @@ configuration:
 
   gateway_port:
     name: Порт на Gateway
-    description: Номер на порт, на който Hermes Agent gateway да слуша (по подразбиране - 18789)
+    description: Port for the Hermes Agent gateway (default 18789)
 
   access_mode:
     name: Режим на достъп
@@ -127,7 +163,7 @@ configuration:
 
   gateway_trusted_proxies:
     name: Доверени прокси на Gateway
-    description: Списък с доверени прокси IP/CIDR, разделени със запетая, за trusted-proxy режим (пример - 127.0.0.1,192.168.88.0/24).
+    description: Trusted proxy IP or CIDR entries (one per row) for trusted-proxy mode. Example - 127.0.0.1 or 192.168.88.0/24.
 
   enable_openai_api:
     name: Активиране на OpenAI API
@@ -179,27 +215,3 @@ configuration:
   tool_skills_hub_enabled:
     name: Skills Hub bootstrap
     description: "When ON, startup initializes Skills Hub directory automatically (equivalent to first-run `hermes skills list`)."
-  openai_api_key:
-    name: OpenAI API ключ
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като OPENAI_API_KEY за Hermes onboard/model setup и runtime."
-  openrouter_api_key:
-    name: OpenRouter API ключ
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като OPENROUTER_API_KEY за Hermes onboard/model setup и runtime."
-  anthropic_api_key:
-    name: Anthropic API ключ
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като ANTHROPIC_API_KEY за Hermes onboard/model setup и runtime."
-  google_api_key:
-    name: Google API ключ
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като GOOGLE_API_KEY за Hermes onboard/model setup и runtime."
-  minimax_api_key:
-    name: MiniMax API ключ
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като MINIMAX_API_KEY за Hermes onboard/model setup и runtime."
-  discord_bot_token:
-    name: Discord Bot Token
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като DISCORD_BOT_TOKEN за Discord инструменти."
-  github_token:
-    name: GitHub Token
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като GITHUB_TOKEN за по-добри API лимити."
-  xai_api_key:
-    name: xAI API ключ
-    description: "Опционален токен, синхронизиран в /config/.hermes/.env като XAI_API_KEY за x_search."

@@ -1,5 +1,5 @@
 name: Hermes Agent
-version: "0.0.15"
+version: "0.0.16"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent as a Home Assistant add-on.
@@ -63,9 +63,21 @@ options:
   # Custom model ID when default_model_preset is custom (e.g. google/gemini-2.5-flash).
   default_model: ""
 
-  # Optional web search credentials (synced to /config/.hermes/.env when set).
-  firecrawl_api_key: ""
-  searxng_url: ""
+  # Provider and tool API keys (expansion panel in Home Assistant UI).
+  provider_api_keys:
+    openai_api_key: ""
+    openrouter_api_key: ""
+    anthropic_api_key: ""
+    google_api_key: ""
+    minimax_api_key: ""
+    discord_bot_token: ""
+    github_token: ""
+    xai_api_key: ""
+    firecrawl_api_key: ""
+    searxng_url: ""
+
+  # Add-on startup log verbosity (colors + emojis when terminal is a TTY).
+  addon_log_level: info
 
   # Optional: outbound HTTP/HTTPS proxy for Hermes Agent network access.
   # Example: "http://192.168.2.1:3128"
@@ -76,7 +88,7 @@ options:
   # reachable from inside the HA host LAN.
   router_ssh_host: ""
   router_ssh_user: ""
-  router_ssh_key_path: "/data/keys/router_ssh"
+  router_ssh_key_path: "/config/keys/router_ssh"
 
   # Cleanup stale session lock files left after crashes/restarts
   clean_session_locks_on_start: true
@@ -115,16 +127,12 @@ options:
   # - trusted-proxy: trust auth headers from configured reverse proxies
   gateway_auth_mode: token
 
-  # Comma-separated trusted proxy IP/CIDR list for trusted-proxy mode.
-  # Example: "127.0.0.1,192.168.88.0/24"
-  gateway_trusted_proxies: ""
+  # Trusted proxy IP/CIDR entries for trusted-proxy mode (one per row in UI).
+  gateway_trusted_proxies: []
 
-  # Additional allowed origins for gateway.controlUi.allowedOrigins.
-  # Merged with built-in defaults and existing configured origins.
-  # In lan_https mode, hostnames/IPs from these origins are also added to the
-  # TLS certificate SAN so the cert is valid for custom domains.
-  # Example: "https://ha.example.com:8443,capacitor://localhost"
-  gateway_additional_allowed_origins: ""
+  # Additional Control UI origins (one per row). Merged with built-in defaults.
+  # In lan_https mode, hostnames/IPs are also added to the TLS certificate SAN.
+  gateway_additional_allowed_origins: []
 
   # In lan_https mode, disable per-device Control UI auth ceremony.
   # Default true (recommended) to avoid interactive pairing error 1008 on LAN.
@@ -187,32 +195,28 @@ options:
   tool_browser_enabled: true
   tool_skills_hub_enabled: true
 
-  # Optional provider/API tokens managed from add-on configuration (hybrid auth model).
-  # Non-empty values are synced to /config/.hermes/.env on each startup so
-  # `hermes onboard`, `hermes model`, and the gateway can use them during setup.
-  # OAuth/device-code providers still require `hermes auth` in terminal.
-  openai_api_key: ""
-  openrouter_api_key: ""
-  anthropic_api_key: ""
-  google_api_key: ""
-  minimax_api_key: ""
-  discord_bot_token: ""
-  github_token: ""
-  xai_api_key: ""
-
-
 schema:
   timezone: str
   enable_terminal: bool?
-  terminal_port: int(1024,65535)?
+  terminal_port: port?
   gateway_public_url: str?
   hass_url: str?
   homeassistant_token: password?
   setup_profile: list(home_assistant|general|advanced)?
   default_model_preset: list(auto|gemini_flash|claude_sonnet|gpt_mini|custom)?
   default_model: str?
-  firecrawl_api_key: str?
-  searxng_url: str?
+  provider_api_keys:
+    openai_api_key: str?
+    openrouter_api_key: str?
+    anthropic_api_key: str?
+    google_api_key: str?
+    minimax_api_key: str?
+    discord_bot_token: str?
+    github_token: str?
+    xai_api_key: str?
+    firecrawl_api_key: str?
+    searxng_url: str?
+  addon_log_level: list(error|warn|info|debug)?
   http_proxy: str?
 
   router_ssh_host: str
@@ -224,11 +228,13 @@ schema:
   gateway_mode: list(local|remote)?
   gateway_remote_url: str?
   gateway_bind_mode: list(loopback|lan|tailnet)?
-  gateway_port: int(1,65535)?
+  gateway_port: port?
   access_mode: list(custom|local_only|lan_https|lan_reverse_proxy|tailnet_https)?
   gateway_auth_mode: list(token|trusted-proxy)?
-  gateway_trusted_proxies: str?
-  gateway_additional_allowed_origins: str?
+  gateway_trusted_proxies:
+    - value: 'match(^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/([0-9]|[1-2][0-9]|3[0-2]))?|([0-9a-fA-F:]+)(\/\d{1,3})?)$)'
+  gateway_additional_allowed_origins:
+    - value: str
   controlui_disable_device_auth: bool?
   enable_openai_api: bool?
   enable_ha_status_sensors: bool?
@@ -246,11 +252,3 @@ schema:
   tool_telegram_enabled: bool?
   tool_browser_enabled: bool?
   tool_skills_hub_enabled: bool?
-  openai_api_key: str?
-  openrouter_api_key: str?
-  anthropic_api_key: str?
-  google_api_key: str?
-  minimax_api_key: str?
-  discord_bot_token: str?
-  github_token: str?
-  xai_api_key: str?

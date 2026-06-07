@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Unified logging (colors + emojis when stderr is a TTY)
+ADDON_LOG_PATH="/addon_log.sh"
+if [ ! -f "$ADDON_LOG_PATH" ] && [ -f "$(dirname "$0")/addon_log.sh" ]; then
+  ADDON_LOG_PATH="$(dirname "$0")/addon_log.sh"
+fi
+if [ -f "$ADDON_LOG_PATH" ]; then
+  # shellcheck disable=SC1091
+  . "$ADDON_LOG_PATH"
+else
+  log_info() { printf '%s\n' "$*" >&2; }
+  log_warn() { printf '%s\n' "$*" >&2; }
+  log_error() { printf '%s\n' "$*" >&2; }
+  log_ok() { printf '%s\n' "$*" >&2; }
+  log_debug() { :; }
+fi
+
 # Ensure Homebrew and brew-installed binaries are in PATH
 # This is needed for Hermes Agent skills that depend on CLI tools (gemini, aider, etc.)
 export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
@@ -9,9 +25,37 @@ export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PA
 OPTIONS_FILE="/data/options.json"
 
 if [ ! -f "$OPTIONS_FILE" ]; then
-  echo "Missing $OPTIONS_FILE (add-on options)."
+  log_error "Missing $OPTIONS_FILE (add-on options)."
   exit 1
 fi
+
+# Read nested provider_api_keys with legacy flat-key fallback (preserves values after reinstall).
+read_provider_option() {
+  local field="$1"
+  local nested flat
+  nested=$(jq -r ".provider_api_keys.${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true)
+  if [ -n "$nested" ]; then
+    printf '%s' "$nested"
+    return 0
+  fi
+  jq -r ".${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true
+}
+
+# Read list-style add-on options (array of {value: ...}) or legacy comma-separated string.
+join_list_option_csv() {
+  local field="$1"
+  jq -r --arg field "$field" '
+    .[$field] as $v
+    | if ($v | type) == "array" then
+        [ $v[]? | if type == "object" then .value elif type == "string" then . else empty end
+          | select(. != null and (. | tostring | length) > 0) ]
+        | join(",")
+      elif ($v | type) == "string" then $v
+      else "" end
+  ' "$OPTIONS_FILE" 2>/dev/null || echo ""
+}
+
+export ADDON_LOG_LEVEL="$(jq -r '.addon_log_level // "info"' "$OPTIONS_FILE")"
 
 HELPER_PATH="/hermes_config_helper.py"
 if [ ! -f "$HELPER_PATH" ] && [ -f "$(dirname "$0")/hermes_config_helper.py" ]; then
@@ -30,6 +74,11 @@ fi
 TZNAME=$(jq -r '.timezone // "Europe/Sofia"' "$OPTIONS_FILE")
 GW_PUBLIC_URL=$(jq -r '.gateway_public_url // empty' "$OPTIONS_FILE")
 HA_TOKEN=$(jq -r '.homeassistant_token // empty' "$OPTIONS_FILE")
+# HA redacts password fields after save — reuse persisted token when the option is empty.
+if [ -z "$HA_TOKEN" ] && [ -f /config/secrets/homeassistant.token ]; then
+  HA_TOKEN="$(tr -d '\r\n' < /config/secrets/homeassistant.token)"
+  log_debug "Loaded homeassistant_token from /config/secrets/homeassistant.token"
+fi
 ADDON_HTTP_PROXY=$(jq -r '.http_proxy // empty' "$OPTIONS_FILE")
 ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
 TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
@@ -39,14 +88,17 @@ TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
 if [[ "$TERMINAL_PORT_RAW" =~ ^[0-9]+$ ]] && [ "$TERMINAL_PORT_RAW" -ge 1024 ] && [ "$TERMINAL_PORT_RAW" -le 65535 ]; then
   TERMINAL_PORT="$TERMINAL_PORT_RAW"
 else
-  echo "ERROR: Invalid terminal_port '$TERMINAL_PORT_RAW'. Must be numeric 1024-65535. Using default 7681."
+  log_error "Invalid terminal_port '$TERMINAL_PORT_RAW'. Must be numeric 1024-65535. Using default 7681."
   TERMINAL_PORT="7681"
 fi
 
 # Generic router SSH settings
 ROUTER_HOST=$(jq -r '.router_ssh_host // empty' "$OPTIONS_FILE")
 ROUTER_USER=$(jq -r '.router_ssh_user // empty' "$OPTIONS_FILE")
-ROUTER_KEY=$(jq -r '.router_ssh_key_path // "/data/keys/router_ssh"' "$OPTIONS_FILE")
+ROUTER_KEY=$(jq -r '.router_ssh_key_path // "/config/keys/router_ssh"' "$OPTIONS_FILE")
+if [ -z "$ROUTER_KEY" ] || [ "$ROUTER_KEY" = "/data/keys/router_ssh" ]; then
+  ROUTER_KEY="/config/keys/router_ssh"
+fi
 
 # Optional: allow disabling lock cleanup if you ever need to debug
 CLEAN_LOCKS_ON_START=$(jq -r '.clean_session_locks_on_start // true' "$OPTIONS_FILE")
@@ -60,8 +112,8 @@ GATEWAY_PORT=$(jq -r '.gateway_port // 18789' "$OPTIONS_FILE")
 ENABLE_OPENAI_API=$(jq -r '.enable_openai_api // false' "$OPTIONS_FILE")
 API_SERVER_PORT=8642
 GATEWAY_AUTH_MODE=$(jq -r '.gateway_auth_mode // "token"' "$OPTIONS_FILE")
-GATEWAY_TRUSTED_PROXIES=$(jq -r '.gateway_trusted_proxies // empty' "$OPTIONS_FILE")
-GATEWAY_ADDITIONAL_ALLOWED_ORIGINS=$(jq -r '.gateway_additional_allowed_origins // empty' "$OPTIONS_FILE")
+GATEWAY_TRUSTED_PROXIES="$(join_list_option_csv gateway_trusted_proxies)"
+GATEWAY_ADDITIONAL_ALLOWED_ORIGINS="$(join_list_option_csv gateway_additional_allowed_origins)"
 CONTROLUI_DISABLE_DEVICE_AUTH=$(jq -r '.controlui_disable_device_auth // true' "$OPTIONS_FILE")
 FORCE_IPV4_DNS=$(jq -r '.force_ipv4_dns // true' "$OPTIONS_FILE")
 SETUP_PROFILE=$(jq -r '.setup_profile // "home_assistant"' "$OPTIONS_FILE")
@@ -69,8 +121,8 @@ DEFAULT_MODEL_PRESET=$(jq -r '.default_model_preset // "auto"' "$OPTIONS_FILE")
 DEFAULT_MODEL_OPT=$(jq -r '.default_model // empty' "$OPTIONS_FILE")
 HASS_URL=$(jq -r '.hass_url // empty' "$OPTIONS_FILE")
 ACCESS_MODE=$(jq -r '.access_mode // "lan_https"' "$OPTIONS_FILE")
-FIRECRAWL_API_KEY_OPT=$(jq -r '.firecrawl_api_key // empty' "$OPTIONS_FILE")
-SEARXNG_URL_OPT=$(jq -r '.searxng_url // empty' "$OPTIONS_FILE")
+FIRECRAWL_API_KEY_OPT="$(read_provider_option firecrawl_api_key)"
+SEARXNG_URL_OPT="$(read_provider_option searxng_url)"
 BOOTSTRAP_AUXILIARY_TITLE="false"
 LOG_GATEWAY_URL_HINT="false"
 NGINX_LOG_LEVEL=$(jq -r '.nginx_log_level // "minimal"' "$OPTIONS_FILE")
@@ -78,14 +130,14 @@ AUTO_CONFIGURE_MCP=$(jq -r '.auto_configure_mcp // false' "$OPTIONS_FILE")
 TOOL_TELEGRAM_ENABLED=$(jq -r '.tool_telegram_enabled // false' "$OPTIONS_FILE")
 TOOL_BROWSER_ENABLED=$(jq -r '.tool_browser_enabled // true' "$OPTIONS_FILE")
 TOOL_SKILLS_HUB_ENABLED=$(jq -r '.tool_skills_hub_enabled // true' "$OPTIONS_FILE")
-OPENAI_API_KEY_OPT=$(jq -r '.openai_api_key // empty' "$OPTIONS_FILE")
-OPENROUTER_API_KEY_OPT=$(jq -r '.openrouter_api_key // empty' "$OPTIONS_FILE")
-ANTHROPIC_API_KEY_OPT=$(jq -r '.anthropic_api_key // empty' "$OPTIONS_FILE")
-GOOGLE_API_KEY_OPT=$(jq -r '.google_api_key // empty' "$OPTIONS_FILE")
-MINIMAX_API_KEY_OPT=$(jq -r '.minimax_api_key // empty' "$OPTIONS_FILE")
-DISCORD_BOT_TOKEN_OPT=$(jq -r '.discord_bot_token // empty' "$OPTIONS_FILE")
-GITHUB_TOKEN_OPT=$(jq -r '.github_token // empty' "$OPTIONS_FILE")
-XAI_API_KEY_OPT=$(jq -r '.xai_api_key // empty' "$OPTIONS_FILE")
+OPENAI_API_KEY_OPT="$(read_provider_option openai_api_key)"
+OPENROUTER_API_KEY_OPT="$(read_provider_option openrouter_api_key)"
+ANTHROPIC_API_KEY_OPT="$(read_provider_option anthropic_api_key)"
+GOOGLE_API_KEY_OPT="$(read_provider_option google_api_key)"
+MINIMAX_API_KEY_OPT="$(read_provider_option minimax_api_key)"
+DISCORD_BOT_TOKEN_OPT="$(read_provider_option discord_bot_token)"
+GITHUB_TOKEN_OPT="$(read_provider_option github_token)"
+XAI_API_KEY_OPT="$(read_provider_option xai_api_key)"
 HERMES_AGENT_VERSION_PRESET=$(jq -r '.hermes_agent_version_preset // "custom"' "$OPTIONS_FILE")
 HERMES_AGENT_VERSION_CUSTOM=$(jq -r '.hermes_agent_version_custom // "0.16.0"' "$OPTIONS_FILE")
 ADDON_HERMES_DEFAULT_VERSION="0.16.0"
@@ -102,7 +154,7 @@ MQTT_STATE_PREFIX=$(jq -r '.mqtt_state_prefix // "hermes"' "$OPTIONS_FILE")
 if [[ "$STATUS_POLL_INTERVAL_RAW" =~ ^[0-9]+$ ]] && [ "$STATUS_POLL_INTERVAL_RAW" -ge 30 ] && [ "$STATUS_POLL_INTERVAL_RAW" -le 300 ]; then
   STATUS_POLL_INTERVAL_SECONDS="$STATUS_POLL_INTERVAL_RAW"
 else
-  echo "WARN: Invalid status_poll_interval_seconds '$STATUS_POLL_INTERVAL_RAW'. Using default 60."
+  log_warn "Invalid status_poll_interval_seconds '$STATUS_POLL_INTERVAL_RAW'. Using default 60."
   STATUS_POLL_INTERVAL_SECONDS="60"
 fi
 
@@ -110,7 +162,7 @@ fi
 if [[ "$MQTT_STATE_PREFIX" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   MQTT_STATE_PREFIX_SAFE="$MQTT_STATE_PREFIX"
 else
-  echo "WARN: Invalid mqtt_state_prefix '$MQTT_STATE_PREFIX'. Using default 'hermes'."
+  log_warn "Invalid mqtt_state_prefix '$MQTT_STATE_PREFIX'. Using default 'hermes'."
   MQTT_STATE_PREFIX_SAFE="hermes"
 fi
 
@@ -140,7 +192,7 @@ if [ -f "$HELPER_PATH" ]; then
     EFFECTIVE_AUTO_CONFIGURE_MCP=$(echo "$RESOLVED_PROFILE" | jq -r 'if .auto_configure_mcp then "true" else "false" end')
     BOOTSTRAP_AUXILIARY_TITLE=$(echo "$RESOLVED_PROFILE" | jq -r 'if .bootstrap_auxiliary_title then "true" else "false" end')
     LOG_GATEWAY_URL_HINT=$(echo "$RESOLVED_PROFILE" | jq -r 'if .log_gateway_url_hint then "true" else "false" end')
-    echo "INFO: setup_profile=${SETUP_PROFILE} — effective access_mode=${ACCESS_MODE}"
+    log_info "setup_profile=${SETUP_PROFILE} — effective access_mode=${ACCESS_MODE}"
   else
     EFFECTIVE_AUTO_CONFIGURE_MCP="$AUTO_CONFIGURE_MCP"
   fi
@@ -224,7 +276,7 @@ resolve_ha_instance_urls() {
   if [ -z "$MCP_HA_URL" ]; then
     MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
   fi
-  echo "INFO: Home Assistant URL (${HA_URL_SOURCE}): ${EFFECTIVE_HASS_URL} (MCP: ${MCP_HA_URL})"
+  log_info "Home Assistant URL (${HA_URL_SOURCE}): ${EFFECTIVE_HASS_URL} (MCP: ${MCP_HA_URL})"
 }
 
 verify_ha_instance_reachable() {
@@ -233,11 +285,11 @@ verify_ha_instance_reachable() {
   fi
   local probe_url="${EFFECTIVE_HASS_URL%/}/api/"
   if curl -fsS -m 8 -H "Authorization: Bearer ${HA_TOKEN}" "$probe_url" >/dev/null 2>&1; then
-    echo "INFO: Verified Home Assistant API at ${EFFECTIVE_HASS_URL}"
+    log_info "Verified Home Assistant API at ${EFFECTIVE_HASS_URL}"
     return 0
   fi
-  echo "WARN: Could not verify Home Assistant at ${EFFECTIVE_HASS_URL}"
-  echo "WARN: If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant:8123 or your external URL)"
+  log_warn "Could not verify Home Assistant at ${EFFECTIVE_HASS_URL}"
+  log_warn "If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant:8123 or your external URL)"
   return 0
 }
 
@@ -253,11 +305,11 @@ apply_reverse_proxy_defaults() {
   fi
   GATEWAY_TRUSTED_PROXIES="127.0.0.1,172.30.0.0/16,10.0.0.0/8"
   if cloudflared_addon_running; then
-    echo "INFO: Cloudflared add-on detected — applied gateway_trusted_proxies: ${GATEWAY_TRUSTED_PROXIES}"
-    echo "INFO: Recommended for Cloudflare Tunnel: access_mode=lan_https with noTLSVerify on origin (see DOCS.md)."
+    log_info "Cloudflared add-on detected — applied gateway_trusted_proxies: ${GATEWAY_TRUSTED_PROXIES}"
+    log_info "Recommended for Cloudflare Tunnel: access_mode=lan_https with noTLSVerify on origin (see DOCS.md)."
   else
-    echo "WARN: gateway_trusted_proxies was empty — applied defaults: ${GATEWAY_TRUSTED_PROXIES}"
-    echo "WARN: trusted-proxy requires X-Forwarded-User from your reverse proxy (e.g. NPM custom header)."
+    log_warn "gateway_trusted_proxies was empty — applied defaults: ${GATEWAY_TRUSTED_PROXIES}"
+    log_warn "trusted-proxy requires X-Forwarded-User from your reverse proxy (e.g. NPM custom header)."
   fi
 }
 
@@ -271,7 +323,7 @@ case "$ACCESS_MODE" in
   local_only)
     GATEWAY_BIND_MODE="loopback"
     GATEWAY_AUTH_MODE="token"
-    echo "INFO: Access mode: local_only (loopback + token, Ingress/terminal only)"
+    log_info "Access mode: local_only (loopback + token, Ingress/terminal only)"
     ;;
   lan_https)
     # Gateway binds loopback on internal port; nginx terminates TLS on the external port.
@@ -279,21 +331,21 @@ case "$ACCESS_MODE" in
     GATEWAY_AUTH_MODE="token"
     ENABLE_HTTPS_PROXY=true
     GATEWAY_INTERNAL_PORT=$((GATEWAY_PORT + 1))
-    echo "INFO: Access mode: lan_https (built-in HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
+    log_info "Access mode: lan_https (built-in HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
     ;;
   lan_reverse_proxy)
     GATEWAY_BIND_MODE="lan"
     GATEWAY_AUTH_MODE="trusted-proxy"
     apply_reverse_proxy_defaults
-    echo "INFO: Access mode: lan_reverse_proxy (LAN bind + trusted-proxy auth)"
+    log_info "Access mode: lan_reverse_proxy (LAN bind + trusted-proxy auth)"
     ;;
   tailnet_https)
     GATEWAY_BIND_MODE="tailnet"
     GATEWAY_AUTH_MODE="token"
-    echo "INFO: Access mode: tailnet_https (Tailscale bind + token auth)"
+    log_info "Access mode: tailnet_https (Tailscale bind + token auth)"
     ;;
   custom|*)
-    echo "INFO: Access mode: custom (using individual gateway_bind_mode/auth_mode settings)"
+    log_info "Access mode: custom (using individual gateway_bind_mode/auth_mode settings)"
     ;;
 esac
 
@@ -313,10 +365,10 @@ if [ -n "$ADDON_HTTP_PROXY" ]; then
     export https_proxy="$ADDON_HTTP_PROXY"
     export NO_PROXY="${NO_PROXY:+${NO_PROXY},}${DEFAULT_NO_PROXY}"
     export no_proxy="${no_proxy:+${no_proxy},}${DEFAULT_NO_PROXY}"
-    echo "INFO: Outbound HTTP/HTTPS proxy enabled from add-on configuration."
-    echo "INFO: Applied NO_PROXY defaults for localhost/private network ranges."
+    log_info "Outbound HTTP/HTTPS proxy enabled from add-on configuration."
+    log_info "Applied NO_PROXY defaults for localhost/private network ranges."
   else
-    echo "WARN: Invalid http_proxy value in add-on options; expected URL like http://host:port"
+    log_warn "Invalid http_proxy value in add-on options; expected URL like http://host:port"
   fi
 fi
 
@@ -328,7 +380,7 @@ if [ "$FORCE_IPV4_DNS" = "true" ] || [ "$FORCE_IPV4_DNS" = "1" ]; then
   else
     export NODE_OPTIONS="--dns-result-order=ipv4first"
   fi
-  echo "INFO: Enabled IPv4-first DNS ordering (NODE_OPTIONS=--dns-result-order=ipv4first)"
+  log_info "Enabled IPv4-first DNS ordering (NODE_OPTIONS=--dns-result-order=ipv4first)"
 fi
 
 # HA add-ons mount persistent storage at /config (maps to /addon_configs/<slug> on the host).
@@ -345,6 +397,17 @@ export XDG_CONFIG_HOME=/config
 
 mkdir -p /config/.hermes /config/.hermes/identity /config/hermesd /config/keys /config/secrets
 
+# Router SSH keys live on persistent /config storage (migrate legacy /data path once).
+LEGACY_ROUTER_KEY="/data/keys/router_ssh"
+if [ -f "$LEGACY_ROUTER_KEY" ] && [ ! -f "/config/keys/router_ssh" ]; then
+  cp "$LEGACY_ROUTER_KEY" "/config/keys/router_ssh"
+  chmod 600 "/config/keys/router_ssh" 2>/dev/null || true
+  log_info "Migrated router SSH key from ${LEGACY_ROUTER_KEY} to /config/keys/router_ssh"
+fi
+if [ "$ROUTER_KEY" = "$LEGACY_ROUTER_KEY" ] && [ -f "/config/keys/router_ssh" ]; then
+  ROUTER_KEY="/config/keys/router_ssh"
+fi
+
 # ------------------------------------------------------------------------------
 # Hermes Agent npm version reconcile (must run BEFORE redirecting npm prefix to /config)
 # ------------------------------------------------------------------------------
@@ -359,7 +422,7 @@ resolve_hermes_agent_npm_spec() {
       if [ -n "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
         echo "$HERMES_AGENT_VERSION_CUSTOM"
       else
-        echo "WARN: hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using ${ADDON_HERMES_DEFAULT_VERSION}." >&2
+        log_warn "hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using ${ADDON_HERMES_DEFAULT_VERSION}." >&2
         echo "$ADDON_HERMES_DEFAULT_VERSION"
       fi
       ;;
@@ -401,40 +464,40 @@ reconcile_hermes_agent_version() {
 
   if command -v hermes >/dev/null 2>&1; then
     if [ "$installed_marker" = "$spec" ]; then
-      echo "INFO: Hermes Agent npm spec '${spec}' already installed."
+      log_info "Hermes Agent npm spec '${spec}' already installed."
       return 0
     fi
     if [ "$installed_marker" = "__image_baked__" ] && [ "$spec" = "latest" ]; then
-      echo "INFO: Using image-baked hermes CLI (preset: latest)."
+      log_info "Using image-baked hermes CLI (preset: latest)."
       printf '%s\n' "$spec" > "$marker"
       chmod 600 "$marker" 2>/dev/null || true
       return 0
     fi
     if [ -z "$installed_marker" ] && [ "$spec" = "$IMAGE_BAKED_HERMES_SPEC" ]; then
-      echo "INFO: Using image-baked hermes CLI (${IMAGE_BAKED_HERMES_SPEC}); seeding version marker."
+      log_info "Using image-baked hermes CLI (${IMAGE_BAKED_HERMES_SPEC}); seeding version marker."
       printf '%s\n' "$spec" > "$marker"
       chmod 600 "$marker" 2>/dev/null || true
       return 0
     fi
     if [ -z "$installed_marker" ] && [ "$spec" = "latest" ]; then
-      echo "INFO: Using image-baked hermes CLI; seeding version marker (preset: latest)."
+      log_info "Using image-baked hermes CLI; seeding version marker (preset: latest)."
       printf '%s\n' "$spec" > "$marker"
       chmod 600 "$marker" 2>/dev/null || true
       return 0
     fi
   fi
 
-  echo "INFO: Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
+  log_info "Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
   if install_hermes_agent_npm "$spec"; then
     printf '%s\n' "$spec" > "$marker"
     chmod 600 "$marker" 2>/dev/null || true
-    echo "INFO: Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
+    log_info "Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
     return 0
   fi
 
-  echo "ERROR: Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
+  log_error "Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
   if command -v hermes >/dev/null 2>&1; then
-    echo "WARN: Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
+    log_warn "Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
     printf '%s\n' "$spec" > "$marker"
     chmod 600 "$marker" 2>/dev/null || true
     return 0
@@ -451,7 +514,7 @@ if [ -f /repair_hermes_wheel.py ]; then
 fi
 
 if ! command -v hermes >/dev/null 2>&1; then
-  echo "ERROR: hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
+  log_error "hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
   exit 1
 fi
 
@@ -505,13 +568,13 @@ if [ -n "$IMAGE_SKILLS_DIR" ] && [ -d "$IMAGE_SKILLS_DIR" ] && [ ! -L "$IMAGE_SK
   # Replace image skills dir with symlink to persistent copy
   rm -rf "$IMAGE_SKILLS_DIR"
   ln -sf "$PERSISTENT_SKILLS_DIR" "$IMAGE_SKILLS_DIR"
-  echo "INFO: Synced built-in skills to persistent storage at $PERSISTENT_SKILLS_DIR"
+  log_info "Synced built-in skills to persistent storage at $PERSISTENT_SKILLS_DIR"
 elif [ -n "$IMAGE_SKILLS_DIR" ] && [ -L "$IMAGE_SKILLS_DIR" ]; then
-  echo "INFO: Built-in skills already linked to persistent storage"
+  log_info "Built-in skills already linked to persistent storage"
 elif [ -d "$PERSISTENT_SKILLS_DIR" ]; then
-  echo "INFO: Built-in skills served from persistent storage at $PERSISTENT_SKILLS_DIR"
+  log_info "Built-in skills served from persistent storage at $PERSISTENT_SKILLS_DIR"
 else
-  echo "WARN: Built-in skills directory not found (image package: ${IMAGE_SKILLS_DIR:-unknown})"
+  log_warn "Built-in skills directory not found (image package: ${IMAGE_SKILLS_DIR:-unknown})"
 fi
 
 # Persist user-installed node skills across Docker image rebuilds.
@@ -529,7 +592,7 @@ export PATH="${PERSISTENT_NODE_GLOBAL}/bin:/usr/local/bin:${PNPM_HOME}:${PATH}"
 export NODE_PATH="${PERSISTENT_NODE_GLOBAL}/lib/node_modules:/usr/local/lib/node_modules:${NODE_PATH:-}"
 
 if ! command -v uv >/dev/null 2>&1; then
-  echo "WARN: uv not found on PATH; runtime Python installs fall back to pip."
+  log_warn "uv not found on PATH; runtime Python installs fall back to pip."
 fi
 
 safe_export_secret_env() {
@@ -539,24 +602,24 @@ safe_export_secret_env() {
     return 0
   fi
   export "${key}=${value}"
-  echo "INFO: Loaded ${key} from add-on configuration."
+  log_info "Loaded ${key} from add-on configuration."
 }
 
 install_python_package_if_missing() {
   local module_name="$1"
   local package_spec="$2"
   if python3 -c "import ${module_name}" >/dev/null 2>&1; then
-    echo "INFO: Python dependency '${package_spec}' already available."
+    log_info "Python dependency '${package_spec}' already available."
     return 0
   fi
-  echo "INFO: Installing missing Python dependency '${package_spec}' (system-wide)..."
+  log_info "Installing missing Python dependency '${package_spec}' (system-wide)..."
   if command -v uv >/dev/null 2>&1 \
     && uv pip install --system --break-system-packages --no-cache "${package_spec}" >/dev/null 2>&1; then
-    echo "INFO: Installed Python dependency '${package_spec}' via uv (system)."
+    log_info "Installed Python dependency '${package_spec}' via uv (system)."
   elif python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
-    echo "INFO: Installed Python dependency '${package_spec}' via pip (system)."
+    log_info "Installed Python dependency '${package_spec}' via pip (system)."
   else
-    echo "WARN: Could not install Python dependency '${package_spec}'. Tool may stay unavailable."
+    log_warn "Could not install Python dependency '${package_spec}'. Tool may stay unavailable."
     return 1
   fi
 }
@@ -565,17 +628,17 @@ install_npm_package_if_missing() {
   local command_name="$1"
   local package_name="$2"
   if command -v "${command_name}" >/dev/null 2>&1; then
-    echo "INFO: Node dependency '${package_name}' already available."
+    log_info "Node dependency '${package_name}' already available."
     return 0
   fi
-  echo "INFO: Installing missing Node dependency '${package_name}' (system-wide)..."
+  log_info "Installing missing Node dependency '${package_name}' (system-wide)..."
   if HOME=/root \
     NPM_CONFIG_PREFIX="/usr/local" \
     NPM_CONFIG_USERCONFIG=/root/.npmrc \
     npm install -g "${package_name}" >/dev/null 2>&1; then
-    echo "INFO: Installed Node dependency '${package_name}' (system)."
+    log_info "Installed Node dependency '${package_name}' (system)."
   else
-    echo "WARN: Could not install Node dependency '${package_name}'. Tool may stay unavailable."
+    log_warn "Could not install Node dependency '${package_name}'. Tool may stay unavailable."
     return 1
   fi
 }
@@ -589,15 +652,15 @@ initialize_skills_hub_if_enabled() {
     return 0
   fi
   if ! command -v hermes >/dev/null 2>&1; then
-    echo "WARN: Hermes CLI is unavailable; cannot initialize Skills Hub yet."
+    log_warn "Hermes CLI is unavailable; cannot initialize Skills Hub yet."
     return 0
   fi
   load_hermes_env_file
   if hermes skills list >/dev/null 2>&1; then
     date -u +"%Y-%m-%dT%H:%M:%SZ" > "$skills_init_flag"
-    echo "INFO: Skills Hub directory initialized."
+    log_info "Skills Hub directory initialized."
   else
-    echo "WARN: Skills Hub initialization failed. You can retry in terminal with: hermes skills list"
+    log_warn "Skills Hub initialization failed. You can retry in terminal with: hermes skills list"
   fi
 }
 
@@ -644,25 +707,25 @@ require_hermes_cli() {
   if command -v hermes >/dev/null 2>&1; then
     return 0
   fi
-  echo "ERROR: hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
+  log_error "hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
   return 1
 }
 
 ensure_default_hermes_profile() {
   mkdir -p "${HERMES_HOME:-/config/.hermes}"
   if [ ! -f "${HERMES_HOME}/config.yaml" ]; then
-    echo "INFO: No ${HERMES_HOME}/config.yaml yet; first-run bootstrap will populate it."
+    log_info "No ${HERMES_HOME}/config.yaml yet; first-run bootstrap will populate it."
   fi
   if ! command -v hermes >/dev/null 2>&1; then
     return 0
   fi
   load_hermes_env_file
   if hermes profile >/dev/null 2>&1; then
-    echo "INFO: Hermes profile summary:"
+    log_info "Hermes profile summary:"
     hermes profile 2>/dev/null | head -8 || true
   fi
   if hermes gateway list >/dev/null 2>&1; then
-    echo "INFO: Hermes gateway list:"
+    log_info "Hermes gateway list:"
     hermes gateway list 2>/dev/null | head -5 || true
   fi
   return 0
@@ -699,22 +762,22 @@ run_hermes_dashboard() {
   host="127.0.0.1"
 
   if ! command -v hermes >/dev/null 2>&1; then
-    echo "WARN: hermes CLI missing; cannot start dashboard Web UI."
+    log_warn "hermes CLI missing; cannot start dashboard Web UI."
     return 1
   fi
   if ! hermes dashboard --help >/dev/null 2>&1; then
-    echo "WARN: hermes dashboard unavailable in installed Hermes version."
+    log_warn "hermes dashboard unavailable in installed Hermes version."
     return 1
   fi
 
   web_dist="$(resolve_hermes_web_dist 2>/dev/null || true)"
   if [ -z "$web_dist" ]; then
-    echo "WARN: Hermes dashboard web_dist not found; HTTPS gateway UI will return 502."
+    log_warn "Hermes dashboard web_dist not found; HTTPS gateway UI will return 502."
     return 1
   fi
 
   export HERMES_WEB_DIST="$web_dist"
-  echo "INFO: Starting Hermes dashboard (Web UI) on ${host}:${port} ..."
+  log_info "Starting Hermes dashboard (Web UI) on ${host}:${port} ..."
   hermes dashboard --port "$port" --host "$host" --no-open --skip-build &
   DASHBOARD_PID=$!
   return 0
@@ -725,7 +788,7 @@ start_cdp_chromium_if_enabled() {
     return 0
   fi
   if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":9222 "; then
-    echo "INFO: CDP Chromium already listening on 127.0.0.1:9222"
+    log_info "CDP Chromium already listening on 127.0.0.1:9222"
     return 0
   fi
 
@@ -737,11 +800,11 @@ start_cdp_chromium_if_enabled() {
     fi
   done
   if [ -z "$chrome_bin" ]; then
-    echo "WARN: No Chromium binary found; browser-cdp tool may stay unavailable"
+    log_warn "No Chromium binary found; browser-cdp tool may stay unavailable"
     return 0
   fi
 
-  echo "INFO: Starting headless Chromium CDP endpoint on 127.0.0.1:9222 for browser-cdp tool..."
+  log_info "Starting headless Chromium CDP endpoint on 127.0.0.1:9222 for browser-cdp tool..."
   "$chrome_bin" \
     --headless=new \
     --no-sandbox \
@@ -797,37 +860,37 @@ try_export_gateway_env_var() {
 
   # Validate variable name format
   if ! [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-    echo "WARN: Invalid environment variable name: '$key' (must start with letter/underscore, skip)"
+    log_warn "Invalid environment variable name: '$key' (must start with letter/underscore, skip)"
     return 0
   fi
 
   # Protect critical runtime variables from accidental override.
   if is_reserved_gateway_env_var "$key"; then
-    echo "WARN: Reserved environment variable '$key' cannot be overridden via gateway_env_vars (skip)"
+    log_warn "Reserved environment variable '$key' cannot be overridden via gateway_env_vars (skip)"
     return 0
   fi
 
   # Enforce max variable name length
   if [ ${#key} -gt $max_var_name_size ]; then
-    echo "WARN: Environment variable name too long: '$key' (max $max_var_name_size chars, skip)"
+    log_warn "Environment variable name too long: '$key' (max $max_var_name_size chars, skip)"
     return 0
   fi
 
   # Enforce max variable value length
   if [ ${#value} -gt $max_var_value_size ]; then
-    echo "WARN: Environment variable value too long for '$key' (max $max_var_value_size chars, skip)"
+    log_warn "Environment variable value too long for '$key' (max $max_var_value_size chars, skip)"
     return 0
   fi
 
   # Enforce limit on number of variables
   if [ $env_count -ge $max_env_vars ]; then
-    echo "WARN: Maximum environment variables limit ($max_env_vars) reached (skip)"
+    log_warn "Maximum environment variables limit ($max_env_vars) reached (skip)"
     return 0
   fi
 
   export "$key=$value"
   env_count=$((env_count + 1))
-  echo "INFO: Exported gateway env var: $key"
+  log_info "Exported gateway env var: $key"
 }
 
 # Export gateway environment variables from add-on config
@@ -840,11 +903,11 @@ if [ "$GW_ENV_VARS_TYPE" = "array" ] || [ "$GW_ENV_VARS_TYPE" = "object" ] || { 
   max_var_value_size=10000
 
   if [ "$GW_ENV_VARS_TYPE" = "array" ] && [ "$GW_ENV_VARS_JSON" != "[]" ]; then
-    echo "INFO: Setting gateway environment variables from list config..."
+    log_info "Setting gateway environment variables from list config..."
 
     invalid_entries_count=$(printf '%s' "$GW_ENV_VARS_JSON" | jq '[.[] | select((type != "object") or ((.name | type) != "string") or (has("value") | not))] | length')
     if [ "$invalid_entries_count" -gt 0 ]; then
-      echo "WARN: Found $invalid_entries_count invalid gateway_env_vars entries; expected objects with 'name' and 'value' keys (skip)"
+      log_warn "Found $invalid_entries_count invalid gateway_env_vars entries; expected objects with 'name' and 'value' keys (skip)"
     fi
 
     while IFS= read -r -d '' key && IFS= read -r -d '' value; do
@@ -852,20 +915,20 @@ if [ "$GW_ENV_VARS_TYPE" = "array" ] || [ "$GW_ENV_VARS_TYPE" = "object" ] || { 
     done < <(printf '%s' "$GW_ENV_VARS_JSON" | jq -j '.[] | select((type == "object") and ((.name | type) == "string") and (has("value"))) | .name, "\u0000", (.value | tostring), "\u0000"')
   elif [ "$GW_ENV_VARS_TYPE" = "object" ] && [ "$GW_ENV_VARS_JSON" != "{}" ]; then
     # Backward compatibility for old map/object configuration.
-    echo "INFO: Setting gateway environment variables from object config (legacy format)..."
+    log_info "Setting gateway environment variables from object config (legacy format)..."
     while IFS= read -r -d '' key && IFS= read -r -d '' value; do
       try_export_gateway_env_var "$key" "$value"
     done < <(printf '%s' "$GW_ENV_VARS_JSON" | jq -j 'to_entries[] | .key, "\u0000", (.value | tostring), "\u0000"')
   elif [ "$GW_ENV_VARS_TYPE" = "string" ] && [ -n "$GW_ENV_VARS_RAW" ]; then
     # Preferred for complex values: JSON object string in one line.
     if printf '%s' "$GW_ENV_VARS_RAW" | jq -e 'type == "object"' >/dev/null 2>&1; then
-      echo "INFO: Setting gateway environment variables from JSON string config..."
+      log_info "Setting gateway environment variables from JSON string config..."
       while IFS= read -r -d '' key && IFS= read -r -d '' value; do
         try_export_gateway_env_var "$key" "$value"
       done < <(printf '%s' "$GW_ENV_VARS_RAW" | jq -j 'to_entries[] | .key, "\u0000", (.value | tostring), "\u0000"')
     else
       # Supported simple format: KEY=VALUE pairs separated by ';' or newlines.
-      echo "INFO: Setting gateway environment variables from KEY=VALUE string config..."
+      log_info "Setting gateway environment variables from KEY=VALUE string config..."
       while IFS= read -r entry; do
         entry="${entry%$'\r'}"
         trimmed="$(printf '%s' "$entry" | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//')"
@@ -876,7 +939,7 @@ if [ "$GW_ENV_VARS_TYPE" = "array" ] || [ "$GW_ENV_VARS_TYPE" = "object" ] || { 
         fi
 
         if [[ "$trimmed" != *"="* ]]; then
-          echo "WARN: Invalid gateway_env_vars entry '$trimmed' (expected KEY=VALUE, skip)"
+          log_warn "Invalid gateway_env_vars entry '$trimmed' (expected KEY=VALUE, skip)"
           continue
         fi
 
@@ -890,10 +953,10 @@ if [ "$GW_ENV_VARS_TYPE" = "array" ] || [ "$GW_ENV_VARS_TYPE" = "object" ] || { 
   fi
 
   if [ $env_count -gt 0 ]; then
-    echo "INFO: Successfully exported $env_count gateway environment variable(s)"
+    log_info "Successfully exported $env_count gateway environment variable(s)"
   fi
 elif [ "$GW_ENV_VARS_TYPE" != "null" ]; then
-  echo "WARN: Invalid gateway_env_vars format in add-on options (expected list, string or object), skipping"
+  log_warn "Invalid gateway_env_vars format in add-on options (expected list, string or object), skipping"
 fi
 
 # ------------------------------------------------------------------------------
@@ -915,24 +978,24 @@ if [ -d "$IMAGE_BREW_DIR" ] && [ ! -L "$IMAGE_BREW_DIR" ]; then
     else
       cp -ru "$IMAGE_BREW_DIR/"* "$PERSISTENT_BREW_DIR/" 2>/dev/null || true
     fi
-    echo "INFO: Synced Homebrew updates to persistent storage"
+    log_info "Synced Homebrew updates to persistent storage"
   else
     # First time: copy entire Homebrew install to persistent storage
     cp -a "$IMAGE_BREW_DIR" "$PERSISTENT_BREW_DIR" 2>/dev/null || true
-    echo "INFO: Copied Homebrew to persistent storage at $PERSISTENT_BREW_DIR"
+    log_info "Copied Homebrew to persistent storage at $PERSISTENT_BREW_DIR"
   fi
   # Replace image dir with symlink to persistent copy
   rm -rf "$IMAGE_BREW_DIR"
   ln -sf "$PERSISTENT_BREW_DIR" "$IMAGE_BREW_DIR"
 elif [ -L "$IMAGE_BREW_DIR" ]; then
-  echo "INFO: Homebrew already linked to persistent storage"
+  log_info "Homebrew already linked to persistent storage"
 elif [ -d "$PERSISTENT_BREW_DIR" ]; then
   # Image doesn't have Homebrew (failed install?) but persistent copy exists
   mkdir -p "$(dirname "$IMAGE_BREW_DIR")"
   ln -sf "$PERSISTENT_BREW_DIR" "$IMAGE_BREW_DIR"
-  echo "INFO: Restored Homebrew symlink from persistent storage"
+  log_info "Restored Homebrew symlink from persistent storage"
 else
-  echo "INFO: Homebrew not available (install may have failed during image build)"
+  log_info "Homebrew not available (install may have failed during image build)"
 fi
 
 # Back-compat: some docs/scripts assume /data; point it at /config.
@@ -950,7 +1013,7 @@ mkdir -p /config/.hermes/agents || true
 STARTUP_LOCK="/config/.hermes/gateway.start.lock"
 exec 9>"$STARTUP_LOCK"
 if ! flock -n 9; then
-  echo "ERROR: Another instance appears to be running (could not acquire $STARTUP_LOCK)."
+  log_error "Another instance appears to be running (could not acquire $STARTUP_LOCK)."
   echo "If this is wrong, check for stuck processes or remove the lock file."
   exit 1
 fi
@@ -999,12 +1062,12 @@ cleanup_session_locks() {
 
   # If gateway is running, do NOT remove locks automatically (could be real).
   if gateway_running; then
-    echo "INFO: Gateway appears to be running; leaving session lock files untouched."
-    echo "INFO: Locks present: $total_locks"
+    log_info "Gateway appears to be running; leaving session lock files untouched."
+    log_info "Locks present: $total_locks"
     return 0
   fi
 
-  echo "INFO: Removing stale session lock files ($total_locks) across agents: ${cleaned_dirs[*]}"
+  log_info "Removing stale session lock files ($total_locks) across agents: ${cleaned_dirs[*]}"
   for agent_sessions_dir in "${cleaned_dirs[@]}"; do
     rm -f "${agent_sessions_dir}"/*.jsonl.lock || true
   done
@@ -1013,7 +1076,7 @@ cleanup_session_locks() {
 if [ "$CLEAN_LOCKS_ON_START" = "true" ]; then
   cleanup_session_locks
 else
-  echo "INFO: clean_session_locks_on_start=false; skipping session lock cleanup."
+  log_info "clean_session_locks_on_start=false; skipping session lock cleanup."
 fi
 
 # ------------------------------------------------------------------------------
@@ -1114,7 +1177,7 @@ bootstrap_selected_tools
 # We do not overwrite or patch existing configs; onboarding owns everything else.
 HERMES_CONFIG_PATH="/config/.hermes/hermes.json"
 if [ ! -f "$HERMES_CONFIG_PATH" ]; then
-  echo "INFO: Hermes config missing; bootstrapping minimal config at $HERMES_CONFIG_PATH"
+  log_info "Hermes config missing; bootstrapping minimal config at $HERMES_CONFIG_PATH"
   python3 - <<'PY'
 import json
 import secrets
@@ -1158,7 +1221,7 @@ export HERMES_CONFIG_PATH="/config/.hermes/hermes.json"
 # can detect authenticated providers (same persistence model as MCP token sync).
 sync_addon_api_keys_to_hermes_env() {
   if [ ! -f "$HELPER_PATH" ]; then
-    echo "WARN: hermes_config_helper.py not found; cannot sync add-on API keys to Hermes .env"
+    log_warn "hermes_config_helper.py not found; cannot sync add-on API keys to Hermes .env"
     return 0
   fi
 
@@ -1188,7 +1251,7 @@ sync_addon_api_keys_to_hermes_env() {
     }')
 
   if ! python3 "$HELPER_PATH" sync-addon-api-keys "$sync_json"; then
-    echo "WARN: Failed to sync add-on API keys into /config/.hermes/.env"
+    log_warn "Failed to sync add-on API keys into /config/.hermes/.env"
   fi
 }
 
@@ -1199,7 +1262,7 @@ sync_router_ssh_env_to_hermes() {
     return 0
   fi
   if ! python3 "$HELPER_PATH" sync-router-ssh-env "$ROUTER_HOST" "$ROUTER_USER" "$ROUTER_KEY"; then
-    echo "WARN: Failed to sync router SSH env into /config/.hermes/.env"
+    log_warn "Failed to sync router SSH env into /config/.hermes/.env"
   fi
 }
 
@@ -1207,7 +1270,7 @@ sync_router_ssh_env_to_hermes
 
 bootstrap_hermes_first_run() {
   if [ ! -f "$HELPER_PATH" ]; then
-    echo "WARN: hermes_config_helper.py not found; cannot bootstrap Hermes first-run config"
+    log_warn "hermes_config_helper.py not found; cannot bootstrap Hermes first-run config"
     return 0
   fi
 
@@ -1263,7 +1326,7 @@ bootstrap_hermes_first_run() {
     }')
 
   if ! python3 "$HELPER_PATH" bootstrap-first-run "$bootstrap_json"; then
-    echo "WARN: Failed to bootstrap Hermes first-run config (model/browser/timezone/HA env)"
+    log_warn "Failed to bootstrap Hermes first-run config (model/browser/timezone/HA env)"
   fi
 }
 
@@ -1275,8 +1338,8 @@ if [ -f "$HERMES_CONFIG_PATH" ]; then
       :
     else
       rc=$?
-      echo "ERROR: Failed to repair known invalid Hermes config settings via hermes_config_helper.py (exit code ${rc})."
-      echo "ERROR: Gateway configuration may be invalid; aborting startup."
+      log_error "Failed to repair known invalid Hermes config settings via hermes_config_helper.py (exit code ${rc})."
+      log_error "Gateway configuration may be invalid; aborting startup."
       exit "${rc}"
     fi
 
@@ -1286,31 +1349,31 @@ if [ -f "$HERMES_CONFIG_PATH" ]; then
       :
     else
       rc=$?
-      echo "ERROR: Failed to apply gateway settings via hermes_config_helper.py (exit code ${rc})."
-      echo "ERROR: Gateway configuration may be incorrect; aborting startup."
+      log_error "Failed to apply gateway settings via hermes_config_helper.py (exit code ${rc})."
+      log_error "Gateway configuration may be incorrect; aborting startup."
       exit "${rc}"
     fi
 
     if ! python3 "$HELPER_PATH" sync-api-server-env "$ENABLE_OPENAI_API" "$API_SERVER_PORT"; then
-      echo "WARN: Failed to sync Assist API server env (API_SERVER_*)."
+      log_warn "Failed to sync Assist API server env (API_SERVER_*)."
     fi
   else
-    echo "WARN: hermes_config_helper.py not found, cannot apply gateway settings"
-    echo "INFO: Ensure the add-on image includes hermes_config_helper.py and restart"
+    log_warn "hermes_config_helper.py not found, cannot apply gateway settings"
+    log_info "Ensure the add-on image includes hermes_config_helper.py and restart"
   fi
 elif [ -f "$HELPER_PATH" ]; then
   if ! python3 "$HELPER_PATH" sync-api-server-env "$ENABLE_OPENAI_API" "$API_SERVER_PORT"; then
-    echo "WARN: Failed to sync Assist API server env (API_SERVER_*)."
+    log_warn "Failed to sync Assist API server env (API_SERVER_*)."
   fi
 else
-  echo "WARN: Hermes config not found at $HERMES_CONFIG_PATH, cannot apply gateway settings"
-  echo "INFO: Run 'hermes onboard' first, then restart the add-on"
+  log_warn "Hermes config not found at $HERMES_CONFIG_PATH, cannot apply gateway settings"
+  log_info "Run 'hermes onboard' first, then restart the add-on"
 fi
 
 if [ "$GATEWAY_AUTH_MODE" = "trusted-proxy" ]; then
-  echo "NOTICE: gateway_auth_mode=trusted-proxy is enabled."
-  echo "NOTICE: Direct local CLI calls to the gateway may return unauthorized (trusted_proxy_user_missing) unless identity headers are injected by your reverse proxy."
-  echo "NOTICE: For local terminal CLI workflows, temporarily switch to token auth or use commands that don't require direct gateway WS auth."
+  log_info "gateway_auth_mode=trusted-proxy is enabled."
+  log_info "Direct local CLI calls to the gateway may return unauthorized (trusted_proxy_user_missing) unless identity headers are injected by your reverse proxy."
+  log_info "For local terminal CLI workflows, temporarily switch to token auth or use commands that don't require direct gateway WS auth."
 fi
 
 # ------------------------------------------------------------------------------
@@ -1326,19 +1389,19 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
   # Detect primary LAN IP
   LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
   if [ "$LOG_GATEWAY_URL_HINT" = "true" ] && [ -z "$GW_PUBLIC_URL" ] && [ -n "$LAN_IP" ]; then
-    echo "INFO: Gateway LAN URL hint (set gateway_public_url if needed): https://${LAN_IP}:${GATEWAY_PORT}/"
+    log_info "Gateway LAN URL hint (set gateway_public_url if needed): https://${LAN_IP}:${GATEWAY_PORT}/"
   fi
   STORED_IP=$(cat "$CERT_DIR/.cert_ip" 2>/dev/null || echo "")
 
   # --- Local CA (generated once, persists across restarts) ---
   if [ ! -f "$CERT_DIR/ca.key" ] || [ ! -f "$CERT_DIR/ca.crt" ]; then
-    echo "INFO: Generating local CA certificate (one-time)..."
+    log_info "Generating local CA certificate (one-time)..."
     openssl genrsa -out "$CERT_DIR/ca.key" 2048 2>/dev/null
     openssl req -new -x509 -key "$CERT_DIR/ca.key" -out "$CERT_DIR/ca.crt" \
       -days 3650 -nodes -subj "/CN=Hermes Local CA" 2>/dev/null
     chmod 600 "$CERT_DIR/ca.key"
     STORED_IP=""  # force server cert regeneration
-    echo "INFO: Local CA created at $CERT_DIR/ca.crt"
+    log_info "Local CA created at $CERT_DIR/ca.crt"
   fi
 
   # --- Extra SANs from gateway_additional_allowed_origins + gateway_public_url ---
@@ -1373,7 +1436,7 @@ PY
 
   # --- Server cert (regenerated when LAN IP or SANs change) ---
   if [ ! -f "$CERT_DIR/gateway.crt" ] || [ ! -f "$CERT_DIR/gateway.key" ] || [ "$LAN_IP" != "$STORED_IP" ] || [ "$EXTRA_SANS" != "$STORED_EXTRA_SANS" ]; then
-    echo "INFO: Generating server TLS certificate for IP: ${LAN_IP:-unknown}..."
+    log_info "Generating server TLS certificate for IP: ${LAN_IP:-unknown}..."
     openssl genrsa -out "$CERT_DIR/gateway.key" 2048 2>/dev/null
     openssl req -new -key "$CERT_DIR/gateway.key" -out "$CERT_DIR/gateway.csr" \
       -subj "/CN=Hermes Gateway" 2>/dev/null
@@ -1392,15 +1455,15 @@ SANEOF
     chmod 600 "$CERT_DIR/gateway.key"
     printf '%s' "$LAN_IP" > "$CERT_DIR/.cert_ip"
     printf '%s' "$EXTRA_SANS" > "$CERT_DIR/.cert_extra_sans"
-    echo "INFO: Server TLS certificate generated (SAN: IP:${LAN_IP:-127.0.0.1}${EXTRA_SANS:+,${EXTRA_SANS}})"
+    log_info "Server TLS certificate generated (SAN: IP:${LAN_IP:-127.0.0.1}${EXTRA_SANS:+,${EXTRA_SANS}})"
   else
-    echo "INFO: Reusing existing TLS certificate (IP: $STORED_IP)"
+    log_info "Reusing existing TLS certificate (IP: $STORED_IP)"
   fi
 
   # Make CA cert available for download via nginx
   mkdir -p /etc/nginx/html
   cp "$CERT_DIR/ca.crt" /etc/nginx/html/hermes-ca.crt 2>/dev/null || true
-  echo "INFO: CA certificate available for download at /cert/ca.crt on the HTTPS port"
+  log_info "CA certificate available for download at /cert/ca.crt on the HTTPS port"
 
 fi
 
@@ -1439,7 +1502,7 @@ PY
   fi
 
   python3 "$HELPER_PATH" set-control-ui-origins "$ALLOWED_ORIGINS" "$GATEWAY_ADDITIONAL_ALLOWED_ORIGINS" "$CONTROLUI_DISABLE_DEVICE_AUTH" || \
-    echo "WARN: Could not set controlUi settings — gateway may reject the Control UI"
+    log_warn "Could not set controlUi settings — gateway may reject the Control UI"
 fi
 
 # ------------------------------------------------------------------------------
@@ -1472,25 +1535,25 @@ if [ "$EFFECTIVE_AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
   MCP_MARKER="${MCP_TOKEN_HASH}:${MCP_HA_URL}"
 
   if [ -f "$MCP_FLAG" ] && [ "$(tr -d '\r\n' < "$MCP_FLAG" 2>/dev/null || true)" = "$MCP_MARKER" ]; then
-    echo "INFO: MCP Home Assistant server already configured (${MCP_HA_URL})"
+    log_info "MCP Home Assistant server already configured (${MCP_HA_URL})"
   elif [ -f "$HELPER_PATH" ]; then
-    echo "INFO: Configuring Home Assistant MCP in Hermes (mcp_servers) at $MCP_HA_URL ..."
+    log_info "Configuring Home Assistant MCP in Hermes (mcp_servers) at $MCP_HA_URL ..."
     if python3 "$HELPER_PATH" configure-ha-mcp HA "$MCP_HA_URL" "$HA_TOKEN"; then
       printf '%s' "$MCP_MARKER" > "$MCP_FLAG"
       chmod 600 "$MCP_FLAG" 2>/dev/null || true
-      echo "INFO: MCP server 'HA' registered in /config/.hermes/config.yaml"
-      echo "INFO: Reload MCP in Gateway chat with /reload-mcp after first setup if tools are missing"
+      log_info "MCP server 'HA' registered in /config/.hermes/config.yaml"
+      log_info "Reload MCP in Gateway chat with /reload-mcp after first setup if tools are missing"
     else
       rc=$?
-      echo "WARN: MCP auto-configuration failed (exit code ${rc}). Configure manually:"
-      echo "WARN:   Add mcp_servers.HA in /config/.hermes/config.yaml, then run /reload-mcp"
+      log_warn "MCP auto-configuration failed (exit code ${rc}). Configure manually:"
+      log_warn "  Add mcp_servers.HA in /config/.hermes/config.yaml, then run /reload-mcp"
     fi
   else
-    echo "WARN: hermes_config_helper.py not found; cannot auto-configure MCP"
+    log_warn "hermes_config_helper.py not found; cannot auto-configure MCP"
   fi
 elif [ "$EFFECTIVE_AUTO_CONFIGURE_MCP" = "true" ] && [ -z "$HA_TOKEN" ]; then
-  echo "INFO: MCP auto-configure enabled but homeassistant_token not set — skipping"
-  echo "INFO: To auto-configure, set homeassistant_token in add-on Configuration, then restart"
+  log_info "MCP auto-configure enabled but homeassistant_token not set — skipping"
+  log_info "To auto-configure, set homeassistant_token in add-on Configuration, then restart"
 fi
 
 update_setup_readiness_markers() {
@@ -1589,9 +1652,9 @@ resolve_mqtt_config_json() {
   fi
 
   if [ -n "$host" ]; then
-    echo "INFO: MQTT broker resolved (${source}): ${host}:${port:-1883}"
+    log_info "MQTT broker resolved (${source}): ${host}:${port:-1883}"
   else
-    echo "INFO: MQTT broker not available at startup (status exporter will retry; ensure Mosquitto add-on is running)"
+    log_info "MQTT broker not available at startup (status exporter will retry; ensure Mosquitto add-on is running)"
   fi
 
   jq -n \
@@ -1653,11 +1716,11 @@ build_status_exporter_payload() {
 
 start_status_exporter() {
   if [ "$ENABLE_HA_STATUS_SENSORS" != "true" ] && [ "$ENABLE_HA_STATUS_SENSORS" != "1" ]; then
-    echo "INFO: HA status sensors disabled (enable_ha_status_sensors=false)"
+    log_info "HA status sensors disabled (enable_ha_status_sensors=false)"
     return 0
   fi
   if [ ! -f "$EXPORTER_PATH" ]; then
-    echo "WARN: hermes_status_exporter.py not found; HA status sensors unavailable"
+    log_warn "hermes_status_exporter.py not found; HA status sensors unavailable"
     return 0
   fi
 
@@ -1666,7 +1729,7 @@ start_status_exporter() {
   local payload
   payload="$(build_status_exporter_payload)"
 
-  echo "INFO: Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE})"
+  log_info "Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE})"
   python3 "$EXPORTER_PATH" run-loop "$payload" &
   STATUS_EXPORTER_PID=$!
 }
@@ -1683,8 +1746,8 @@ start_hermes_runtime() {
     # 'hermes config show' which may time out at startup or return redacted values.
     REMOTE_URL="$GATEWAY_REMOTE_URL"
     if [ -z "$REMOTE_URL" ]; then
-      echo "ERROR: gateway_mode=remote but gateway_remote_url is not set in add-on options"
-      echo "ERROR: Set gateway_remote_url in add-on Configuration (e.g. ws://192.168.1.10:18789), then restart"
+      log_error "gateway_mode=remote but gateway_remote_url is not set in add-on options"
+      log_error "Set gateway_remote_url in add-on Configuration (e.g. ws://192.168.1.10:18789), then restart"
       return 1
     fi
 
@@ -1697,7 +1760,7 @@ from urllib.parse import urlparse
 url = (sys.argv[1] or '').strip()
 p = urlparse(url)
 if p.scheme not in ('ws', 'wss') or not p.hostname:
-    print('echo "ERROR: Invalid gateway.remote.url (expected ws:// or wss://): %s"' % url.replace('"', '\\"'))
+    print('log_error "Invalid gateway.remote.url (expected ws:// or wss://): %s"' % url.replace('"', '\\"'))
     print('exit 1')
     raise SystemExit(0)
 port = p.port or (443 if p.scheme == 'wss' else 80)
@@ -1706,16 +1769,16 @@ print(f'NODE_PORT={port}')
 print(f'NODE_TLS_FLAG={"--tls" if p.scheme == "wss" else ""}')
 PY
 )"; then
-      echo "ERROR: Failed to parse gateway.remote.url: $REMOTE_URL"
+      log_error "Failed to parse gateway.remote.url: $REMOTE_URL"
       return 1
     fi
 
     if ! hermes node run --help >/dev/null 2>&1; then
-      echo "ERROR: gateway_mode=remote requires 'hermes node run', which is unavailable in the installed Hermes version."
-      echo "ERROR: Upgrade via hermes_agent_version_preset or set gateway_mode=local."
+      log_error "gateway_mode=remote requires 'hermes node run', which is unavailable in the installed Hermes version."
+      log_error "Upgrade via hermes_agent_version_preset or set gateway_mode=local."
       return 1
     fi
-    echo "INFO: gateway_mode=remote detected; starting node host to $NODE_HOST:$NODE_PORT ${NODE_TLS_FLAG}"
+    log_info "gateway_mode=remote detected; starting node host to $NODE_HOST:$NODE_PORT ${NODE_TLS_FLAG}"
     # shellcheck disable=SC2086
     hermes node run --host "$NODE_HOST" --port "$NODE_PORT" $NODE_TLS_FLAG &
   else
@@ -1746,7 +1809,7 @@ start_gw_relay() {
   ts_ip=$(ip -4 addr show tailscale0 2>/dev/null \
     | awk '/inet /{gsub(/\/.*/,"",$2); print $2; exit}' || true)
   if [[ "${ts_ip:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "INFO: Starting loopback relay for tailnet gateway (127.0.0.1:${GATEWAY_PORT} -> ${ts_ip}:${GATEWAY_PORT})"
+    log_info "Starting loopback relay for tailnet gateway (127.0.0.1:${GATEWAY_PORT} -> ${ts_ip}:${GATEWAY_PORT})"
     node -e "
 const net = require('net');
 const TARGET_HOST = '${ts_ip}';
@@ -1759,10 +1822,10 @@ const server = net.createServer(function(c) {
 });
 server.listen(TARGET_PORT, '127.0.0.1');" &
     GW_RELAY_PID=$!
-    echo "INFO: Loopback relay started (PID ${GW_RELAY_PID})"
+    log_info "Loopback relay started (PID ${GW_RELAY_PID})"
   else
-    echo "WARN: tailnet bind mode active but Tailscale IP not found on tailscale0 interface."
-    echo "WARN: Terminal CLI may show gateway as unreachable. Ensure Tailscale is running and restart."
+    log_warn "tailnet bind mode active but Tailscale IP not found on tailscale0 interface."
+    log_warn "Terminal CLI may show gateway as unreachable. Ensure Tailscale is running and restart."
   fi
 }
 
@@ -1825,7 +1888,7 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
     sleep 2
   done
   if [ "$GATEWAY_BIND_OK" = "true" ]; then
-    echo "INFO: Dashboard listening on 127.0.0.1:${GATEWAY_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
+    log_info "Dashboard listening on 127.0.0.1:${GATEWAY_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
     if [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; then
       API_BIND_OK=false
       for _api_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
@@ -1836,20 +1899,20 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
         sleep 2
       done
       if [ "$API_BIND_OK" = "true" ]; then
-        echo "INFO: Assist API server listening on 0.0.0.0:${API_SERVER_PORT} (Extended OpenAI from HA Core: http://<LAN-IP>:${API_SERVER_PORT}/v1)"
+        log_info "Assist API server listening on 0.0.0.0:${API_SERVER_PORT} (Extended OpenAI from HA Core: http://<LAN-IP>:${API_SERVER_PORT}/v1)"
       else
-        echo "ERROR: Assist API server did not bind port ${API_SERVER_PORT} within 30s."
-        echo "ERROR: Set enable_openai_api=true, ensure gateway token exists, and restart."
-        echo "ERROR: Probe: curl -sS http://127.0.0.1:${API_SERVER_PORT}/health"
+        log_error "Assist API server did not bind port ${API_SERVER_PORT} within 30s."
+        log_error "Set enable_openai_api=true, ensure gateway token exists, and restart."
+        log_error "Probe: curl -sS http://127.0.0.1:${API_SERVER_PORT}/health"
       fi
     fi
   else
-    echo "ERROR: Dashboard did not bind port ${GATEWAY_INTERNAL_PORT} within 30s."
-    echo "ERROR: https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
-    echo "ERROR: Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
-    echo "ERROR: Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
-    echo "ERROR: If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."
-    echo "ERROR: If import fails otherwise, install Web UI deps: uv pip install --system 'fastapi' 'uvicorn[standard]' (or pip --break-system-packages)"
+    log_error "Dashboard did not bind port ${GATEWAY_INTERNAL_PORT} within 30s."
+    log_error "https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
+    log_error "Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
+    log_error "Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
+    log_error "If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."
+    log_error "If import fails otherwise, install Web UI deps: uv pip install --system 'fastapi' 'uvicorn[standard]' (or pip --break-system-packages)"
   fi
 fi
 
@@ -1939,7 +2002,7 @@ if command -v pkill >/dev/null 2>&1; then
 fi
 # Verify port 48099 is actually free before proceeding
 if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ':48099 '; then
-  echo "WARN: Port 48099 still in use after cleanup; nginx may fail to start"
+  log_warn "Port 48099 still in use after cleanup; nginx may fail to start"
 fi
 
 # ------------------------------------------------------------------------------
@@ -1967,12 +2030,12 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
     disk_avail=$(df -h /config | awk 'NR==2{print $4}')
     disk_pct=$(df -h /config   | awk 'NR==2{print $5}')
     if [ "$label" = "startup" ]; then
-      echo "INFO: Disk usage: ${disk_used}/${disk_total} (${disk_pct} used, ${disk_avail} free)"
+      log_info "Disk usage: ${disk_used}/${disk_total} (${disk_pct} used, ${disk_avail} free)"
       local pct_num=${disk_pct//%/}
       if [ "$pct_num" -ge 90 ] 2>/dev/null; then
         echo "WARNING: Disk is ${disk_pct} full! Add-on updates may fail. Run 'hermes-cleanup' in the terminal."
       elif [ "$pct_num" -ge 75 ] 2>/dev/null; then
-        echo "NOTICE: Disk is ${disk_pct} full. Consider running 'hermes-cleanup' in the terminal."
+        log_info "Disk is ${disk_pct} full. Consider running 'hermes-cleanup' in the terminal."
       fi
     fi
   fi
@@ -2004,7 +2067,7 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
     nginx_pid=$(cat "${NGINX_PID_FILE:-/var/run/hermes-nginx.pid}" 2>/dev/null || true)
     if [ -n "$nginx_pid" ] && kill -0 "$nginx_pid" 2>/dev/null; then
       kill -HUP "$nginx_pid" 2>/dev/null || true
-      echo "INFO: Landing page re-rendered with gateway token (nginx reloaded)."
+      log_info "Landing page re-rendered with gateway token (nginx reloaded)."
     fi
   fi
 }
@@ -2020,7 +2083,7 @@ if kill -0 "$NGINX_PID" 2>/dev/null; then
   echo "$NGINX_PID" > "$NGINX_PID_FILE"
   echo "nginx started with PID $NGINX_PID"
 else
-  echo "WARN: nginx failed to start (PID $NGINX_PID exited); ingress UI may be unavailable"
+  log_warn "nginx failed to start (PID $NGINX_PID exited); ingress UI may be unavailable"
 fi
 
 start_status_exporter
@@ -2044,7 +2107,7 @@ except Exception:
       if [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; then
         if [ -f "$HELPER_PATH" ]; then
           python3 "$HELPER_PATH" sync-api-server-env true "$API_SERVER_PORT" >/dev/null 2>&1 || true
-          echo "INFO: Gateway token available; Assist API env updated. Restart add-on if port ${API_SERVER_PORT} is not listening."
+          log_info "Gateway token available; Assist API env updated. Restart add-on if port ${API_SERVER_PORT} is not listening."
         fi
       fi
       render_landing post-onboard
@@ -2112,7 +2175,7 @@ while true; do
   fi
 
   if [ -n "$RESTARTED_PID" ]; then
-    echo "INFO: Hermes runtime active (PID $RESTARTED_PID); monitoring."
+    log_info "Hermes runtime active (PID $RESTARTED_PID); monitoring."
     GW_PID="$RESTARTED_PID"
     GW_IS_CHILD=false
     continue
@@ -2128,13 +2191,13 @@ while true; do
       | grep ":${GATEWAY_INTERNAL_PORT} " \
       | sed -n 's/.*pid=\([0-9]*\).*/\1/p' \
       | head -1 || true)
-    echo "INFO: Gateway port ${GATEWAY_INTERNAL_PORT} occupied by PID ${PORT_PID:-unknown}; monitoring."
+    log_info "Gateway port ${GATEWAY_INTERNAL_PORT} occupied by PID ${PORT_PID:-unknown}; monitoring."
     GW_PID="${PORT_PID:-$GW_PID}"
     GW_IS_CHILD=false
     continue
   fi
 
-  echo "WARN: Hermes runtime exited with code ${GW_EXIT_CODE}. Restarting in 2s..."
+  log_warn "Hermes runtime exited with code ${GW_EXIT_CODE}. Restarting in 2s..."
   sleep 2
 
   # Stop the loopback relay BEFORE restarting the gateway (tailnet mode only).
@@ -2143,7 +2206,7 @@ while true; do
   stop_gw_relay
 
   if ! start_hermes_runtime; then
-    echo "ERROR: Failed to restart Hermes runtime; retrying in 5s..."
+    log_error "Failed to restart Hermes runtime; retrying in 5s..."
     sleep 5
   else
     GW_IS_CHILD=true

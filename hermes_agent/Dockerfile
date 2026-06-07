@@ -161,14 +161,16 @@ if [ -z "${LS_COLORS+x}" ]; then
 fi
 EOF
 COPY run.sh /run.sh
+COPY addon_log.sh /addon_log.sh
 COPY hermes_config_helper.py /hermes_config_helper.py
 COPY hermes_status_exporter.py /hermes_status_exporter.py
+COPY hermes_mqtt_resolver.py /hermes_mqtt_resolver.py
 COPY render_nginx.py /render_nginx.py
 COPY hermes-cleanup.sh /usr/local/bin/hermes-cleanup
 COPY hermes-proxy-shim.cjs /usr/local/lib/hermes-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
-RUN chmod +x /run.sh /hermes_config_helper.py /hermes_status_exporter.py /render_nginx.py /repair_hermes_wheel.py /usr/local/bin/hermes-cleanup \
+RUN chmod +x /run.sh /addon_log.sh /hermes_config_helper.py /hermes_status_exporter.py /hermes_mqtt_resolver.py /render_nginx.py /repair_hermes_wheel.py /usr/local/bin/hermes-cleanup \
     && mkdir -p /run/nginx
 
 CMD [ "/run.sh" ]

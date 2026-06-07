@@ -9,7 +9,7 @@ configuration:
   
   terminal_port:
     name: Puerto del terminal
-    description: Número de puerto para el terminal web (predeterminado - 7681). Cambie si este puerto entra en conflicto con otro servicio.
+    description: Puerto para el terminal web (predeterminado 7681). Cambie si este puerto entra en conflicto con otro servicio.
   
   gateway_public_url:
     name: URL pública del Gateway
@@ -45,13 +45,49 @@ configuration:
     name: Modelo (custom)
     description: "ID de modelo cuando el preajuste es custom. Bootstrap solo en el primer arranque si no hay modelo configurado."
 
-  firecrawl_api_key:
-    name: Clave API de Firecrawl
-    description: "Token opcional de búsqueda web sincronizado como FIRECRAWL_API_KEY en /config/.hermes/.env."
+  provider_api_keys:
+    name: Claves API de proveedores
+    description: Tokens opcionales de proveedores y herramientas sincronizados en /config/.hermes/.env al reiniciar. Los proveedores OAuth/device-code aún requieren `hermes auth` en el terminal.
+    fields:
+      openai_api_key:
+        name: Clave API de OpenAI
+        description: Sincronizada como OPENAI_API_KEY.
+      openrouter_api_key:
+        name: Clave API de OpenRouter
+        description: Sincronizada como OPENROUTER_API_KEY.
+      anthropic_api_key:
+        name: Clave API de Anthropic
+        description: Sincronizada como ANTHROPIC_API_KEY.
+      google_api_key:
+        name: Clave API de Google
+        description: Sincronizada como GOOGLE_API_KEY.
+      minimax_api_key:
+        name: Clave API de MiniMax
+        description: Sincronizada como MINIMAX_API_KEY.
+      discord_bot_token:
+        name: Token de bot de Discord
+        description: Sincronizado como DISCORD_BOT_TOKEN.
+      github_token:
+        name: Token de GitHub
+        description: Sincronizado como GITHUB_TOKEN.
+      xai_api_key:
+        name: Clave API de xAI
+        description: Sincronizada como XAI_API_KEY.
+      firecrawl_api_key:
+        name: Clave API de Firecrawl
+        description: Sincronizada como FIRECRAWL_API_KEY.
+      searxng_url:
+        name: URL de SearXNG
+        description: Sincronizada como SEARXNG_URL.
 
-  searxng_url:
-    name: URL de SearXNG
-    description: "URL opcional de SearXNG sincronizada como SEARXNG_URL en /config/.hermes/.env."
+  addon_log_level:
+    name: Nivel de log del complemento
+    description: Verbosidad de los logs de inicio del contenedor del complemento (colores y emojis cuando el terminal de logs es interactivo).
+    options:
+      error: "Solo errores"
+      warn: "Advertencias y errores"
+      info: "Info (predeterminado)"
+      debug: "Debug (detallado)"
 
   http_proxy:
     name: Proxy HTTP de salida
@@ -67,7 +103,7 @@ configuration:
   
   router_ssh_key_path:
     name: Ruta de clave SSH del router
-    description: Ruta a la clave privada SSH para acceso al router (predeterminado - /data/keys/router_ssh)
+    description: Ruta a la clave privada SSH para acceso al router en almacenamiento persistente (predeterminado - /config/keys/router_ssh)
   
   clean_session_locks_on_start:
     name: Limpiar bloqueos de sesión al iniciar
@@ -90,7 +126,7 @@ configuration:
 
   gateway_additional_allowed_origins:
     name: Orígenes permitidos adicionales
-    description: Orígenes extra de Control UI separados por comas que se combinan en gateway.controlUi.allowedOrigins en modo lan_https (ejemplo - https://ha.example.com:8443,capacitor://localhost)
+    description: Orígenes extra de Control UI (uno por fila). Se combinan en gateway.controlUi.allowedOrigins; en lan_https los nombres de host también se añaden al SAN del certificado TLS.
 
   controlui_disable_device_auth:
     name: Desactivar emparejamiento por dispositivo en Control UI (lan_https)
@@ -106,7 +142,7 @@ configuration:
 
   gateway_port:
     name: Puerto del Gateway
-    description: Número de puerto en el que el gateway de Hermes Agent escuchará (predeterminado - 18789)
+    description: Puerto del gateway de Hermes Agent (predeterminado 18789)
 
   access_mode:
     name: Modo de acceso
@@ -127,7 +163,7 @@ configuration:
 
   gateway_trusted_proxies:
     name: Proxys de confianza del Gateway
-    description: Lista de IPs/CIDR de proxys de confianza separados por comas para el modo trusted-proxy (ejemplo - 127.0.0.1,192.168.88.0/24).
+    description: Entradas de IP o CIDR de proxy de confianza (una por fila) para el modo trusted-proxy. Ejemplo - 127.0.0.1 o 192.168.88.0/24.
 
   enable_openai_api:
     name: Activar API OpenAI
@@ -179,27 +215,3 @@ configuration:
   tool_skills_hub_enabled:
     name: Bootstrap de Skills Hub
     description: "Cuando está ACTIVADO, el inicio inicializa automáticamente el directorio de Skills Hub (equivalente a ejecutar `hermes skills list` por primera vez)."
-  openai_api_key:
-    name: Clave API de OpenAI
-    description: "Token opcional sincronizado en /config/.hermes/.env como OPENAI_API_KEY para la configuración onboard/model y el runtime de Hermes."
-  openrouter_api_key:
-    name: Clave API de OpenRouter
-    description: "Token opcional sincronizado en /config/.hermes/.env como OPENROUTER_API_KEY para la configuración onboard/model y el runtime de Hermes."
-  anthropic_api_key:
-    name: Clave API de Anthropic
-    description: "Token opcional sincronizado en /config/.hermes/.env como ANTHROPIC_API_KEY para la configuración onboard/model y el runtime de Hermes."
-  google_api_key:
-    name: Clave API de Google
-    description: "Token opcional sincronizado en /config/.hermes/.env como GOOGLE_API_KEY para la configuración onboard/model y el runtime de Hermes."
-  minimax_api_key:
-    name: Clave API de MiniMax
-    description: "Token opcional sincronizado en /config/.hermes/.env como MINIMAX_API_KEY para la configuración onboard/model y el runtime de Hermes."
-  discord_bot_token:
-    name: Token de bot de Discord
-    description: "Token opcional sincronizado en /config/.hermes/.env como DISCORD_BOT_TOKEN para herramientas de Discord."
-  github_token:
-    name: Token de GitHub
-    description: "Token opcional sincronizado en /config/.hermes/.env como GITHUB_TOKEN para mejorar límites de API."
-  xai_api_key:
-    name: Clave API de xAI
-    description: "Token opcional sincronizado en /config/.hermes/.env como XAI_API_KEY para x_search."
