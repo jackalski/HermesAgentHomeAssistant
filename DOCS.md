@@ -1,4 +1,4 @@
-# Hermes Agent — Home Assistant Add-on
+# Hermes Agent Integration — Home Assistant Add-on
 
 Canonical setup and operations guide. This add-on is marked **Experimental** in the Home Assistant add-on store — expect breaking changes between releases. Read [SECURITY.md](SECURITY.md) before enabling remote access.
 
@@ -16,13 +16,13 @@ Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`,
 
 1. **Settings → Add-ons → Add-on store → Repositories**
 2. Add `https://github.com/jackalski/HermesAgentHomeAssistant`
-3. Install **Hermes Agent** and start it.
+3. Install **Hermes Agent Integration** and start it.
 
 Architectures: `amd64`, `aarch64`, `armv7`.
 
 ## Quick start (recommended)
 
-**Settings → Add-ons → Hermes Agent → Configuration:**
+**Settings → Add-ons → Hermes Agent Integration → Configuration:**
 
 | Field | What to set |
 |-------|-------------|
@@ -112,7 +112,7 @@ ingress:
 
 With `enable_ha_status_sensors` (default ON):
 
-- **MQTT** entities when Mosquitto is installed (device: Hermes Agent).
+- **MQTT** entities when Mosquitto is installed (device: Hermes Agent Integration).
 - **JSON API** at Ingress `/status.json` and `/share/hermes/status.json`.
 
 Options: `publish_mqtt_discovery`, `status_poll_interval_seconds` (30–300), `mqtt_state_prefix`.

@@ -1,8 +1,8 @@
-name: Hermes Agent
-version: "0.0.16"
+name: Hermes Agent Integration
+version: "0.0.17"
 slug: hermes_agent
 stage: experimental
-description: Run Hermes Agent as a Home Assistant add-on.
+description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
 url: https://github.com/jackalski/HermesAgentHomeAssistant
 services:
   - mqtt:want
@@ -20,7 +20,7 @@ host_network: true
 # Home Assistant Ingress (UI inside the add-on page)
 ingress: true
 ingress_port: 48099
-panel_title: Hermes Agent
+panel_title: Hermes Agent Integration
 panel_icon: mdi:robot
 
 map:

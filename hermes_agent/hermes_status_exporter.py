@@ -47,7 +47,7 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.16"
+ADDON_VERSION = "0.0.17"
 STATUS_FILE = Path("/share/hermes/status.json")
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
@@ -362,9 +362,9 @@ def write_status_file(path: Path, snapshot: dict[str, Any]) -> bool:
 def _device_block(sw_version: str) -> dict[str, Any]:
     return {
         "identifiers": DEVICE_IDENTIFIERS,
-        "name": "Hermes Agent",
+        "name": "Hermes Agent Integration",
         "manufacturer": "Nous Research",
-        "model": "Hermes Agent Add-on",
+        "model": "Hermes Agent Integration Add-on",
         "sw_version": sw_version,
     }
 

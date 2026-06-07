@@ -2,8 +2,8 @@
 
 ## Project Scope
 
-This repository builds the **Hermes Agent** Home Assistant add-on.
-The add-on packages Hermes Agent + nginx + ttyd and manages startup/configuration glue.
+This repository builds the **Hermes Agent Integration** Home Assistant add-on.
+The add-on packages upstream Hermes Agent + nginx + ttyd and manages startup/configuration glue.
 
 ## Architecture at a Glance
 

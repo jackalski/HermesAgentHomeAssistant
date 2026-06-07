@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem with the Hermes Agent Home Assistant add-on.
+description: Report a reproducible problem with the Hermes Agent Integration Home Assistant add-on.
 title: "bug: "
 labels:
   - bug

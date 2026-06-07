@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hermes Agent</title>
+  <title>Hermes Agent Integration</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;margin:0;padding:16px;background:#0b0f14;color:#e6edf3}
     a,button{font:inherit}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="card">
-    <h2 style="margin:0 0 4px 0">Hermes Agent</h2>
+    <h2 style="margin:0 0 4px 0">Hermes Agent Integration</h2>
     <div style="margin-bottom:10px">
       <span class="badge mode" id="modeBadge">__ACCESS_MODE__</span>
       <span class="badge" id="secureBadge"></span>
@@ -436,7 +436,7 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
       wizardContent.innerHTML = `
         <div class="banner warn">You are using custom settings and this page is not in a secure context.
         The Gateway Control UI will reject connections over plain HTTP.</div>
-        <p style="font-size:14px"><b>Recommended:</b> Go to <b>Settings → Add-ons → Hermes Agent → Configuration</b>
+        <p style="font-size:14px"><b>Recommended:</b> Go to <b>Settings → Add-ons → Hermes Agent Integration → Configuration</b>
         and set <code>access_mode</code> to one of:</p>
         <ul style="font-size:14px;line-height:1.8;padding-left:22px">
           <li><b>lan_https</b> — easiest, adds built-in HTTPS proxy (no external setup needed)</li>
