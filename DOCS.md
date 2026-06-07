@@ -142,7 +142,8 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | Option | Default | Notes |
 |--------|---------|-------|
 | `setup_profile` | `home_assistant` | Preset for first-run behavior |
-| `default_model_preset` | `auto` | `gemini_flash`, `claude_sonnet`, `gpt_mini`, `custom` |
+| `default_provider` | `openrouter` | `nous`, `openrouter`, `google`, `anthropic`, `ollama`, `minimax`, `xai`, `openai` |
+| `default_model_preset` | `custom` | `custom` only — set model ID in `default_model` |
 | `access_mode` | `lan_https` | See access modes above |
 | `gateway_port` | `18789` | External HTTPS port in `lan_https` |
 | `hass_url` | *(empty)* | Autodetect on HAOS |
@@ -163,7 +164,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
 | `hermes_agent_version_custom` | `0.16.0` | npm tag/semver when preset is `custom` |
 
-Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG).
+Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
 
 **`enable_openai_api`** maps directly to Hermes **`API_SERVER_ENABLED`** in `/config/.hermes/.env` (with `API_SERVER_HOST`, `API_SERVER_PORT`, `API_SERVER_KEY`).
 

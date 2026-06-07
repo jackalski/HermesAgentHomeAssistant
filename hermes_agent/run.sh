@@ -135,7 +135,8 @@ GATEWAY_ADDITIONAL_ALLOWED_ORIGINS="$(join_nested_list_option_csv gateway_access
 CONTROLUI_DISABLE_DEVICE_AUTH="$(read_nested_option gateway_access controlui_disable_device_auth)"
 FORCE_IPV4_DNS="$(read_nested_option advanced_settings force_ipv4_dns)"
 SETUP_PROFILE=$(jq -r '.setup_profile // "home_assistant"' "$OPTIONS_FILE")
-DEFAULT_MODEL_PRESET=$(jq -r '.default_model_preset // "auto"' "$OPTIONS_FILE")
+DEFAULT_PROVIDER=$(jq -r '.default_provider // "openrouter"' "$OPTIONS_FILE")
+DEFAULT_MODEL_PRESET=$(jq -r '.default_model_preset // "custom"' "$OPTIONS_FILE")
 DEFAULT_MODEL_OPT=$(jq -r '.default_model // empty' "$OPTIONS_FILE")
 HASS_URL="$(read_nested_option home_assistant hass_url)"
 ACCESS_MODE="$(read_nested_option gateway_access access_mode)"
@@ -152,6 +153,7 @@ OPENAI_API_KEY_OPT="$(read_provider_option openai_api_key)"
 OPENROUTER_API_KEY_OPT="$(read_provider_option openrouter_api_key)"
 ANTHROPIC_API_KEY_OPT="$(read_provider_option anthropic_api_key)"
 GOOGLE_API_KEY_OPT="$(read_provider_option google_api_key)"
+OLLAMA_API_KEY_OPT="$(read_provider_option ollama_api_key)"
 MINIMAX_API_KEY_OPT="$(read_provider_option minimax_api_key)"
 DISCORD_BOT_TOKEN_OPT="$(read_provider_option discord_bot_token)"
 GITHUB_TOKEN_OPT="$(read_provider_option github_token)"
@@ -1288,6 +1290,7 @@ sync_addon_api_keys_to_hermes_env() {
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
     --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
     --arg google "$GOOGLE_API_KEY_OPT" \
+    --arg ollama "$OLLAMA_API_KEY_OPT" \
     --arg minimax "$MINIMAX_API_KEY_OPT" \
     --arg discord "$DISCORD_BOT_TOKEN_OPT" \
     --arg github "$GITHUB_TOKEN_OPT" \
@@ -1299,6 +1302,7 @@ sync_addon_api_keys_to_hermes_env() {
       OPENROUTER_API_KEY: $openrouter,
       ANTHROPIC_API_KEY: $anthropic,
       GOOGLE_API_KEY: $google,
+      OLLAMA_API_KEY: $ollama,
       MINIMAX_API_KEY: $minimax,
       DISCORD_BOT_TOKEN: $discord,
       GITHUB_TOKEN: $github,
@@ -1344,6 +1348,7 @@ bootstrap_hermes_first_run() {
 
   bootstrap_json=$(jq -n \
     --arg timezone "$TZNAME" \
+    --arg default_provider "$DEFAULT_PROVIDER" \
     --arg default_model_preset "$DEFAULT_MODEL_PRESET" \
     --arg default_model "$DEFAULT_MODEL_OPT" \
     --arg ha_url "$EFFECTIVE_HASS_URL" \
@@ -1359,9 +1364,12 @@ bootstrap_hermes_first_run() {
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
     --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
     --arg google "$GOOGLE_API_KEY_OPT" \
+    --arg ollama "$OLLAMA_API_KEY_OPT" \
     --arg minimax "$MINIMAX_API_KEY_OPT" \
+    --arg xai "$XAI_API_KEY_OPT" \
     '{
       timezone: $timezone,
+      default_provider: $default_provider,
       default_model_preset: $default_model_preset,
       default_model: $default_model,
       browser_enabled: $browser_enabled,
@@ -1378,7 +1386,9 @@ bootstrap_hermes_first_run() {
         ANTHROPIC_API_KEY: $anthropic,
         OPENAI_API_KEY: $openai,
         GOOGLE_API_KEY: $google,
-        MINIMAX_API_KEY: $minimax
+        OLLAMA_API_KEY: $ollama,
+        MINIMAX_API_KEY: $minimax,
+        XAI_API_KEY: $xai
       }
     }')
 

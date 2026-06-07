@@ -20,19 +20,28 @@ configuration:
       general: "General assistant"
       advanced: "Advanced (manual options)"
 
+  default_provider:
+    name: Default Provider
+    description: "Main LLM provider for first-run bootstrap. Nous Portal uses OAuth (`hermes setup --portal` or `hermes auth add nous` in terminal). Ollama maps to Ollama Cloud (`ollama-cloud`)."
+    options:
+      nous: "Nous Portal"
+      openrouter: "OpenRouter"
+      google: "Google (Gemini API key)"
+      anthropic: "Anthropic"
+      ollama: "Ollama Cloud"
+      minimax: "MiniMax"
+      xai: "xAI (Grok)"
+      openai: "OpenAI"
+
   default_model_preset:
     name: Default Model Preset
-    description: "Curated main model for first-run bootstrap. auto infers from your first API key; custom uses the Default Model (custom) field."
+    description: "Use Custom and set the model ID in Default Model below."
     options:
-      auto: "Auto (infer from API key)"
-      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
-      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
-      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
       custom: "Custom model ID"
 
   default_model:
-    name: Default Model (custom)
-    description: "Main model ID when Default Model Preset is custom (e.g. google/gemini-2.5-flash). Bootstrapped on first run only when no model is configured yet."
+    name: Default Model
+    description: "Main model ID for the selected provider (e.g. google/gemini-2.5-flash for OpenRouter, claude-sonnet-4-6 for Anthropic, gpt-oss:120b for Ollama Cloud). Bootstrapped on first run only when no model is configured yet."
 
   provider_api_keys:
     name: Provider API Keys
@@ -50,6 +59,9 @@ configuration:
       google_api_key:
         name: Google API Key
         description: Synced as GOOGLE_API_KEY.
+      ollama_api_key:
+        name: Ollama Cloud API Key
+        description: Synced as OLLAMA_API_KEY (from ollama.com/settings/keys).
       minimax_api_key:
         name: MiniMax API Key
         description: Synced as MINIMAX_API_KEY.

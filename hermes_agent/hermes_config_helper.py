@@ -41,10 +41,34 @@ PROFILE_MANIFEST = {
     },
 }
 
-MODEL_PRESETS = {
+# Legacy curated presets (removed from add-on UI; still honored if present in saved options).
+LEGACY_MODEL_PRESETS = {
     "gemini_flash": "google/gemini-2.5-flash",
     "claude_sonnet": "anthropic/claude-sonnet-4-6",
     "gpt_mini": "openai/gpt-4.1-mini",
+}
+
+# Add-on default_provider values -> Hermes config.yaml model.provider ids.
+ADDON_PROVIDER_TO_HERMES = {
+    "nous": "nous",
+    "openrouter": "openrouter",
+    "google": "gemini",
+    "anthropic": "anthropic",
+    "ollama": "ollama-cloud",
+    "minimax": "minimax",
+    "xai": "xai",
+    "openai": "openai",
+}
+
+PROVIDER_ENV_KEYS = {
+    "nous": None,
+    "openrouter": "OPENROUTER_API_KEY",
+    "gemini": "GOOGLE_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "ollama-cloud": "OLLAMA_API_KEY",
+    "minimax": "MINIMAX_API_KEY",
+    "xai": "XAI_API_KEY",
+    "openai": "OPENAI_API_KEY",
 }
 
 AUXILIARY_TITLE_MODEL = "google/gemini-2.5-flash"
@@ -164,6 +188,7 @@ ADDON_API_KEY_ENV_MAP = {
     "OPENROUTER_API_KEY": "openrouter_api_key",
     "ANTHROPIC_API_KEY": "anthropic_api_key",
     "GOOGLE_API_KEY": "google_api_key",
+    "OLLAMA_API_KEY": "ollama_api_key",
     "MINIMAX_API_KEY": "minimax_api_key",
     "DISCORD_BOT_TOKEN": "discord_bot_token",
     "GITHUB_TOKEN": "github_token",
@@ -249,22 +274,25 @@ def upsert_env_var(key: str, value: str):
         return False
 
 
-# Default main models when add-on default_model is empty (provider -> model id).
+# Default main models when add-on default_model is empty (Hermes provider id -> model id).
 DEFAULT_MODEL_BY_PROVIDER = {
     "openrouter": "google/gemini-2.5-flash",
     "anthropic": "claude-sonnet-4-6",
     "openai": "gpt-4.1-mini",
-    "google": "gemini-2.5-flash",
+    "gemini": "gemini-2.5-flash",
     "minimax": "MiniMax-M2.7",
+    "xai": "grok-4-1-fast-reasoning",
 }
 
-# Provider preference when multiple API keys are configured.
+# Provider preference when multiple API keys are configured (legacy inference).
 PROVIDER_KEY_PRIORITY = (
     ("openrouter", "OPENROUTER_API_KEY"),
     ("anthropic", "ANTHROPIC_API_KEY"),
     ("openai", "OPENAI_API_KEY"),
-    ("google", "GOOGLE_API_KEY"),
+    ("gemini", "GOOGLE_API_KEY"),
     ("minimax", "MINIMAX_API_KEY"),
+    ("xai", "XAI_API_KEY"),
+    ("ollama-cloud", "OLLAMA_API_KEY"),
 )
 
 # Main LLM provider env keys only (excludes auxiliary/search tokens).
@@ -397,16 +425,40 @@ def resolve_setup_profile(payload: dict):
 
 
 def resolve_default_model_text(default_model_preset: str, default_model: str) -> str:
-    preset = (default_model_preset or "auto").strip().lower()
+    preset = (default_model_preset or "custom").strip().lower()
     if preset == "custom":
         return (default_model or "").strip()
     if preset == "auto":
         return (default_model or "").strip()
-    return MODEL_PRESETS.get(preset, (default_model or "").strip())
+    return LEGACY_MODEL_PRESETS.get(preset, (default_model or "").strip())
 
 
-def infer_provider_and_model(default_model: str, api_keys: dict):
+def resolve_hermes_provider_id(default_provider: str) -> str:
+    ui_provider = (default_provider or "").strip().lower()
+    return ADDON_PROVIDER_TO_HERMES.get(ui_provider, "")
+
+
+def _provider_has_credentials(hermes_provider: str, api_keys: dict) -> bool:
+    env_key = PROVIDER_ENV_KEYS.get(hermes_provider)
+    if env_key is None:
+        return True
+    return _has_api_key(api_keys, env_key)
+
+
+def infer_provider_and_model(
+    default_provider: str, default_model: str, api_keys: dict
+):
     """Return (provider, model) or (None, None) when inference is not possible."""
+    hermes_provider = resolve_hermes_provider_id(default_provider)
+    explicit = (default_model or "").strip()
+    if hermes_provider:
+        if not _provider_has_credentials(hermes_provider, api_keys):
+            return None, None
+        model_id = explicit or DEFAULT_MODEL_BY_PROVIDER.get(hermes_provider, "")
+        if not model_id:
+            return None, None
+        return hermes_provider, model_id
+
     explicit = (default_model or "").strip()
     if explicit:
         if "/" in explicit and _has_api_key(api_keys, "OPENROUTER_API_KEY"):
@@ -420,7 +472,7 @@ def infer_provider_and_model(default_model: str, api_keys: dict):
             if prefix in ("openai", "gpt") and _has_api_key(api_keys, "OPENAI_API_KEY"):
                 return "openai", model_id
             if prefix == "google" and _has_api_key(api_keys, "GOOGLE_API_KEY"):
-                return "google", model_id
+                return "gemini", model_id
         for provider, env_key in PROVIDER_KEY_PRIORITY:
             if _has_api_key(api_keys, env_key):
                 return provider, explicit
@@ -428,7 +480,10 @@ def infer_provider_and_model(default_model: str, api_keys: dict):
 
     for provider, env_key in PROVIDER_KEY_PRIORITY:
         if _has_api_key(api_keys, env_key):
-            return provider, DEFAULT_MODEL_BY_PROVIDER[provider]
+            model_id = DEFAULT_MODEL_BY_PROVIDER.get(provider, "")
+            if not model_id:
+                return None, None
+            return provider, model_id
 
     return None, None
 
@@ -569,14 +624,18 @@ def sync_router_ssh_env(host: str, user: str, key_path: str):
     return ok
 
 
-def bootstrap_model_if_missing(default_model: str, api_keys: dict):
+def bootstrap_model_if_missing(
+    default_provider: str, default_model: str, api_keys: dict
+):
     cfg = read_yaml_config()
     if cfg is None:
         return False
     if not model_needs_bootstrap(cfg):
         return True
 
-    provider, model_id = infer_provider_and_model(default_model, api_keys)
+    provider, model_id = infer_provider_and_model(
+        default_provider, default_model, api_keys
+    )
     if not provider or not model_id:
         return True
 
@@ -739,7 +798,8 @@ def bootstrap_first_run(payload: dict):
 
     timezone = payload.get("timezone", "")
     browser_enabled = str(payload.get("browser_enabled", "false")).lower() in ("1", "true", "yes")
-    default_model_preset = payload.get("default_model_preset", "auto")
+    default_provider = payload.get("default_provider", "")
+    default_model_preset = payload.get("default_model_preset", "custom")
     default_model = payload.get("default_model", "")
     bootstrap_auxiliary_title = str(payload.get("bootstrap_auxiliary_title", "false")).lower() in (
         "1",
@@ -767,7 +827,12 @@ def bootstrap_first_run(payload: dict):
     ok = bootstrap_browser_if_enabled(browser_enabled) and ok
     ok = bootstrap_web_search_if_missing(firecrawl_key, searxng_url) and ok
     ok = bootstrap_kanban_toolset_if_missing(setup_profile) and ok
-    ok = bootstrap_model_if_missing(resolved_model, api_keys) and ok
+    ok = (
+        bootstrap_model_if_missing(
+            str(default_provider), resolved_model, api_keys
+        )
+        and ok
+    )
     if bootstrap_auxiliary_title:
         ok = bootstrap_auxiliary_title_if_needed(api_keys) and ok
     ok = update_readiness_markers(api_keys, enable_openai_api, mcp_configured) and ok

@@ -20,19 +20,28 @@ configuration:
       general: "Assistente geral"
       advanced: "Avançado (opções manuais)"
 
+  default_provider:
+    name: Provedor padrão
+    description: "Provedor LLM principal para a primeira execução. Nous Portal usa OAuth (`hermes setup --portal` ou `hermes auth add nous` no terminal). Ollama corresponde a Ollama Cloud (`ollama-cloud`)."
+    options:
+      nous: "Nous Portal"
+      openrouter: "OpenRouter"
+      google: "Google (chave API Gemini)"
+      anthropic: "Anthropic"
+      ollama: "Ollama Cloud"
+      minimax: "MiniMax"
+      xai: "xAI (Grok)"
+      openai: "OpenAI"
+
   default_model_preset:
     name: Predefinição de modelo
-    description: "Modelo principal curado para a primeira execução. auto infere da primeira chave API; custom usa o campo Modelo (custom)."
+    description: "Use Custom e defina o ID do modelo em Modelo padrão."
     options:
-      auto: "Auto (da chave API)"
-      gemini_flash: "Gemini 2.5 Flash (OpenRouter)"
-      claude_sonnet: "Claude Sonnet 4 (OpenRouter)"
-      gpt_mini: "GPT-4.1 Mini (OpenRouter)"
       custom: "ID de modelo personalizado"
 
   default_model:
-    name: Modelo (custom)
-    description: "ID do modelo quando a predefinição é custom. Bootstrap apenas na primeira execução quando nenhum modelo estiver configurado."
+    name: Modelo padrão
+    description: "ID do modelo para o provedor selecionado (ex. google/gemini-2.5-flash para OpenRouter, claude-sonnet-4-6 para Anthropic, gpt-oss:120b para Ollama Cloud). Bootstrap apenas na primeira execução quando nenhum modelo estiver configurado."
 
   provider_api_keys:
     name: Chaves API de provedores
@@ -50,6 +59,9 @@ configuration:
       google_api_key:
         name: Chave API Google
         description: Sincronizada como GOOGLE_API_KEY.
+      ollama_api_key:
+        name: Chave API Ollama Cloud
+        description: Sincronizada como OLLAMA_API_KEY (de ollama.com/settings/keys).
       minimax_api_key:
         name: Chave API MiniMax
         description: Sincronizada como MINIMAX_API_KEY.

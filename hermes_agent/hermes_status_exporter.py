@@ -47,7 +47,7 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.17"
+ADDON_VERSION = "0.0.18"
 STATUS_FILE = Path("/share/hermes/status.json")
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
@@ -57,7 +57,9 @@ PROVIDER_SENSOR_NAMES = (
     ("anthropic", "ANTHROPIC_API_KEY"),
     ("openai", "OPENAI_API_KEY"),
     ("google", "GOOGLE_API_KEY"),
+    ("ollama", "OLLAMA_API_KEY"),
     ("minimax", "MINIMAX_API_KEY"),
+    ("xai", "XAI_API_KEY"),
 )
 
 DEVICE_IDENTIFIERS = ["hermes_agent_ha_addon"]
