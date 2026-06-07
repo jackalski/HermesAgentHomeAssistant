@@ -13,6 +13,7 @@ All notable changes to the Hermes Agent Home Assistant Add-on are documented in 
 - **`hermes_mqtt_resolver.py`** — improved Mosquitto detection (env, supervisor, bashio, host-network loopback fallback).
 
 ### Changed
+- Expanded **Gateway Trusted Proxies** and **Additional Allowed Origins** configuration help (panel descriptions + per-row `value` field labels, all locales).
 - Router SSH keys default to **`/config/keys/router_ssh`** (persistent); legacy `/data/keys/router_ssh` migrated on startup.
 - Add-on API keys and HA token **preserve existing `/config/.hermes/.env` values** when options are empty after reinstall (HA secret redaction).
 - `terminal_port` and `gateway_port` use **`port`** schema for clearer HA UI defaults.

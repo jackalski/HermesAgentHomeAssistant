@@ -137,10 +137,18 @@ configuration:
           trusted-proxy: "Zaufany proxy (dla reverse proxy)"
       gateway_trusted_proxies:
         name: Zaufane proxy Gateway
-        description: Zaufane wpisy IP lub CIDR proxy (jeden na wiersz) dla trybu trusted-proxy.
+        description: "Lista IP/CIDR zaufanych reverse proxy dla gateway_auth_mode trusted-proxy (jeden wiersz na proxy). Wymagane przy access_mode lan_reverse_proxy lub zewnętrznym proxy (NPM, Caddy, Traefik). Gdy puste w lan_reverse_proxy, start ustawia domyślne (127.0.0.1, 172.30.0.0/16, 10.0.0.0/8). Proxy musi wysyłać X-Forwarded-User."
+        fields:
+          value:
+            name: IP lub CIDR proxy
+            description: "IPv4, IPv4/CIDR lub IPv6/CIDR źródła proxy. Przykłady: 127.0.0.1, 192.168.88.0/24, 172.30.0.0/16."
       gateway_additional_allowed_origins:
         name: Dodatkowe dozwolone origins
-        description: Dodatkowe origins Control UI (jeden na wiersz); łączone w allowedOrigins i TLS SAN w lan_https.
+        description: "Dodatkowe origins przeglądarki dla Control UI Hermes (jeden wiersz na origin). Scalane z domyślnymi do gateway.controlUi.allowedOrigins. W lan_https hostnames trafiają też do SAN certyfikatu TLS."
+        fields:
+          value:
+            name: URL origin
+            description: "Pełny origin ze schematem i hostem (port gdy niestandardowy). Przykłady: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost."
       controlui_disable_device_auth:
         name: Wyłącz parowanie urządzeń Control UI (lan_https)
         description: "Zalecane WŁĄCZONE dla domowej sieci LAN — pomija akceptację per-urządzenie (zapobiega błędowi 1008)."

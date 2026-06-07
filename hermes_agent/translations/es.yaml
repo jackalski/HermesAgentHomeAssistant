@@ -137,10 +137,18 @@ configuration:
           trusted-proxy: "Proxy de confianza (para proxys inversos)"
       gateway_trusted_proxies:
         name: Proxys de confianza del Gateway
-        description: Entradas de IP o CIDR de proxy de confianza (una por fila) para el modo trusted-proxy.
+        description: "Lista de IP/CIDR de reverse proxy de confianza para gateway_auth_mode trusted-proxy (una fila por proxy). Requerido con access_mode lan_reverse_proxy o proxy externo (NPM, Caddy, Traefik). Si está vacío en lan_reverse_proxy, el inicio aplica valores por defecto (127.0.0.1, 172.30.0.0/16, 10.0.0.0/8). El proxy debe enviar X-Forwarded-User."
+        fields:
+          value:
+            name: IP o CIDR del proxy
+            description: "IPv4, IPv4/CIDR o IPv6/CIDR del origen del proxy. Ejemplos: 127.0.0.1, 192.168.88.0/24, 172.30.0.0/16."
       gateway_additional_allowed_origins:
         name: Orígenes permitidos adicionales
-        description: Orígenes extra de Control UI (uno por fila); combinados en allowedOrigins y TLS SAN en lan_https.
+        description: "Orígenes de navegador adicionales para la Control UI de Hermes (una fila por origen). Se combinan con los valores predeterminados en gateway.controlUi.allowedOrigins. En lan_https, los hostnames también se añaden al SAN del certificado TLS."
+        fields:
+          value:
+            name: URL de origen
+            description: "Origen completo con esquema y host (incluya el puerto si no es el predeterminado). Ejemplos: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost."
       controlui_disable_device_auth:
         name: Desactivar emparejamiento por dispositivo en Control UI (lan_https)
         description: "Recomendado ACTIVADO para LAN doméstica — omite aprobación por dispositivo (evita error 1008)."
