@@ -1,8 +1,8 @@
-# Hermes Agent – Home Assistant App/Add-on
+# Hermes Agent Integration – Home Assistant Add-on
 
 ### Hermes Agent Home Assistant integration is available now!  https://github.com/jackalski/HermesAgentHomeAssistantIntegration
 
-This repository contains a Home Assistant add-on that runs **Hermes Agent** inside **Home Assistant OS (HAOS)**. The add-on is currently marked **Experimental** in the HA add-on store.
+This repository contains the **Hermes Agent Integration** Home Assistant add-on, which runs **Hermes Agent** (upstream AI platform) inside **Home Assistant OS (HAOS)**. The add-on is currently marked **Experimental** in the HA add-on store.
 
 > Upstream rename history (FYI): clawdbot → moltbot → **hermes-agent**.
 
@@ -44,7 +44,7 @@ This repository contains a Home Assistant add-on that runs **Hermes Agent** insi
 2. **⋮ → Repositories**
 3. Add this repo:
    - `https://github.com/jackalski/HermesAgentHomeAssistant`
-4. Install **Hermes Agent**
+4. Install **Hermes Agent Integration**
 
 ## Star History
 

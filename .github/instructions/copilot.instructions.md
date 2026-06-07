@@ -1,4 +1,4 @@
-# Hermes Agent Home Assistant Add-on Patterns
+# Hermes Agent Integration Home Assistant Add-on Patterns
 
 Always reuse existing logic in `run.sh`, `hermes_config_helper.py`, and `render_nginx.py`.
 Avoid duplicate implementations for config parsing, gateway patching, or template rendering.

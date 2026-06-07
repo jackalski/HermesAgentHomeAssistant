@@ -1,6 +1,11 @@
 # Changelog
 
-All notable changes to the Hermes Agent Home Assistant Add-on are documented in this file.
+All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
+
+## [0.0.17] - 2026-06-07
+
+### Changed
+- User-facing add-on name is now **Hermes Agent Integration** (HA store, Ingress, MQTT device, docs) to distinguish this add-on from upstream Hermes Agent and the separate HA custom integration.
 
 ## [0.0.16] - 2026-06-07
 

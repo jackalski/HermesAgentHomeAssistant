@@ -1,6 +1,6 @@
 # Security Risks & Disclaimer
 
-This document outlines the security risks associated with running the Hermes Agent Home Assistant add-on and provides best practices for safe usage.
+This document outlines the security risks associated with running the Hermes Agent Integration Home Assistant add-on and provides best practices for safe usage.
 
 **By installing and using this add-on, you acknowledge and accept the risks described below.**
 

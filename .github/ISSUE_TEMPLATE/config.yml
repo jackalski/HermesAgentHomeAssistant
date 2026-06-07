@@ -1,14 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Hermes Agent Home Assistant Add-on Docs (DOCS.md)
+  - name: Hermes Agent Integration Add-on Docs (DOCS.md)
     url: https://github.com/jackalski/HermesAgentHomeAssistant/blob/main/DOCS.md
     about: Add-on specific installation, configuration, and troubleshooting.
-  - name: Hermes Agent Home Assistant Discord
-    url: https://discord.gg/xeHeKu9jYp
-    about: Community support for this Home Assistant add-on.
   - name: Hermes Agent Official Docs
     url: https://github.com/jackalski/HermesAgentHomeAssistant/blob/main/DOCS.md
     about: Official Hermes Agent platform documentation.
-  - name: Hermes Agent Official Community Discord
-    url: https://discord.gg/xeHeKu9jYp
-    about: Official Hermes Agent community server.
