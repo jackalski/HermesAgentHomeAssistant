@@ -478,14 +478,21 @@ class MqttPublisher:
     def _make_client(self) -> Any:
         import paho.mqtt.client as mqtt
 
-        try:
-            return mqtt.Client(
-                mqtt.CallbackAPIVersion.VERSION1,
-                client_id=self.CLIENT_ID,
-                protocol=mqtt.MQTTv311,
-            )
-        except (AttributeError, TypeError):
-            return mqtt.Client(client_id=self.CLIENT_ID, protocol=mqtt.MQTTv311)
+        for callback_api in (
+            getattr(mqtt.CallbackAPIVersion, "VERSION2", None),
+            getattr(mqtt.CallbackAPIVersion, "VERSION1", None),
+        ):
+            if callback_api is None:
+                continue
+            try:
+                return mqtt.Client(
+                    callback_api,
+                    client_id=self.CLIENT_ID,
+                    protocol=mqtt.MQTTv311,
+                )
+            except (AttributeError, TypeError):
+                continue
+        return mqtt.Client(client_id=self.CLIENT_ID, protocol=mqtt.MQTTv311)
 
     def ensure_connected(self, mqtt_cfg: dict) -> bool:
         host = str(mqtt_cfg.get("host", "") or "").strip()

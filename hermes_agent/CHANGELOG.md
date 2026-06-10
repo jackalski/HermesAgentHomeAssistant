@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.20] - 2026-06-10
+
+### Fixed
+- MQTT status exporter uses **paho-mqtt Callback API v2** (avoids `DeprecationWarning: Callback API version 1 is deprecated` on paho-mqtt 2.x).
+
 ## [0.0.19] - 2026-06-07
 
 ### Fixed
