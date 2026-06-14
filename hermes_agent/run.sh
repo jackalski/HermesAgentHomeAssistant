@@ -100,6 +100,7 @@ ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
 TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
 ENABLE_WEB_INTERFACE="$(read_nested_option web_interface enable_web_interface)"
 AUTO_START_WEB_INTERFACE="$(read_nested_option web_interface auto_start_with_integration)"
+DASHBOARD_PORT_RAW="$(read_nested_option web_interface dashboard_port)"
 
 # SECURITY: Validate TERMINAL_PORT to prevent nginx config injection
 # Only allow numeric values in valid port range (1024-65535)
@@ -207,6 +208,16 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$MQTT_BROKER_PORT" ] && MQTT_BROKER_PORT="1883"
 [ -z "$ENABLE_WEB_INTERFACE" ] && ENABLE_WEB_INTERFACE="true"
 [ -z "$AUTO_START_WEB_INTERFACE" ] && AUTO_START_WEB_INTERFACE="true"
+[ -z "$DASHBOARD_PORT_RAW" ] && DASHBOARD_PORT_RAW="9119"
+
+# SECURITY: Validate DASHBOARD_PORT (the hermes dashboard web UI port) to keep
+# the value safe for nginx config injection and shell use.
+if [[ "$DASHBOARD_PORT_RAW" =~ ^[0-9]+$ ]] && [ "$DASHBOARD_PORT_RAW" -ge 1024 ] && [ "$DASHBOARD_PORT_RAW" -le 65535 ]; then
+  DASHBOARD_PORT="$DASHBOARD_PORT_RAW"
+else
+  log_error "Invalid dashboard_port '$DASHBOARD_PORT_RAW'. Must be numeric 1024-65535. Using default 9119."
+  DASHBOARD_PORT="9119"
+fi
 
 # Validate status poll interval (30-300 seconds)
 if [[ "$STATUS_POLL_INTERVAL_RAW" =~ ^[0-9]+$ ]] && [ "$STATUS_POLL_INTERVAL_RAW" -ge 30 ] && [ "$STATUS_POLL_INTERVAL_RAW" -le 300 ]; then
@@ -406,6 +417,23 @@ case "$ACCESS_MODE" in
     log_info "Access mode: custom (using individual gateway_bind_mode/auth_mode settings)"
     ;;
 esac
+
+# Hermes dashboard (hermes dashboard) binds loopback only. In lan_https mode nginx
+# terminates TLS on DASHBOARD_PORT and proxies to the loopback internal port; in
+# other modes the dashboard stays loopback-only (reach it via Ingress/tunnel).
+if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
+  DASHBOARD_INTERNAL_PORT=$((DASHBOARD_PORT + 1))
+else
+  DASHBOARD_INTERNAL_PORT="$DASHBOARD_PORT"
+fi
+
+# Warn (non-fatal) if the dashboard ports collide with other add-on services.
+for _busy_port in "$GATEWAY_PORT" "$GATEWAY_INTERNAL_PORT" "$API_SERVER_PORT" "$TERMINAL_PORT"; do
+  [ -z "$_busy_port" ] && continue
+  if [ "$DASHBOARD_PORT" = "$_busy_port" ] || [ "$DASHBOARD_INTERNAL_PORT" = "$_busy_port" ]; then
+    log_warn "dashboard_port=${DASHBOARD_PORT} (internal ${DASHBOARD_INTERNAL_PORT}) overlaps another service on ${_busy_port}; pick a different dashboard_port to avoid bind conflicts."
+  fi
+done
 
 # Reduce risk of secrets ending up in logs
 set +x
@@ -828,28 +856,41 @@ PY
 }
 
 run_hermes_dashboard() {
-  local web_dist port host
-  port="$GATEWAY_INTERNAL_PORT"
+  local web_dist port host dashboard_args=()
+  port="$DASHBOARD_INTERNAL_PORT"
   host="127.0.0.1"
 
   if ! command -v hermes >/dev/null 2>&1; then
-    log_warn "hermes CLI missing; cannot start dashboard Web UI."
+    log_warn "hermes CLI missing; cannot start Hermes dashboard."
     return 1
   fi
   if ! hermes dashboard --help >/dev/null 2>&1; then
-    log_warn "hermes dashboard unavailable in installed Hermes version."
+    log_warn "hermes dashboard unavailable in installed Hermes version (needs hermes-agent[web])."
     return 1
   fi
 
+  # Prefer a prebuilt frontend when the installed wheel ships one; otherwise the
+  # dashboard builds it on first launch when npm is available.
   web_dist="$(resolve_hermes_web_dist 2>/dev/null || true)"
-  if [ -z "$web_dist" ]; then
-    log_warn "Hermes dashboard web_dist not found; HTTPS gateway UI will return 502."
-    return 1
+  if [ -n "$web_dist" ]; then
+    export HERMES_WEB_DIST="$web_dist"
   fi
 
-  export HERMES_WEB_DIST="$web_dist"
-  log_info "Starting Hermes dashboard (Web UI) on ${host}:${port} ..."
-  hermes dashboard --port "$port" --host "$host" --no-open --skip-build &
+  # Embedded Chat tab (hermes --tui over PTY/WebSocket) needs ptyprocess + Node.
+  if python3 -c "import ptyprocess" 2>/dev/null; then
+    if hermes dashboard --help 2>&1 | grep -q -- '--tui'; then
+      dashboard_args+=(--tui)
+    fi
+  else
+    log_warn "ptyprocess missing; Hermes dashboard Chat tab will be unavailable (uv pip install --system ptyprocess)."
+  fi
+
+  if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
+    log_info "Starting Hermes dashboard on ${host}:${port} (nginx HTTPS proxy on 0.0.0.0:${DASHBOARD_PORT}) ..."
+  else
+    log_info "Starting Hermes dashboard on ${host}:${port} (loopback only; reach it via Ingress/tunnel) ..."
+  fi
+  hermes dashboard --port "$port" --host "$host" --no-open "${dashboard_args[@]}" &
   DASHBOARD_PID=$!
   return 0
 }
@@ -1823,10 +1864,10 @@ PY
       if [ "$AUTO_START_WEB_INTERFACE" = "true" ] || [ "$AUTO_START_WEB_INTERFACE" = "1" ]; then
         run_hermes_dashboard || true
       else
-        log_info "Web interface enabled but auto_start_with_integration=false; skipping hermes dashboard startup"
+        log_info "Hermes dashboard enabled but auto_start_with_integration=false; skipping hermes dashboard startup"
       fi
     else
-      log_info "Gateway Web UI disabled (enable_web_interface=false)"
+      log_info "Hermes dashboard disabled (web_interface.enable_web_interface=false)"
     fi
   fi
   if [ -z "${GW_PID:-}" ]; then
@@ -1924,40 +1965,43 @@ fi
 if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ] \
     && { [ "$ENABLE_WEB_INTERFACE" = "true" ] || [ "$ENABLE_WEB_INTERFACE" = "1" ]; } \
     && { [ "$AUTO_START_WEB_INTERFACE" = "true" ] || [ "$AUTO_START_WEB_INTERFACE" = "1" ]; }; then
-  GATEWAY_BIND_OK=false
+  DASHBOARD_BIND_OK=false
   for _gw_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${GATEWAY_INTERNAL_PORT} "; then
-      GATEWAY_BIND_OK=true
+    if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${DASHBOARD_INTERNAL_PORT} "; then
+      DASHBOARD_BIND_OK=true
       break
     fi
     sleep 2
   done
-  if [ "$GATEWAY_BIND_OK" = "true" ]; then
-    log_info "Dashboard listening on 127.0.0.1:${GATEWAY_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
-    if [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; then
-      API_BIND_OK=false
-      for _api_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-        if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${API_SERVER_PORT} "; then
-          API_BIND_OK=true
-          break
-        fi
-        sleep 2
-      done
-      if [ "$API_BIND_OK" = "true" ]; then
-        log_info "Assist API server listening on 0.0.0.0:${API_SERVER_PORT} (Extended OpenAI from HA Core: http://<LAN-IP>:${API_SERVER_PORT}/v1)"
-      else
-        log_error "Assist API server did not bind port ${API_SERVER_PORT} within 30s."
-        log_error "Set enable_openai_api=true, ensure gateway token exists, and restart."
-        log_error "Probe: curl -sS http://127.0.0.1:${API_SERVER_PORT}/health"
-      fi
-    fi
+  if [ "$DASHBOARD_BIND_OK" = "true" ]; then
+    log_info "Hermes dashboard listening on 127.0.0.1:${DASHBOARD_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${DASHBOARD_PORT})"
   else
-    log_error "Dashboard did not bind port ${GATEWAY_INTERNAL_PORT} within 30s."
-    log_error "https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
-    log_error "Messaging gateway uses hermes gateway run (no HTTP listener); nginx proxies to hermes dashboard on ${GATEWAY_INTERNAL_PORT}."
-    log_error "Run 'hermes dashboard --port ${GATEWAY_INTERNAL_PORT} --host 127.0.0.1 --no-open --skip-build' in the terminal for startup errors."
+    log_error "Hermes dashboard did not bind port ${DASHBOARD_INTERNAL_PORT} within 30s."
+    log_error "https://<LAN-IP>:${DASHBOARD_PORT}/ will return 502 until the dashboard is healthy."
+    log_error "The dashboard is a separate service started with 'hermes dashboard' (needs hermes-agent[web])."
+    log_error "Run 'hermes dashboard --port ${DASHBOARD_INTERNAL_PORT} --host 127.0.0.1 --no-open' in the terminal for startup errors."
     log_error "If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."
-    log_error "If import fails otherwise, install Web UI deps: uv pip install --system 'fastapi' 'uvicorn[standard]' (or pip --break-system-packages)"
+    log_error "If import fails otherwise, install Web UI deps: uv pip install --system 'fastapi' 'uvicorn[standard]' 'ptyprocess' (or pip --break-system-packages)"
+  fi
+fi
+
+# Assist API server readiness is independent of the dashboard.
+if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ] \
+    && { [ "$ENABLE_OPENAI_API" = "true" ] || [ "$ENABLE_OPENAI_API" = "1" ]; }; then
+  API_BIND_OK=false
+  for _api_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${API_SERVER_PORT} "; then
+      API_BIND_OK=true
+      break
+    fi
+    sleep 2
+  done
+  if [ "$API_BIND_OK" = "true" ]; then
+    log_info "Assist API server listening on 0.0.0.0:${API_SERVER_PORT} (Extended OpenAI from HA Core: http://<LAN-IP>:${API_SERVER_PORT}/v1)"
+  else
+    log_error "Assist API server did not bind port ${API_SERVER_PORT} within 30s."
+    log_error "Set enable_openai_api=true, ensure gateway token exists, and restart."
+    log_error "Probe: curl -sS http://127.0.0.1:${API_SERVER_PORT}/health"
   fi
 fi
 
@@ -2104,6 +2148,7 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
     NGINX_LOG_LEVEL="$NGINX_LOG_LEVEL" \
     ENABLE_WEB_INTERFACE="$ENABLE_WEB_INTERFACE" \
     AUTO_START_WEB_INTERFACE="$AUTO_START_WEB_INTERFACE" \
+    DASHBOARD_PORT="$DASHBOARD_PORT" DASHBOARD_INTERNAL_PORT="$DASHBOARD_INTERNAL_PORT" \
     SETUP_API_KEY="$setup_api_key" SETUP_MODEL="$setup_model" SETUP_MCP="$setup_mcp" \
     SETUP_ASSIST="$setup_assist" SETUP_GATEWAY_URL_HINT="$gateway_url_hint" \
     python3 /render_nginx.py

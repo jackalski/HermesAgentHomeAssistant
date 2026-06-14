@@ -71,13 +71,22 @@
     <!-- ==================== ACTION BUTTONS ==================== -->
     <div class="row" style="margin-bottom:6px">
       <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__?token=__GATEWAY_TOKEN__" target="_blank" rel="noopener noreferrer">Open Gateway Web UI</a>
+      <a class="btn green hidden" id="dashbtn" href="" target="_blank" rel="noopener noreferrer">Open Hermes Dashboard</a>
       <a class="btn secondary" href="./terminal/" target="_self">Open Terminal (full page)</a>
       <a class="btn green hidden" id="certBtn" href="" target="_blank" rel="noopener noreferrer">Download CA Certificate</a>
     </div>
     <div class="banner info hidden" id="webUiDisabledBanner">
-      <b>Gateway Web UI is disabled.</b> Enable <code>web_interface.enable_web_interface</code> and
-      <code>auto_start_with_integration</code> in add-on Configuration, then restart to open the Control UI
-      and use the HTTPS gateway button.
+      <b>Hermes dashboard is disabled.</b> The dashboard (<code>hermes dashboard</code>) is a separate
+      admin UI for config, API keys, sessions, logs, and skills. Enable
+      <code>web_interface.enable_web_interface</code> and <code>auto_start_with_integration</code> in
+      add-on Configuration, then restart. It is exposed over HTTPS on port
+      <code id="dashPortHint">9119</code> in <code>lan_https</code> mode.
+    </div>
+    <div class="banner warn hidden" id="dashLoopbackBanner">
+      <b>Hermes dashboard is loopback-only in this access mode.</b> It listens on
+      <code>127.0.0.1</code> with no built-in auth. Switch <code>access_mode</code> to
+      <b>lan_https</b> for a TLS-protected LAN button, or reach it via an SSH tunnel / your own
+      reverse proxy.
     </div>
 
     <!-- ==================== MIGRATION BANNER ==================== -->
@@ -244,12 +253,26 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
     const DISK_USED = '__DISK_USED__';
     const DISK_TOTAL = '__DISK_TOTAL__';
     const ENABLE_WEB_INTERFACE = '__ENABLE_WEB_INTERFACE__';
+    const DASHBOARD_PORT = '__DASHBOARD_PORT__';
 
     const $ = id => document.getElementById(id);
 
-    if (ENABLE_WEB_INTERFACE !== 'yes') {
-      const gwbtn = $('gwbtn');
-      if (gwbtn) gwbtn.classList.add('hidden');
+    // The separate Hermes dashboard (hermes dashboard) is gated by web_interface options.
+    if (ENABLE_WEB_INTERFACE === 'yes') {
+      if (ACCESS_MODE === 'lan_https' && DASHBOARD_PORT) {
+        const dashbtn = $('dashbtn');
+        if (dashbtn) {
+          const host = window.location.hostname || 'homeassistant.local';
+          dashbtn.href = 'https://' + host + ':' + DASHBOARD_PORT + '/';
+          dashbtn.classList.remove('hidden');
+        }
+        const hint = $('dashPortHint');
+        if (hint) hint.textContent = DASHBOARD_PORT;
+      } else {
+        const loopbackBanner = $('dashLoopbackBanner');
+        if (loopbackBanner) loopbackBanner.classList.remove('hidden');
+      }
+    } else {
       const webUiBanner = $('webUiDisabledBanner');
       if (webUiBanner) webUiBanner.classList.remove('hidden');
     }

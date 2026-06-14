@@ -2,6 +2,24 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.22] - 2026-06-14
+
+### Added
+- **`dashboard_port`** (default **9119**) in the **Hermes Dashboard** panel — the separate `hermes dashboard` admin UI (config, API keys, sessions, logs, skills) now runs on its own configurable port instead of sharing the gateway port.
+- Dedicated **HTTPS proxy block** for the dashboard in `lan_https` mode: nginx terminates TLS on `dashboard_port` and proxies to the loopback dashboard. A new **Open Hermes Dashboard** button appears on the Ingress landing page.
+- **Dashboard Chat tab:** image installs `ptyprocess` (Hermes `[pty]` extra) and starts `hermes dashboard --tui` when supported, enabling the embedded TUI chat pane over PTY/WebSocket (Node 22 is already in the image for TUI bundle builds).
+
+### Changed
+- The `web_interface` panel now controls the **separate Hermes dashboard** (port 9119), not the always-on gateway Control UI on 18789. Renamed to **Hermes Dashboard** in all translations.
+- The dashboard now binds its own loopback port (`dashboard_port + 1` in `lan_https`); port **18789** is left for the gateway Control UI.
+- `gateway_running` status detection now probes the gateway over HTTP with a process-check fallback, so it no longer depends on the dashboard.
+
+### Fixed
+- Dropped the invalid **`--skip-build`** flag from the `hermes dashboard` launch (not supported by current Hermes), which could prevent the dashboard from starting on 0.16.0.
+
+### Security
+- Documented that the Hermes dashboard has **no built-in authentication**; in `lan_https` it is TLS-encrypted on the LAN but still unauthenticated. Disable it or front it with an authenticating proxy if not needed. See `SECURITY.md`.
+
 ## [0.0.21] - 2026-06-10
 
 ### Added

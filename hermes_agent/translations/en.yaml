@@ -104,15 +104,18 @@ configuration:
     description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
 
   web_interface:
-    name: Gateway Web Interface
-    description: Hermes Control UI (hermes dashboard) for chat, gateway management, and HTTPS access in lan_https mode.
+    name: Hermes Dashboard
+    description: Separate Hermes admin UI (hermes dashboard) for config, API keys, sessions, logs, and skills. No built-in auth; exposed over HTTPS on the dashboard port in lan_https mode. Independent of the gateway Control UI.
     fields:
       enable_web_interface:
-        name: Enable Gateway Web UI
-        description: Allow the Hermes dashboard Web UI to run inside the add-on (required for Open Gateway Web UI and /api/status health checks).
+        name: Enable Hermes Dashboard
+        description: Run the separate hermes dashboard service inside the add-on. This is distinct from the gateway Control UI, which always starts.
       auto_start_with_integration:
         name: Auto-Start With Add-on
-        description: Start hermes dashboard automatically when the add-on starts (local gateway mode). Turn OFF to start the messaging gateway only.
+        description: Start hermes dashboard automatically when the add-on starts. Turn OFF to run the gateway only.
+      dashboard_port:
+        name: Dashboard Port
+        description: HTTPS port for the Hermes dashboard (default 9119). In lan_https mode nginx serves it over TLS; the dashboard itself binds loopback only.
 
   gateway_access:
     name: Gateway Access

@@ -141,7 +141,8 @@ RUN uv pip install --system --break-system-packages --no-cache \
         "brotlicffi>=1.2.0.1" \
         "starlette>=1.0.1" \
         "fastapi>=0.136.3" \
-        "uvicorn[standard]>=0.49.0"
+        "uvicorn[standard]>=0.49.0" \
+        ptyprocess
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'
