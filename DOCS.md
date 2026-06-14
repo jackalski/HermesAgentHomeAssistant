@@ -157,6 +157,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |
 | **Router SSH** panel | — | `host`, `user`, `key_path` (default `/config/keys/router_ssh`) |
 | **Tool Bootstrap** panel | browser ON | Telegram / browser / Skills Hub auto-install toggles |
+| **Web Interface** panel | ON / auto-start | `enable_web_interface`, `auto_start_with_integration` — starts `hermes dashboard` with the add-on (local gateway) |
 | **Advanced Settings** panel | — | `http_proxy`, `nginx_log_level`, `gateway_env_vars`, Hermes version |
 | `addon_log_level` | `info` | Add-on startup log verbosity |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |

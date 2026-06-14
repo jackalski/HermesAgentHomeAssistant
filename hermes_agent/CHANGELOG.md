@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.21] - 2026-06-10
+
+### Added
+- **Web Interface** configuration panel: `enable_web_interface` and `auto_start_with_integration` (default **ON**) — starts `hermes dashboard` automatically when the add-on starts in local gateway mode.
+
 ## [0.0.20] - 2026-06-10
 
 ### Fixed

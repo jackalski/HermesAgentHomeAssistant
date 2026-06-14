@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.20"
+version: "0.0.21"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -60,6 +60,11 @@ options:
   # --- Web terminal (Ingress) ---
   enable_terminal: true
   terminal_port: 7681
+
+  # --- Gateway Web UI (hermes dashboard) ---
+  web_interface:
+    enable_web_interface: true
+    auto_start_with_integration: true
 
   # --- Gateway access ---
   gateway_access:
@@ -134,6 +139,9 @@ schema:
     auto_configure_mcp: bool?
   enable_terminal: bool?
   terminal_port: port?
+  web_interface:
+    enable_web_interface: bool?
+    auto_start_with_integration: bool?
   gateway_access:
     access_mode: list(custom|local_only|lan_https|lan_reverse_proxy|tailnet_https)?
     gateway_port: port?

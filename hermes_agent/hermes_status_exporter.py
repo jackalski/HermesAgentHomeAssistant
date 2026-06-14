@@ -105,6 +105,22 @@ def _probe_gateway_health(port: int) -> tuple[bool, str | None]:
     return False, None
 
 
+def _probe_gateway_process() -> tuple[bool, str | None]:
+    try:
+        proc = subprocess.run(
+            ["pgrep", "-f", r"[h]ermes.*gateway"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode == 0 and (proc.stdout or "").strip():
+            return True, _utc_now_iso()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return False, None
+
+
 def _hermes_agent_version() -> str:
     for cmd in (["hermes", "--version"],):
         try:
@@ -306,7 +322,11 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         cfg = {}
 
     main_provider, main_model, aux_model = _model_fields(cfg)
-    gateway_running, gateway_probe_at = _probe_gateway_health(gateway_port)
+    web_ui_enabled = str(payload.get("enable_web_interface", "true")).lower() in ("1", "true", "yes")
+    if web_ui_enabled:
+        gateway_running, gateway_probe_at = _probe_gateway_health(gateway_port)
+    else:
+        gateway_running, gateway_probe_at = _probe_gateway_process()
     usage = _query_state_db()
     disk_pct = _disk_usage_percent()
 

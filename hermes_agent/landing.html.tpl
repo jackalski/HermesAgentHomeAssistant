@@ -74,6 +74,11 @@
       <a class="btn secondary" href="./terminal/" target="_self">Open Terminal (full page)</a>
       <a class="btn green hidden" id="certBtn" href="" target="_blank" rel="noopener noreferrer">Download CA Certificate</a>
     </div>
+    <div class="banner info hidden" id="webUiDisabledBanner">
+      <b>Gateway Web UI is disabled.</b> Enable <code>web_interface.enable_web_interface</code> and
+      <code>auto_start_with_integration</code> in add-on Configuration, then restart to open the Control UI
+      and use the HTTPS gateway button.
+    </div>
 
     <!-- ==================== MIGRATION BANNER ==================== -->
     <div class="banner warn hidden" id="migrationBanner">
@@ -238,8 +243,16 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
     const DISK_AVAIL = '__DISK_AVAIL__';
     const DISK_USED = '__DISK_USED__';
     const DISK_TOTAL = '__DISK_TOTAL__';
+    const ENABLE_WEB_INTERFACE = '__ENABLE_WEB_INTERFACE__';
 
     const $ = id => document.getElementById(id);
+
+    if (ENABLE_WEB_INTERFACE !== 'yes') {
+      const gwbtn = $('gwbtn');
+      if (gwbtn) gwbtn.classList.add('hidden');
+      const webUiBanner = $('webUiDisabledBanner');
+      if (webUiBanner) webUiBanner.classList.remove('hidden');
+    }
 
     function formatSetupFlag(el) {
       if (!el) return;
