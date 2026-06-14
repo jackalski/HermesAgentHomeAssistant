@@ -58,6 +58,17 @@ http {
       add_header Cache-Control "no-store";
     }
 
+    # Connection tests (Ingress UI buttons → hermes_connection_tests.py)
+    location ^~ /test/ {
+      proxy_pass http://127.0.0.1:48100;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $remote_addr;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_read_timeout 30s;
+    }
+
     # (Optional) Gateway UI via ingress has been intentionally removed.
     # See landing page link that opens the gateway in a separate tab.
 
@@ -67,7 +78,5 @@ http {
     }
   }
 
-  __HTTPS_GATEWAY_BLOCK__
-
-  __HTTPS_DASHBOARD_BLOCK__
+  __HTTPS_LAN_BLOCK__
 }

@@ -8,7 +8,7 @@ Canonical setup and operations guide. This add-on is marked **Experimental** in 
 |---------|------|---------|
 | Hermes Gateway | 18789 (configurable) | HTTPS entry to `hermes dashboard` (gateway web UI) + Assist API routes when enabled |
 | Hermes Dashboard | 9119 (configurable) | Second HTTPS entry to the same `hermes dashboard` admin UI |
-| nginx (Ingress) | 48099 | Landing page + `/status.json` |
+| nginx (Ingress) | 48099 | Landing page, **Connection tests** (`/test/`), `/status.json` |
 | ttyd (terminal) | 7681 (configurable) | Browser terminal |
 
 Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`, `.linuxbrew`, `.node_global`, etc.). System tools (`hermes`, `uv`, `mcp`) install to **`/usr/local`**; user npm skills from the dashboard go to **`/config/.node_global`**.
@@ -170,6 +170,21 @@ Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenR
 
 **`enable_openai_api`** maps directly to Hermes **`API_SERVER_ENABLED`** in `/config/.hermes/.env` (with `API_SERVER_HOST`, `API_SERVER_PORT`, `API_SERVER_KEY`).
 
+## Connection tests (add-on Web UI)
+
+Home Assistant add-on Configuration has no native **Test** buttons. Instead, open the add-on **Web UI** (Ingress landing page) and expand **Connection tests** — **one button per setting**, grouped by configuration panel:
+
+| Panel | Tests |
+|-------|-------|
+| **Home Assistant Integration** | **Test URL** (`hass_url`), **Test Token** (`homeassistant_token`), **Test MCP** (`auto_configure_mcp`) |
+| **MQTT Status Sensors** | **Test Broker** (`broker_host` / autodetect), **Test Auth** (`broker_username` / `broker_password`) |
+| **Hermes Dashboard** | **Test Dashboard** (loopback process), **Test HTTPS Port** (`dashboard_port` when different from `gateway_port`) |
+| **Gateway Access** | **Test Gateway** (local process), **Test Gateway HTTPS** (`gateway_port` in `lan_https`), **Test Remote** (`gateway_remote_url` when `gateway_mode=remote`), **Test Assist API** (`enable_openai_api`) |
+| **Web Terminal** | **Test Terminal** (`enable_terminal` / `terminal_port`) |
+| **Run all** | Every test above (skipped entries count as OK) |
+
+Results appear inline on the landing page. Configuration field descriptions reference the matching test name.
+
 ## Persistence
 
 | Path | Contents |
@@ -200,7 +215,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Low disk | Run `hermes-cleanup` in terminal |
 | `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `http://<LAN-IP>:8642/v1` from HA Core (not HTTPS 18789) |
 | `Connection error` in Extended OpenAI Conversation | HA Core rejects self-signed HTTPS on 18789 — use Base URL `http://<LAN-IP>:8642/v1` (fixed in **0.0.13+**; API binds `0.0.0.0:8642`, bearer token required) |
-| MQTT status sensors missing / "MQTT broker not available" | Install and start **Mosquitto broker** add-on; fixed in **0.0.15+** (Supervisor API + retry). Check add-on log for `MQTT broker resolved` or `MQTT broker available for status sensors` |
+| MQTT status sensors missing / "MQTT broker not available" | Install and start **Mosquitto broker** add-on; use **Connection tests → Test Broker** / **Test Auth** on the Web UI after saving broker settings; fixed in **0.0.15+** (Supervisor API + retry) |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.16.0 > /config/.hermes/.addon-managed-hermes-version` |

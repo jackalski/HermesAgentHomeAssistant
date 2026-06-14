@@ -83,7 +83,7 @@ configuration:
 
   home_assistant:
     name: Home Assistant Integration
-    description: Connect Hermes to your Home Assistant instance for MCP, scripts, and autodetection.
+    description: Connect Hermes to Home Assistant. Each field has a matching test on the add-on Web UI (Connection tests).
     fields:
       hass_url:
         name: Home Assistant URL
@@ -105,7 +105,7 @@ configuration:
 
   web_interface:
     name: Hermes табло (dashboard)
-    description: Отделен административен интерфейс на Hermes (hermes dashboard) за конфигурация, API ключове, сесии, логове и умения. Без вградена автентикация; в режим lan_https се публикува по HTTPS на порта на таблото. Независим от Control UI на gateway.
+    description: Hermes dashboard admin UI. Each field has a matching test on the add-on Web UI.
     fields:
       enable_web_interface:
         name: Включи Hermes таблото
@@ -119,7 +119,7 @@ configuration:
 
   gateway_access:
     name: Gateway Access
-    description: Network access, authentication, and Assist API settings for the Hermes gateway.
+    description: Network access and Assist API. Each relevant field has a test on the add-on Web UI.
     fields:
       access_mode:
         name: Режим на достъп
@@ -181,7 +181,7 @@ configuration:
 
   mqtt_settings:
     name: MQTT Status Sensors
-    description: Broker connection and Home Assistant status sensor publishing (MQTT discovery + /status.json).
+    description: MQTT broker connection. Each broker field has a matching test on the add-on Web UI.
     fields:
       broker_host:
         name: MQTT Broker Host

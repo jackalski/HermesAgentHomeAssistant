@@ -1135,9 +1135,6 @@ fi
 # ------------------------------------------------------------------------------
 
 gateway_running() {
-  if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ":${GATEWAY_INTERNAL_PORT} "; then
-    return 0
-  fi
   local pid_file="${HERMES_HOME:-/config/.hermes}/gateway.pid"
   if [ -f "$pid_file" ]; then
     local gpid
@@ -1225,6 +1222,7 @@ GW_RELAY_PID=""
 NGINX_PID=""
 TTYD_PID=""
 STATUS_EXPORTER_PID=""
+TEST_SERVER_PID=""
 CDP_CHROMIUM_PID=""
 SHUTTING_DOWN="false"
 
@@ -1269,6 +1267,11 @@ shutdown() {
   if [ -n "${STATUS_EXPORTER_PID}" ] && kill -0 "${STATUS_EXPORTER_PID}" >/dev/null 2>&1; then
     kill -TERM "${STATUS_EXPORTER_PID}" >/dev/null 2>&1 || true
     wait "${STATUS_EXPORTER_PID}" || true
+  fi
+
+  if [ -n "${TEST_SERVER_PID}" ] && kill -0 "${TEST_SERVER_PID}" >/dev/null 2>&1; then
+    kill -TERM "${TEST_SERVER_PID}" >/dev/null 2>&1 || true
+    wait "${TEST_SERVER_PID}" 2>/dev/null || true
   fi
 
   if [ "$CLEAN_LOCKS_ON_EXIT" = "true" ]; then
@@ -1764,7 +1767,6 @@ build_status_exporter_payload() {
     --arg minimax "$MINIMAX_API_KEY_OPT" \
     --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
     --arg searxng "$SEARXNG_URL_OPT" \
-    --arg enable_web_interface "$ENABLE_WEB_INTERFACE" \
     '{
       mqtt_settings: $mqtt_settings,
       gateway_internal_port: ($gateway_internal_port | tonumber),
@@ -1776,7 +1778,6 @@ build_status_exporter_payload() {
       publish_mqtt_discovery: $publish_mqtt_discovery,
       mqtt_state_prefix: $mqtt_state_prefix,
       status_poll_interval_seconds: $status_poll_interval_seconds,
-      enable_web_interface: $enable_web_interface,
       api_keys: {
         OPENROUTER_API_KEY: $openrouter,
         ANTHROPIC_API_KEY: $anthropic,
@@ -1808,6 +1809,18 @@ start_status_exporter() {
   log_info "Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE})"
   python3 "$EXPORTER_PATH" run-loop "$payload" &
   STATUS_EXPORTER_PID=$!
+}
+
+start_connection_test_server() {
+  local tests_path="/hermes_connection_tests.py"
+  if [ ! -f "$tests_path" ] && [ -f "$(dirname "$0")/hermes_connection_tests.py" ]; then
+    tests_path="$(dirname "$0")/hermes_connection_tests.py"
+  fi
+  if [ ! -f "$tests_path" ]; then
+    return 0
+  fi
+  python3 "$tests_path" --serve --port 48100 &
+  TEST_SERVER_PID=$!
 }
 
 start_hermes_runtime() {
@@ -2178,6 +2191,7 @@ else
   log_warn "nginx failed to start (PID $NGINX_PID exited); ingress UI may be unavailable"
 fi
 
+start_connection_test_server
 start_status_exporter
 
 # If the token was not available at startup (first boot / pre-onboard), schedule

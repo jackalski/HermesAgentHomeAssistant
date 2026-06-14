@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.22"
+version: "0.0.25"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -62,9 +62,6 @@ options:
   terminal_port: 7681
 
   # --- Hermes dashboard (hermes dashboard) ---
-  # Separate admin web UI (config, API keys, sessions, logs, skills). It has no
-  # built-in auth and binds loopback; in lan_https mode nginx exposes it over TLS
-  # on dashboard_port. This is independent of the gateway Control UI.
   web_interface:
     enable_web_interface: true
     auto_start_with_integration: true

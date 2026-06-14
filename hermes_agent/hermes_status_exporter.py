@@ -47,7 +47,31 @@ except ImportError:
         read_yaml_config,
     )
 
-ADDON_VERSION = "0.0.19"
+def _read_addon_version() -> str:
+    """Resolve the live add-on version from config.yaml (baked into the image).
+
+    Falls back to a pinned constant if the file is unavailable so the exporter
+    never crashes. Keep the fallback in sync with config.yaml on release.
+    """
+    fallback = "0.0.25"
+    candidates = (
+        Path("/addon_config.yaml"),
+        Path(__file__).resolve().parent / "config.yaml",
+    )
+    for path in candidates:
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped.startswith("version:"):
+                    value = stripped.split(":", 1)[1].strip().strip("\"'")
+                    if value:
+                        return value
+        except OSError:
+            continue
+    return fallback
+
+
+ADDON_VERSION = _read_addon_version()
 STATUS_FILE = Path("/share/hermes/status.json")
 DISCOVERY_MARKER = HERMES_STATE_DIR / ".mqtt_discovery_published"
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")

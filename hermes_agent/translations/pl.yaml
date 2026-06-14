@@ -83,17 +83,17 @@ configuration:
 
   home_assistant:
     name: Integracja z Home Assistant
-    description: Łączy Hermes z instancją Home Assistant dla MCP, skryptów i autowykrywania.
+    description: Łączy Hermes z Home Assistant. Każde pole ma test w interfejsie web (Testy połączenia).
     fields:
       hass_url:
         name: URL Home Assistant
-        description: "Pozostaw puste dla autowykrywania na HAOS (zalecane). Synchronizowany jako HOMEASSISTANT_URL w /config/.hermes/.env, gdy ustawiony jest token."
+        description: "Pozostaw puste dla autowykrywania. Testy połączenia → Test URL."
       homeassistant_token:
         name: Token Home Assistant
         description: Długoterminowy token dostępu dla MCP i skryptów HA. Ukryty po zapisaniu. Zapisany w /config/secrets/homeassistant.token.
       auto_configure_mcp:
         name: Automatyczna konfiguracja MCP dla Home Assistant
-        description: "Gdy WŁĄCZONE i token jest ustawiony, rejestruje Home Assistant w Hermes MCP (mcp_servers) przy każdym starcie."
+        description: "Rejestruje HA w MCP przy starcie. Po restarcie: Testy połączenia → Test MCP."
 
   enable_terminal:
     name: Włącz terminal webowy
@@ -105,7 +105,7 @@ configuration:
 
   web_interface:
     name: Panel Hermes (dashboard)
-    description: Osobny panel administracyjny Hermes (hermes dashboard) — konfiguracja, klucze API, sesje, logi i umiejętności. Bez wbudowanego uwierzytelniania; w trybie lan_https udostępniany przez HTTPS na porcie panelu. Niezależny od Control UI gateway.
+    description: Panel Hermes (hermes dashboard). Każde pole ma test w Testy połączenia.
     fields:
       enable_web_interface:
         name: Włącz panel Hermes
@@ -119,7 +119,7 @@ configuration:
 
   gateway_access:
     name: Dostęp do Gateway
-    description: Dostęp sieciowy, uwierzytelnianie i ustawienia API Assist dla gateway Hermes.
+    description: Dostęp sieciowy i API Assist. Każde istotne pole ma test w Testy połączenia.
     fields:
       access_mode:
         name: Tryb dostępu
@@ -181,7 +181,7 @@ configuration:
 
   mqtt_settings:
     name: Sensory statusu MQTT
-    description: Połączenie z brokerem i publikowanie sensorów statusu Home Assistant (MQTT discovery + /status.json).
+    description: Połączenie z brokerem MQTT. Każde pole brokera ma test w Testy połączenia.
     fields:
       broker_host:
         name: Host brokera MQTT

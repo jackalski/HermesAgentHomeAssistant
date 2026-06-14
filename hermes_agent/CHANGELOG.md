@@ -2,6 +2,31 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.25] - 2026-06-14
+
+### Fixed
+- **Add-on version reporting**: the status exporter now reads the live add-on version from `config.yaml` (baked into the image as `/addon_config.yaml`) instead of a hard-coded constant that was stuck at `0.0.19`. The MQTT **Add-on Version** sensor and `status.json` `addon_version` now match the installed version, and MQTT discovery re-publishes once per real version bump (marker `<version>:<prefix>`).
+- **Landing page dashboard banner**: in `lan_https` mode with `dashboard_port` equal to `gateway_port`, the page no longer shows the misleading "dashboard is loopback-only" warning — the dashboard is reached via the unified **Open Web UI** button on `gateway_port`. The loopback-only banner now appears only when `access_mode` is not `lan_https`.
+
+## [0.0.24] - 2026-06-14
+
+### Changed
+- **Connection tests** are now **one test per Configuration entry** (URL, token, MCP, MQTT broker/auth, dashboard loopback/HTTPS, gateway/remote/HTTPS, Assist API, terminal). The Ingress Web UI groups buttons by configuration panel.
+
+## [0.0.23] - 2026-06-14
+
+### Added
+- **Connection tests** on the add-on Web UI (Ingress landing page): buttons for MQTT, HA/MCP, gateway, dashboard, Assist API, and **Run all**. Served via `/test/<name>` (no add-on restart needed for MQTT/HA probes after saving Configuration).
+- Configuration panel descriptions now point to Connection tests where applicable (Home Assistant, MQTT, Gateway Access, Hermes Dashboard).
+
+### Changed
+- Merged duplicate **HTTPS nginx server blocks** into one `lan_https` listener on `gateway_port` and optional `dashboard_port`.
+- Simplified Ingress landing page: unified **Open Web UI** button, optional second port link only when `dashboard_port` differs from `gateway_port`, and trimmed redundant dashboard help text.
+
+### Removed
+- Misleading gateway HTTP port check in `gateway_running()` (Hermes 0.16+ gateway has no HTTP listener on `gateway.port`).
+- Unused `enable_web_interface` field from status exporter payload.
+
 ## [0.0.22] - 2026-06-14
 
 ### Added
