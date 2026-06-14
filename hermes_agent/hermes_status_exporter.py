@@ -322,10 +322,12 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         cfg = {}
 
     main_provider, main_model, aux_model = _model_fields(cfg)
-    web_ui_enabled = str(payload.get("enable_web_interface", "true")).lower() in ("1", "true", "yes")
-    if web_ui_enabled:
-        gateway_running, gateway_probe_at = _probe_gateway_health(gateway_port)
-    else:
+    # gateway_running reflects the messaging gateway (hermes gateway run), which
+    # is independent of the separate hermes dashboard. Try the HTTP /api/status
+    # probe first and fall back to a process check when the gateway exposes no
+    # HTTP listener on this port.
+    gateway_running, gateway_probe_at = _probe_gateway_health(gateway_port)
+    if not gateway_running:
         gateway_running, gateway_probe_at = _probe_gateway_process()
     usage = _query_state_db()
     disk_pct = _disk_usage_percent()

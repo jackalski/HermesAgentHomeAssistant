@@ -104,15 +104,18 @@ configuration:
     description: Port für das Web-Terminal (Standard 7681). Ändern Sie diesen, wenn dieser Port mit einem anderen Dienst in Konflikt steht.
 
   web_interface:
-    name: Gateway-Webinterface
-    description: Hermes Control UI (hermes dashboard) für Chat, Gateway-Verwaltung und HTTPS-Zugriff im Modus lan_https.
+    name: Hermes-Dashboard
+    description: Separate Hermes-Admin-Oberfläche (hermes dashboard) für Konfiguration, API-Schlüssel, Sitzungen, Logs und Skills. Keine eingebaute Authentifizierung; im Modus lan_https über HTTPS auf dem Dashboard-Port erreichbar. Unabhängig von der Gateway-Control-UI.
     fields:
       enable_web_interface:
-        name: Gateway-Web-UI aktivieren
-        description: Ermöglicht das Hermes-Dashboard im Add-on (erforderlich für Open Gateway Web UI und /api/status Health-Checks).
+        name: Hermes-Dashboard aktivieren
+        description: Startet den separaten Dienst hermes dashboard im Add-on. Dies ist unabhängig von der Gateway-Control-UI, die immer startet.
       auto_start_with_integration:
         name: Mit Add-on automatisch starten
-        description: Startet hermes dashboard automatisch beim Add-on-Start (lokaler Gateway-Modus). AUS = nur Messaging-Gateway.
+        description: Startet hermes dashboard automatisch beim Add-on-Start. AUS = nur das Gateway starten.
+      dashboard_port:
+        name: Dashboard-Port
+        description: HTTPS-Port für das Hermes-Dashboard (Standard 9119). Im Modus lan_https stellt nginx es über TLS bereit; das Dashboard selbst bindet nur an Loopback.
 
   gateway_access:
     name: Gateway-Zugriff

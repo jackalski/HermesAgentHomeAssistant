@@ -85,7 +85,26 @@ The `homeassistant_token` option stores a **long-lived access token** that grant
 - Revoke and regenerate the token if you suspect compromise
 - Monitor your HA logs for unexpected API activity
 
-### 5. Third-Party Skills & Supply Chain
+### 5. Hermes Dashboard (`hermes dashboard`)
+
+The Hermes dashboard (`web_interface` panel, default port **9119**) is a separate admin web UI that exposes **configuration, API keys, sessions, logs, and skills**. Upstream Hermes ships it with **no built-in authentication** — it is designed to bind to loopback only.
+
+**How the add-on exposes it**:
+- The dashboard process always binds `127.0.0.1` (loopback) inside the container.
+- In `lan_https` mode, nginx terminates TLS and proxies `dashboard_port` to the loopback dashboard, so LAN traffic is encrypted.
+- In other access modes the dashboard stays loopback-only (reach it via Ingress, an SSH tunnel, or your own authenticated reverse proxy).
+
+**Risks**:
+- TLS protects the traffic, but there is **no login** on the dashboard itself — anyone who can reach `dashboard_port` on your LAN can read API keys and change configuration.
+- Never forward `dashboard_port` directly to the internet.
+
+**Mitigations**:
+- Set `web_interface.enable_web_interface: false` if you do not need the dashboard.
+- Keep `access_mode: lan_https` so access is at least TLS-encrypted on the LAN.
+- For remote access, put an authenticating reverse proxy (e.g. Nginx Proxy Manager basic-auth, Cloudflare Access) or a private network (Tailscale) in front of it.
+- Treat the dashboard port like a credential store and restrict it at the network/firewall level.
+
+### 6. Third-Party Skills & Supply Chain
 
 Hermes Agent supports installing skills from community sources and via npm. These are **third-party code** running inside the add-on container.
 
@@ -101,7 +120,7 @@ Hermes Agent supports installing skills from community sources and via npm. Thes
 - Monitor the add-on logs for unexpected activity
 - Keep the add-on updated to get security patches
 
-### 6. Router SSH Access
+### 7. Router SSH Access
 
 The `router_ssh_*` options allow the add-on to SSH into your router or network devices. Private keys should live on persistent storage (default `/config/keys/router_ssh`). This grants **direct access to your network infrastructure**.
 
@@ -115,7 +134,7 @@ The `router_ssh_*` options allow the add-on to SSH into your router or network d
 - Restrict the SSH user's capabilities on the router (read-only if possible)
 - Only enable if you have a specific use case that requires it, and only if you understand the risks very well
 
-### 7. Browser Automation (Chromium)
+### 8. Browser Automation (Chromium)
 
 The bundled Chromium runs with `noSandbox` (required in Docker). This reduces browser-level security isolation.
 
@@ -129,7 +148,7 @@ The bundled Chromium runs with `noSandbox` (required in Docker). This reduces br
 - Do not use it to log into sensitive accounts
 - The container itself provides some isolation from the host
 
-### 8. Prompt Injection
+### 9. Prompt Injection
 
 AI agents that process external content (web pages, documents, emails) are vulnerable to **prompt injection** — hidden instructions that manipulate the agent's behavior.
 
@@ -158,6 +177,7 @@ AI agents that process external content (web pages, documents, emails) are vulne
 | Use a dedicated HA user for the `homeassistant_token` | Medium |
 | Monitor add-on logs regularly | Medium |
 | Rotate gateway tokens periodically | Medium |
+| Disable the Hermes dashboard, or front it with auth, if not needed (no built-in login) | Medium |
 | Restrict router SSH user permissions | Medium |
 | Back up your configuration regularly | Low |
 

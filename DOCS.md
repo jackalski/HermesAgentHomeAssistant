@@ -6,7 +6,8 @@ Canonical setup and operations guide. This add-on is marked **Experimental** in 
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Hermes Gateway | 18789 (configurable) | AI agent server |
+| Hermes Gateway | 18789 (configurable) | Messaging gateway + Control UI |
+| Hermes Dashboard | 9119 (configurable) | Admin web UI (`hermes dashboard`) — `lan_https` only; includes embedded Chat tab when `ptyprocess` is present |
 | nginx (Ingress) | 48099 | Landing page + `/status.json` |
 | ttyd (terminal) | 7681 (configurable) | Browser terminal |
 
@@ -157,7 +158,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |
 | **Router SSH** panel | — | `host`, `user`, `key_path` (default `/config/keys/router_ssh`) |
 | **Tool Bootstrap** panel | browser ON | Telegram / browser / Skills Hub auto-install toggles |
-| **Web Interface** panel | ON / auto-start | `enable_web_interface`, `auto_start_with_integration` — starts `hermes dashboard` with the add-on (local gateway) |
+| **Hermes Dashboard** panel | ON / auto-start / 9119 | `enable_web_interface`, `auto_start_with_integration`, `dashboard_port` — runs the separate `hermes dashboard` admin UI; exposed over HTTPS on `dashboard_port` in `lan_https` (no built-in auth, binds loopback) |
 | **Advanced Settings** panel | — | `http_proxy`, `nginx_log_level`, `gateway_env_vars`, Hermes version |
 | `addon_log_level` | `info` | Add-on startup log verbosity |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
@@ -191,7 +192,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |
 | `no such gateway 'default'` in terminal | Use `hermes gateway run` (not `hermes-agent gateway run`); ensure `HOME=/config` and `HERMES_HOME=/config/.hermes` (ttyd sets this automatically) |
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
-| `502 Bad Gateway` on `https://<LAN-IP>:18789/` | In `lan_https`, nginx on **18789** proxies to **`hermes dashboard`** on **18790** — 502 means the dashboard is not listening (`hermes gateway run` has no HTTP port); see probe below |
+| `502 Bad Gateway` on `https://<LAN-IP>:9119/` | In `lan_https`, nginx on **9119** (`dashboard_port`) proxies to **`hermes dashboard`** on **9120** — 502 means the dashboard is not listening; check `enable_web_interface`, the `hermes-agent[web]` extra, and the probe below |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
 | `HA (http) — failed` in MCP Servers | Add HA **Model Context Protocol Server** integration; verify token; leave `hass_url` empty on HAOS; run probe below |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
@@ -212,30 +213,32 @@ Gateway token (if CLI redacts secrets):
 jq -r '.gateway.auth.token' /config/.hermes/hermes.json
 ```
 
-Gateway upstream probe (`lan_https` — add-on terminal):
+Gateway + dashboard upstream probe (`lan_https` — add-on terminal):
 
 ```sh
-ss -tlnp | grep -E ':18789|:18790'
-curl -sS -m 5 -o /dev/null -w "nginx HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:18789/"
-curl -sS -m 5 -o /dev/null -w "gateway loopback: HTTP %{http_code}\n" "http://127.0.0.1:18790/"
+ss -tlnp | grep -E ':18789|:18790|:9119|:9120'
+curl -sS -m 5 -o /dev/null -w "gateway HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:18789/"
+curl -sS -m 5 -o /dev/null -w "dashboard HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:9119/"
+curl -sS -m 5 -o /dev/null -w "dashboard loopback: HTTP %{http_code}\n" "http://127.0.0.1:9120/"
 jq '{port:.gateway.port,bind:.gateway.bind,mode:.gateway.mode}' /config/.hermes/hermes.json
 ```
 
 | Check | Healthy |
 |-------|---------|
-| `:18789` listener | nginx TLS proxy (external URL) |
-| `:18790` listener | Hermes **dashboard** Web UI (nginx upstream; required for HTTPS) |
-| Messaging gateway | No HTTP port — `hermes gateway run` + `${HERMES_HOME}/gateway.pid` |
-| Loopback curl to `:18790` | Not connection refused (200/302 from dashboard is fine) |
+| `:18789` listener | nginx TLS proxy → gateway Control UI (external URL) |
+| `:9119` listener | nginx TLS proxy → Hermes **dashboard** (`dashboard_port`) |
+| `:9120` listener | Hermes **dashboard** loopback upstream (`hermes dashboard`) |
+| Messaging gateway | `hermes gateway run` + `${HERMES_HOME}/gateway.pid` |
+| Loopback curl to `:9120` | Not connection refused (200/302 from dashboard is fine) |
 
-If **18790 is missing**: dashboard failed to start — read add-on log for `Starting Hermes dashboard` errors, or run:
+If **9120 is missing**: dashboard failed to start — read add-on log for `Starting Hermes dashboard` errors, or run:
 
 ```sh
 export HOME=/config HERMES_HOME=/config/.hermes
-hermes dashboard --port 18790 --host 127.0.0.1 --no-open --skip-build
+hermes dashboard --port 9120 --host 127.0.0.1 --no-open
 ```
 
-If import fails: `uv pip install --system 'fastapi' 'uvicorn[standard]'` (or `python3 -m pip install --break-system-packages ...`). Confirm `gateway_mode` is `local` (not `remote`).
+If import fails: `uv pip install --system 'fastapi' 'uvicorn[standard]' 'ptyprocess'` (or `python3 -m pip install --break-system-packages ...`). Confirm `gateway_mode` is `local` (not `remote`). The dashboard **Chat** tab also needs `ptyprocess` and Node (both bundled in the add-on image from **0.0.22+**).
 
 MCP connectivity probe (add-on terminal):
 

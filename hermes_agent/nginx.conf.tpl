@@ -68,4 +68,6 @@ http {
   }
 
   __HTTPS_GATEWAY_BLOCK__
+
+  __HTTPS_DASHBOARD_BLOCK__
 }

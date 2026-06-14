@@ -104,15 +104,18 @@ configuration:
     description: Porta para o terminal web (padrão 7681). Altere se esta porta conflitar com outro serviço.
 
   web_interface:
-    name: Interface Web do Gateway
-    description: Hermes Control UI (hermes dashboard) para chat, gestão do gateway e acesso HTTPS no modo lan_https.
+    name: Painel do Hermes (dashboard)
+    description: Interface de administração separada do Hermes (hermes dashboard) para configuração, chaves de API, sessões, logs e skills. Sem autenticação integrada; exposta por HTTPS na porta do painel no modo lan_https. Independente da Control UI do gateway.
     fields:
       enable_web_interface:
-        name: Ativar interface web do Gateway
-        description: Permite o dashboard Hermes no add-on (necessário para Open Gateway Web UI e health checks /api/status).
+        name: Ativar painel do Hermes
+        description: Executa o serviço separado hermes dashboard no add-on. É distinto da Control UI do gateway, que sempre inicia.
       auto_start_with_integration:
         name: Iniciar automaticamente com o add-on
-        description: Inicia hermes dashboard ao iniciar o add-on (modo gateway local). Desligar = apenas gateway de mensagens.
+        description: Inicia hermes dashboard ao iniciar o add-on. Desligar = iniciar apenas o gateway.
+      dashboard_port:
+        name: Porta do painel
+        description: Porta HTTPS do painel do Hermes (padrão 9119). No modo lan_https o nginx o serve por TLS; o painel em si escuta apenas em loopback.
 
   gateway_access:
     name: Acesso ao Gateway

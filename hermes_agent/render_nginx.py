@@ -7,6 +7,8 @@ Called by run.sh with the following env vars:
   ENABLE_HTTPS_PROXY, HTTPS_PROXY_PORT,
   GATEWAY_INTERNAL_PORT, ACCESS_MODE,
   ENABLE_OPENAI_API, API_SERVER_PORT,
+  ENABLE_WEB_INTERFACE, AUTO_START_WEB_INTERFACE,
+  DASHBOARD_PORT, DASHBOARD_INTERNAL_PORT,
   DISK_TOTAL, DISK_USED, DISK_AVAIL, DISK_PCT
 """
 
@@ -69,6 +71,8 @@ def main():
     access_mode = os.environ.get('ACCESS_MODE', 'custom')
     enable_openai_api = os.environ.get('ENABLE_OPENAI_API', 'false').lower() in ('1', 'true', 'yes')
     api_server_port = os.environ.get('API_SERVER_PORT', '8642')
+    dashboard_port = os.environ.get('DASHBOARD_PORT', '9119')
+    dashboard_internal_port = os.environ.get('DASHBOARD_INTERNAL_PORT', '')
 
     # Disk usage info (collected by run.sh)
     disk_total = os.environ.get('DISK_TOTAL', '')
@@ -123,7 +127,7 @@ def main():
         ssl_protocols       TLSv1.2 TLSv1.3;
         ssl_ciphers         HIGH:!aNULL:!MD5;
 {api_locations}
-        # Dashboard Web UI and WebSocket traffic
+        # Gateway Control UI and WebSocket traffic (hermes gateway run)
         location / {{
             proxy_pass http://127.0.0.1:{internal_gw_port};
             proxy_http_version 1.1;
@@ -148,6 +152,48 @@ def main():
 """
 
     conf = conf.replace('__HTTPS_GATEWAY_BLOCK__', https_block)
+
+    # Build HTTPS dashboard proxy block (separate hermes dashboard service).
+    # Only for lan_https mode when the dashboard is enabled + auto-started.
+    dashboard_block = ''
+    if enable_https and web_interface_active and dashboard_port and dashboard_internal_port:
+        dashboard_block = f"""
+    # --- HTTPS Hermes Dashboard Proxy (lan_https mode) ---
+    # The dashboard (hermes dashboard) has no built-in auth and binds loopback;
+    # nginx terminates TLS here so it is only reachable over HTTPS on the LAN.
+    server {{
+        listen {dashboard_port} ssl;
+
+        ssl_certificate     /config/certs/gateway.crt;
+        ssl_certificate_key /config/certs/gateway.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+
+        # Hermes dashboard UI + WebSocket (Chat/PTY) traffic
+        location / {{
+            proxy_pass http://127.0.0.1:{dashboard_internal_port};
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+            proxy_buffering off;
+        }}
+
+        # Download the local CA certificate (install on phone for trusted access)
+        location = /cert/ca.crt {{
+            alias /etc/nginx/html/hermes-ca.crt;
+            default_type application/x-x509-ca-cert;
+            add_header Content-Disposition 'attachment; filename="hermes-ca.crt"';
+        }}
+    }}
+"""
+
+    conf = conf.replace('__HTTPS_DASHBOARD_BLOCK__', dashboard_block)
     Path('/etc/nginx/nginx.conf').write_text(conf)
 
     # ── landing page ────────────────────────────────────────────
@@ -177,6 +223,7 @@ def main():
     landing = landing.replace('__SETUP_ASSIST__', setup_assist)
     landing = landing.replace('__SETUP_GATEWAY_URL_HINT__', gateway_url_hint)
     landing = landing.replace('__ENABLE_WEB_INTERFACE__', 'yes' if web_interface_active else 'no')
+    landing = landing.replace('__DASHBOARD_PORT__', dashboard_port if (enable_https and web_interface_active) else '')
 
     out_dir = Path('/etc/nginx/html')
     out_dir.mkdir(parents=True, exist_ok=True)
