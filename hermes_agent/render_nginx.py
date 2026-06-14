@@ -59,6 +59,25 @@ def _api_proxy_locations(api_port: str) -> str:
 """
 
 
+def _dashboard_upstream_proxy(internal_port: str) -> str:
+    """Nginx location body for proxying to loopback hermes dashboard."""
+    return f"""
+            proxy_pass http://127.0.0.1:{internal_port};
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            # Dashboard binds 127.0.0.1 and validates Host against its bind address
+            # (DNS rebinding protection). Forward the loopback Host, not the client Host.
+            proxy_set_header Host 127.0.0.1:{internal_port};
+            proxy_set_header X-Forwarded-Proto https;
+            # Do not set X-Forwarded-For — the dashboard WS loopback gate expects nginx
+            # (127.0.0.1) as the immediate peer, not the original browser IP.
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+            proxy_buffering off;
+"""
+
+
 def main():
     tpl = Path('/etc/nginx/nginx.conf.tpl').read_text()
     landing_tpl = Path('/etc/nginx/landing.html.tpl').read_text()
@@ -117,6 +136,18 @@ def main():
         api_locations = ''
         if enable_openai_api and api_server_port:
             api_locations = _api_proxy_locations(api_server_port)
+        if web_interface_active and dashboard_internal_port:
+            root_upstream = _dashboard_upstream_proxy(dashboard_internal_port)
+            root_comment = (
+                '# Hermes dashboard (hermes dashboard) — serves the gateway web UI; '
+                'messaging stays in hermes gateway run'
+            )
+        else:
+            root_upstream = """
+            default_type application/json;
+            return 503 '{"detail":"Hermes dashboard is disabled. Enable web_interface in add-on Configuration and restart."}';
+"""
+            root_comment = '# Dashboard disabled — enable web_interface to serve the gateway web UI'
         https_block = f"""
     # --- HTTPS Gateway Proxy (lan_https mode) ---
     server {{
@@ -127,19 +158,9 @@ def main():
         ssl_protocols       TLSv1.2 TLSv1.3;
         ssl_ciphers         HIGH:!aNULL:!MD5;
 {api_locations}
-        # Gateway Control UI and WebSocket traffic (hermes gateway run)
+        {root_comment}
         location / {{
-            proxy_pass http://127.0.0.1:{internal_gw_port};
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
-            proxy_buffering off;
+{root_upstream}
         }}
 
         # Download the local CA certificate (install on phone for trusted access)
@@ -171,17 +192,7 @@ def main():
 
         # Hermes dashboard UI + WebSocket (Chat/PTY) traffic
         location / {{
-            proxy_pass http://127.0.0.1:{dashboard_internal_port};
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
-            proxy_buffering off;
+{_dashboard_upstream_proxy(dashboard_internal_port)}
         }}
 
         # Download the local CA certificate (install on phone for trusted access)
