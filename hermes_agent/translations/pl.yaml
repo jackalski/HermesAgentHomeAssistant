@@ -103,6 +103,17 @@ configuration:
     name: Port terminala
     description: Port dla terminala webowego (domyślnie 7681). Zmień, jeśli ten port koliduje z inną usługą.
 
+  web_interface:
+    name: Interfejs webowy Gateway
+    description: Hermes Control UI (hermes dashboard) — czat, zarządzanie gateway i dostęp HTTPS w trybie lan_https.
+    fields:
+      enable_web_interface:
+        name: Włącz interfejs webowy Gateway
+        description: Uruchamia dashboard Hermes w dodatku (wymagane dla przycisku Open Gateway Web UI i health check /api/status).
+      auto_start_with_integration:
+        name: Auto-start z dodatkiem
+        description: Uruchamia hermes dashboard automatycznie przy starcie dodatku (tryb local gateway). Wyłącz, aby uruchomić tylko messaging gateway.
+
   gateway_access:
     name: Dostęp do Gateway
     description: Dostęp sieciowy, uwierzytelnianie i ustawienia API Assist dla gateway Hermes.

@@ -98,6 +98,8 @@ fi
 ADDON_HTTP_PROXY="$(read_nested_option advanced_settings http_proxy)"
 ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
 TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
+ENABLE_WEB_INTERFACE="$(read_nested_option web_interface enable_web_interface)"
+AUTO_START_WEB_INTERFACE="$(read_nested_option web_interface auto_start_with_integration)"
 
 # SECURITY: Validate TERMINAL_PORT to prevent nginx config injection
 # Only allow numeric values in valid port range (1024-65535)
@@ -203,6 +205,8 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$STATUS_POLL_INTERVAL_RAW" ] && STATUS_POLL_INTERVAL_RAW="60"
 [ -z "$MQTT_STATE_PREFIX" ] && MQTT_STATE_PREFIX="hermes"
 [ -z "$MQTT_BROKER_PORT" ] && MQTT_BROKER_PORT="1883"
+[ -z "$ENABLE_WEB_INTERFACE" ] && ENABLE_WEB_INTERFACE="true"
+[ -z "$AUTO_START_WEB_INTERFACE" ] && AUTO_START_WEB_INTERFACE="true"
 
 # Validate status poll interval (30-300 seconds)
 if [[ "$STATUS_POLL_INTERVAL_RAW" =~ ^[0-9]+$ ]] && [ "$STATUS_POLL_INTERVAL_RAW" -ge 30 ] && [ "$STATUS_POLL_INTERVAL_RAW" -le 300 ]; then
@@ -1719,6 +1723,7 @@ build_status_exporter_payload() {
     --arg minimax "$MINIMAX_API_KEY_OPT" \
     --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
     --arg searxng "$SEARXNG_URL_OPT" \
+    --arg enable_web_interface "$ENABLE_WEB_INTERFACE" \
     '{
       mqtt_settings: $mqtt_settings,
       gateway_internal_port: ($gateway_internal_port | tonumber),
@@ -1730,6 +1735,7 @@ build_status_exporter_payload() {
       publish_mqtt_discovery: $publish_mqtt_discovery,
       mqtt_state_prefix: $mqtt_state_prefix,
       status_poll_interval_seconds: $status_poll_interval_seconds,
+      enable_web_interface: $enable_web_interface,
       api_keys: {
         OPENROUTER_API_KEY: $openrouter,
         ANTHROPIC_API_KEY: $anthropic,
@@ -1813,7 +1819,15 @@ PY
   else
     run_hermes_gateway
     GW_PID=$!
-    run_hermes_dashboard || true
+    if [ "$ENABLE_WEB_INTERFACE" = "true" ] || [ "$ENABLE_WEB_INTERFACE" = "1" ]; then
+      if [ "$AUTO_START_WEB_INTERFACE" = "true" ] || [ "$AUTO_START_WEB_INTERFACE" = "1" ]; then
+        run_hermes_dashboard || true
+      else
+        log_info "Web interface enabled but auto_start_with_integration=false; skipping hermes dashboard startup"
+      fi
+    else
+      log_info "Gateway Web UI disabled (enable_web_interface=false)"
+    fi
   fi
   if [ -z "${GW_PID:-}" ]; then
     GW_PID=$!
@@ -1907,7 +1921,9 @@ if ! start_hermes_runtime; then
   exit 1
 fi
 
-if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ]; then
+if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ] \
+    && { [ "$ENABLE_WEB_INTERFACE" = "true" ] || [ "$ENABLE_WEB_INTERFACE" = "1" ]; } \
+    && { [ "$AUTO_START_WEB_INTERFACE" = "true" ] || [ "$AUTO_START_WEB_INTERFACE" = "1" ]; }; then
   GATEWAY_BIND_OK=false
   for _gw_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ":${GATEWAY_INTERNAL_PORT} "; then
@@ -2086,6 +2102,8 @@ print(json.load(open(p)).get('gateway',{}).get('auth',{}).get('token',''), end='
     ENABLE_OPENAI_API="$ENABLE_OPENAI_API" API_SERVER_PORT="$API_SERVER_PORT" \
     DISK_TOTAL="$disk_total" DISK_USED="$disk_used" DISK_AVAIL="$disk_avail" DISK_PCT="$disk_pct" \
     NGINX_LOG_LEVEL="$NGINX_LOG_LEVEL" \
+    ENABLE_WEB_INTERFACE="$ENABLE_WEB_INTERFACE" \
+    AUTO_START_WEB_INTERFACE="$AUTO_START_WEB_INTERFACE" \
     SETUP_API_KEY="$setup_api_key" SETUP_MODEL="$setup_model" SETUP_MCP="$setup_mcp" \
     SETUP_ASSIST="$setup_assist" SETUP_GATEWAY_URL_HINT="$gateway_url_hint" \
     python3 /render_nginx.py

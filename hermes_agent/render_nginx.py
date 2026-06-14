@@ -81,6 +81,9 @@ def main():
     setup_mcp = os.environ.get('SETUP_MCP', 'no')
     setup_assist = os.environ.get('SETUP_ASSIST', 'no')
     gateway_url_hint = os.environ.get('SETUP_GATEWAY_URL_HINT', '')
+    enable_web_interface = os.environ.get('ENABLE_WEB_INTERFACE', 'true').lower() in ('1', 'true', 'yes')
+    auto_start_web_interface = os.environ.get('AUTO_START_WEB_INTERFACE', 'true').lower() in ('1', 'true', 'yes')
+    web_interface_active = enable_web_interface and auto_start_web_interface
 
     # Token comes from environment (best-effort CLI query in run.sh)
     token = os.environ.get('GW_TOKEN', '')
@@ -173,6 +176,7 @@ def main():
     landing = landing.replace('__SETUP_MCP__', setup_mcp)
     landing = landing.replace('__SETUP_ASSIST__', setup_assist)
     landing = landing.replace('__SETUP_GATEWAY_URL_HINT__', gateway_url_hint)
+    landing = landing.replace('__ENABLE_WEB_INTERFACE__', 'yes' if web_interface_active else 'no')
 
     out_dir = Path('/etc/nginx/html')
     out_dir.mkdir(parents=True, exist_ok=True)
