@@ -10,12 +10,14 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 - **Dashboard Chat tab:** image installs `ptyprocess` (Hermes `[pty]` extra) and starts `hermes dashboard --tui` when supported, enabling the embedded TUI chat pane over PTY/WebSocket (Node 22 is already in the image for TUI bundle builds).
 
 ### Changed
-- The `web_interface` panel now controls the **separate Hermes dashboard** (port 9119), not the always-on gateway Control UI on 18789. Renamed to **Hermes Dashboard** in all translations.
-- The dashboard now binds its own loopback port (`dashboard_port + 1` in `lan_https`); port **18789** is left for the gateway Control UI.
+- The `web_interface` panel controls **`hermes dashboard`** auto-start and `dashboard_port` (default 9119). Renamed to **Hermes Dashboard** in all translations.
+- In `lan_https`, **both** `gateway_port` (18789) and `dashboard_port` (9119) are nginx HTTPS entry points to the same dashboard loopback process; messaging stays in `hermes gateway run` (no HTTP on `gateway.port`).
 - `gateway_running` status detection now probes the gateway over HTTP with a process-check fallback, so it no longer depends on the dashboard.
 
 ### Fixed
 - Dropped the invalid **`--skip-build`** flag from the `hermes dashboard` launch (not supported by current Hermes), which could prevent the dashboard from starting on 0.16.0.
+- **`Invalid Host header` on `dashboard_port`:** nginx now forwards `Host: 127.0.0.1:<internal>` (not the client LAN IP) and omits `X-Forwarded-For` so the dashboard accepts proxied requests and WebSocket chat works.
+- **`502 Bad Gateway` on `gateway_port` (18789):** port 18789 again proxies `/` to **`hermes dashboard`** (not `gateway.port`, which has no HTTP listener in Hermes 0.16+). Port **9119** is a second HTTPS entry to the same dashboard.
 
 ### Security
 - Documented that the Hermes dashboard has **no built-in authentication**; in `lan_https` it is TLS-encrypted on the LAN but still unauthenticated. Disable it or front it with an authenticating proxy if not needed. See `SECURITY.md`.

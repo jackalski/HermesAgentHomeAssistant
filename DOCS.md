@@ -6,8 +6,8 @@ Canonical setup and operations guide. This add-on is marked **Experimental** in 
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Hermes Gateway | 18789 (configurable) | Messaging gateway + Control UI |
-| Hermes Dashboard | 9119 (configurable) | Admin web UI (`hermes dashboard`) — `lan_https` only; includes embedded Chat tab when `ptyprocess` is present |
+| Hermes Gateway | 18789 (configurable) | HTTPS entry to `hermes dashboard` (gateway web UI) + Assist API routes when enabled |
+| Hermes Dashboard | 9119 (configurable) | Second HTTPS entry to the same `hermes dashboard` admin UI |
 | nginx (Ingress) | 48099 | Landing page + `/status.json` |
 | ttyd (terminal) | 7681 (configurable) | Browser terminal |
 
@@ -192,7 +192,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |
 | `no such gateway 'default'` in terminal | Use `hermes gateway run` (not `hermes-agent gateway run`); ensure `HOME=/config` and `HERMES_HOME=/config/.hermes` (ttyd sets this automatically) |
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
-| `502 Bad Gateway` on `https://<LAN-IP>:9119/` | In `lan_https`, nginx on **9119** (`dashboard_port`) proxies to **`hermes dashboard`** on **9120** — 502 means the dashboard is not listening; check `enable_web_interface`, the `hermes-agent[web]` extra, and the probe below |
+| `502 Bad Gateway` on `https://<LAN-IP>:18789/` or `:9119/` | In `lan_https`, nginx proxies both ports to **`hermes dashboard`** on loopback (`dashboard_port + 1`, default **9120**). 502 means the dashboard is not listening — check `enable_web_interface`, `hermes-agent[web]`, and add-on logs. **`Invalid Host header`** on 9119 was fixed in **0.0.22+** (nginx must send `Host: 127.0.0.1:<internal>`). |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
 | `HA (http) — failed` in MCP Servers | Add HA **Model Context Protocol Server** integration; verify token; leave `hass_url` empty on HAOS; run probe below |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
