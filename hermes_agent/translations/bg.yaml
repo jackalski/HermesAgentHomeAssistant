@@ -104,18 +104,18 @@ configuration:
     description: Port for the web terminal (default 7681). Change if this port conflicts with another service.
 
   web_interface:
-    name: Hermes табло (dashboard)
-    description: Hermes dashboard admin UI. Each field has a matching test on the add-on Web UI.
+    name: Hermes Web UI
+    description: Hermes admin UI (hermes dashboard). External HTTPS on gateway_port. Each field has a matching test on the add-on Web UI.
     fields:
       enable_web_interface:
-        name: Включи Hermes таблото
-        description: Стартира отделната услуга hermes dashboard в добавката. Различава се от Control UI на gateway, който винаги стартира.
+        name: Enable Hermes Web UI
+        description: Starts hermes dashboard in the add-on. Connection tests → Test Dashboard.
       auto_start_with_integration:
-        name: Авто-старт с добавката
-        description: Стартира hermes dashboard автоматично при стартиране на добавката. Изключете, за да стартирате само gateway.
+        name: Auto-start with add-on
+        description: Starts hermes dashboard on add-on start. Required for Connection tests → Test Dashboard.
       dashboard_port:
-        name: Порт на таблото
-        description: HTTPS порт за Hermes таблото (по подразбиране 9119). В режим lan_https nginx го обслужва по TLS; самото табло слуша само на loopback.
+        name: Dashboard loopback port
+        description: Loopback bind offset only (process listens on dashboard_port + 1 in lan_https). External HTTPS is on gateway_port.
 
   gateway_access:
     name: Gateway Access
@@ -131,11 +131,11 @@ configuration:
           lan_reverse_proxy: "LAN Reverse Proxy (външен прокси с trusted-proxy удостоверяване)"
           tailnet_https: "Tailscale HTTPS (Tailscale + token)"
       gateway_port:
-        name: Порт на Gateway
-        description: Port for the Hermes gateway (default 18789).
+        name: Gateway port
+        description: HTTPS port for Hermes Web UI (default 18789). Connection tests → Test Web UI HTTPS.
       gateway_public_url:
-        name: Публичен URL на Gateway
-        description: Public base URL for opening the Gateway Web UI in a new tab (not embedded).
+        name: Gateway public URL
+        description: Public base URL for opening Hermes Web UI in a new tab (not embedded).
       enable_openai_api:
         name: Активиране на OpenAI API
         description: "Enables Hermes Assist API (API_SERVER_ENABLED). Extended OpenAI from HA Core: http://<LAN-IP>:8642/v1."

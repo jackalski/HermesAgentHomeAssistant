@@ -430,7 +430,7 @@ def check_gateway_https(options: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": ok,
         "summary": f"Gateway HTTPS HTTP {status if status is not None else 'unreachable'}",
-        "detail": f"https://<LAN-IP>:{port}/ (nginx TLS on gateway_port)",
+        "detail": f"https://<LAN-IP>:{port}/ (nginx TLS on gateway_port — Hermes Web UI)",
         "http_status": status,
     }
 
@@ -462,33 +462,10 @@ def check_dashboard(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def check_dashboard_https(options: dict[str, Any]) -> dict[str, Any]:
-    access_mode = str(_nested(options, "gateway_access", "access_mode", default="custom") or "custom")
-    if access_mode != "lan_https":
-        return _skipped(
-            "Dashboard HTTPS skipped (access_mode is not lan_https)",
-            "Switch gateway_access.access_mode to lan_https.",
-        )
-    if not _truthy(_nested(options, "web_interface", "enable_web_interface", default=True)):
-        return {
-            "ok": False,
-            "summary": "Hermes dashboard disabled",
-            "detail": "Enable web_interface.enable_web_interface.",
-        }
-    gw_port = int(_nested(options, "gateway_access", "gateway_port", default=18789) or 18789)
-    dash_port = int(_nested(options, "web_interface", "dashboard_port", default=9119) or 9119)
-    if dash_port == gw_port:
-        return _skipped(
-            "Dashboard HTTPS skipped (same port as gateway_port)",
-            f"Port {dash_port} is already covered by Test Gateway HTTPS.",
-        )
-    status = _http_status(f"https://127.0.0.1:{dash_port}/", timeout=8.0)
-    ok = status is not None and status < 500
-    return {
-        "ok": ok,
-        "summary": f"Dashboard HTTPS HTTP {status if status is not None else 'unreachable'}",
-        "detail": f"https://<LAN-IP>:{dash_port}/ (nginx TLS on dashboard_port)",
-        "http_status": status,
-    }
+    return _skipped(
+        "Dashboard HTTPS alias removed (use Test Web UI HTTPS)",
+        "External HTTPS is published only on gateway_port. Use Connection tests → Test Web UI HTTPS.",
+    )
 
 
 def check_assist_api(options: dict[str, Any]) -> dict[str, Any]:

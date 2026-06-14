@@ -70,17 +70,16 @@
 
     <!-- ==================== ACTION BUTTONS ==================== -->
     <div class="row" style="margin-bottom:6px">
-      <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__?token=__GATEWAY_TOKEN__" target="_blank" rel="noopener noreferrer">Open Web UI</a>
-      <a class="btn green hidden" id="dashbtn" href="" target="_blank" rel="noopener noreferrer">Open Dashboard</a>
+      <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__?token=__GATEWAY_TOKEN__" target="_blank" rel="noopener noreferrer">Open Hermes Web UI</a>
       <a class="btn secondary" href="./terminal/" target="_self">Open Terminal (full page)</a>
       <a class="btn green hidden" id="certBtn" href="" target="_blank" rel="noopener noreferrer">Download CA Certificate</a>
     </div>
     <div class="banner info hidden" id="webUiDisabledBanner">
-      <b>Hermes dashboard is disabled.</b> Enable <code>web_interface.enable_web_interface</code> and
+      <b>Hermes Web UI is disabled.</b> Enable <code>web_interface.enable_web_interface</code> and
       <code>auto_start_with_integration</code>, then restart.
     </div>
     <div class="banner warn hidden" id="dashLoopbackBanner">
-      <b>Hermes dashboard is loopback-only in this access mode.</b> It listens on
+      <b>Hermes Web UI is loopback-only in this access mode.</b> It listens on
       <code>127.0.0.1</code> with no built-in auth. Switch <code>access_mode</code> to
       <b>lan_https</b> for a TLS-protected LAN button, or reach it via an SSH tunnel / your own
       reverse proxy.
@@ -107,7 +106,7 @@
     <div class="banner success hidden" id="successBanner"></div>
 
     <!-- ==================== CONNECTION TESTS ==================== -->
-    <details open>
+    <details>
       <summary>Connection tests</summary>
       <div class="muted" style="margin-top:6px;font-size:13px">
         One test per add-on Configuration entry. Save Configuration first; MQTT and HA URL/token
@@ -127,16 +126,15 @@
         <button class="btn secondary" type="button" data-test="mqtt_auth">Test Auth</button>
       </div>
 
-      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Hermes Dashboard</div>
+      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Hermes Web UI</div>
       <div class="row" style="margin-top:6px">
         <button class="btn secondary" type="button" data-test="dashboard">Test Dashboard</button>
-        <button class="btn secondary" type="button" data-test="dashboard_https">Test HTTPS Port</button>
+        <button class="btn secondary" type="button" data-test="gateway_https">Test Web UI HTTPS</button>
       </div>
 
       <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Gateway Access</div>
       <div class="row" style="margin-top:6px">
         <button class="btn secondary" type="button" data-test="gateway">Test Gateway</button>
-        <button class="btn secondary" type="button" data-test="gateway_https">Test Gateway HTTPS</button>
         <button class="btn secondary" type="button" data-test="gateway_remote">Test Remote</button>
         <button class="btn secondary" type="button" data-test="assist_api">Test Assist API</button>
       </div>
@@ -151,7 +149,7 @@
     </details>
 
     <!-- ==================== SETUP READINESS ==================== -->
-    <details open>
+    <details>
       <summary>Setup status</summary>
       <div style="margin-top:8px;font-size:13px;color:#9ca3af;line-height:1.9">
         <div>API key synced: <b id="setupApiKey">__SETUP_API_KEY__</b></div>
@@ -185,10 +183,13 @@
     </details>
 
     <!-- ==================== ACCESS WIZARD ==================== -->
-    <div class="wizard hidden" id="wizard">
-      <h3>🧭 Quick-Start: Secure LAN Access</h3>
-      <div id="wizardContent"></div>
-    </div>
+    <details>
+      <summary>Access Wizard</summary>
+      <div class="wizard hidden" id="wizard">
+        <h3>🧭 Quick-Start: Secure LAN Access</h3>
+        <div id="wizardContent"></div>
+      </div>
+    </details>
 
     <!-- ==================== TIPS ==================== -->
     <details>
@@ -294,25 +295,11 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
     const DISK_USED = '__DISK_USED__';
     const DISK_TOTAL = '__DISK_TOTAL__';
     const ENABLE_WEB_INTERFACE = '__ENABLE_WEB_INTERFACE__';
-    const DASHBOARD_PORT = '__DASHBOARD_PORT__';
 
     const $ = id => document.getElementById(id);
 
-    // The separate Hermes dashboard (hermes dashboard) is gated by web_interface options.
     if (ENABLE_WEB_INTERFACE === 'yes') {
-      if (ACCESS_MODE === 'lan_https') {
-        // In lan_https the dashboard is served over TLS via "Open Web UI" on the
-        // gateway port. Only surface a second button when dashboard_port is a
-        // distinct HTTPS entry; equal ports need no banner (not loopback-only).
-        if (DASHBOARD_PORT && DASHBOARD_PORT !== HTTPS_PORT) {
-          const dashbtn = $('dashbtn');
-          if (dashbtn) {
-            const host = window.location.hostname || 'homeassistant.local';
-            dashbtn.href = 'https://' + host + ':' + DASHBOARD_PORT + '/';
-            dashbtn.classList.remove('hidden');
-          }
-        }
-      } else {
+      if (ACCESS_MODE !== 'lan_https') {
         const loopbackBanner = $('dashLoopbackBanner');
         if (loopbackBanner) loopbackBanner.classList.remove('hidden');
       }
@@ -383,12 +370,12 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
       statusSecure.innerHTML = '<span class="icon">❌</span><span>Secure context: <b>no</b> — HTTPS required for Control UI</span>';
     }
 
-    // ---------- HA status.json (add-on exporter) ----------
+    // ---------- HA status.json (add-on exporter + gateway health) ----------
     (async function loadHaStatus() {
       const el = $('haStatusLive');
-      if (!el) return;
+      const statusEl = $('statusGateway');
       try {
-        const r = await fetch('/status.json', { cache: 'no-store' });
+        const r = await fetch('./status.json', { cache: 'no-store' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const s = await r.json();
         const u = s.usage || {};
@@ -398,29 +385,23 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
           : (s.main_model || 'not set');
         const tokens = u.total_tokens != null ? u.total_tokens : '—';
         const cost = u.estimated_cost_usd != null ? '$' + Number(u.estimated_cost_usd).toFixed(4) : '—';
-        el.innerHTML =
-          'Gateway: <b>' + gw + '</b> · Model: <b>' + model + '</b> · Tokens: <b>' + tokens + '</b> · Est. cost: <b>' + cost + '</b>' +
-          (s.updated_at ? ' <span class="muted">(updated ' + s.updated_at + ')</span>' : '');
-      } catch {
-        el.innerHTML = 'Live status unavailable yet — exporter may still be starting. Check add-on logs or <code>/share/hermes/status.json</code>.';
-      }
-    })();
-
-    // ---------- Gateway health check ----------
-    (async function checkGateway() {
-      const statusEl = $('statusGateway');
-      try {
-        const url = GW_PUBLIC_URL
-          ? GW_PUBLIC_URL.replace(/\/$/, '') + '/api/status'
-          : '/api/status'; // fallback to relative (only works if proxied)
-        const r = await fetch(url, { mode: 'no-cors', cache: 'no-store' }).catch(() => null);
-        if (r && (r.ok || r.type === 'opaque')) {
-          statusEl.innerHTML = '<span class="icon">✅</span><span>Gateway: <b>running</b></span>';
-        } else {
-          statusEl.innerHTML = '<span class="icon">⚠️</span><span>Gateway: <b>unreachable</b> (may still be starting)</span>';
+        if (el) {
+          el.innerHTML =
+            'Gateway: <b>' + gw + '</b> · Model: <b>' + model + '</b> · Tokens: <b>' + tokens + '</b> · Est. cost: <b>' + cost + '</b>' +
+            (s.updated_at ? ' <span class="muted">(updated ' + s.updated_at + ')</span>' : '');
+        }
+        if (statusEl) {
+          statusEl.innerHTML = s.gateway_running
+            ? '<span class="icon">✅</span><span>Gateway: <b>running</b></span>'
+            : '<span class="icon">⚠️</span><span>Gateway: <b>unreachable</b> (may still be starting)</span>';
         }
       } catch {
-        statusEl.innerHTML = '<span class="icon">❌</span><span>Gateway: <b>unreachable</b></span>';
+        if (el) {
+          el.innerHTML = 'Live status unavailable yet — exporter may still be starting. Check add-on logs or <code>/share/hermes/status.json</code>.';
+        }
+        if (statusEl) {
+          statusEl.innerHTML = '<span class="icon">❌</span><span>Gateway: <b>unreachable</b></span>';
+        }
       }
     })();
 
@@ -510,7 +491,7 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
       wizardContent.innerHTML = `
         <div class="banner success">✅ Built-in HTTPS proxy is active on port <b>${HTTPS_PORT}</b>.</div>
         <ol>
-          <li>Click <b>Open Web UI</b> above — it uses HTTPS on port <b>${HTTPS_PORT}</b>.</li>
+          <li>Click <b>Open Hermes Web UI</b> above — it uses HTTPS on port <b>${HTTPS_PORT}</b>.</li>
           <li>Your browser may show a certificate warning the first time. Click <b>Advanced → Proceed</b> to continue.</li>
           <li><b>For phones/tablets (one-time):</b> Click <b>Download CA Certificate</b>, then install it:
             <ul style="margin:4px 0;padding-left:18px">

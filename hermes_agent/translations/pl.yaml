@@ -104,18 +104,18 @@ configuration:
     description: Port dla terminala webowego (domyślnie 7681). Zmień, jeśli ten port koliduje z inną usługą.
 
   web_interface:
-    name: Panel Hermes (dashboard)
-    description: Panel Hermes (hermes dashboard). Każde pole ma test w Testy połączenia.
+    name: Hermes Web UI
+    description: Panel Hermes (hermes dashboard). HTTPS na zewnątrz na gateway_port. Każde pole ma test w Testy połączenia.
     fields:
       enable_web_interface:
-        name: Włącz panel Hermes
-        description: Uruchamia osobną usługę hermes dashboard w dodatku. To coś innego niż Control UI gateway, które uruchamia się zawsze.
+        name: Włącz Hermes Web UI
+        description: Uruchamia hermes dashboard. Testy połączenia → Test Dashboard.
       auto_start_with_integration:
         name: Auto-start z dodatkiem
-        description: Uruchamia hermes dashboard automatycznie przy starcie dodatku. Wyłącz, aby uruchomić tylko gateway.
+        description: Uruchamia hermes dashboard przy starcie dodatku. Wymagane dla Test Dashboard.
       dashboard_port:
-        name: Port panelu
-        description: Port HTTPS panelu Hermes (domyślnie 9119). W trybie lan_https nginx udostępnia go przez TLS; sam panel nasłuchuje tylko na pętli zwrotnej (loopback).
+        name: Port loopback panelu
+        description: Tylko offset loopback (proces na dashboard_port + 1). HTTPS na LAN tylko na gateway_port.
 
   gateway_access:
     name: Dostęp do Gateway
@@ -132,10 +132,10 @@ configuration:
           tailnet_https: "Tailscale HTTPS (Tailscale + token)"
       gateway_port:
         name: Port Gateway
-        description: Port gateway Hermes (domyślnie 18789).
+        description: Port HTTPS Hermes Web UI (domyślnie 18789). Testy połączenia → Test Web UI HTTPS.
       gateway_public_url:
         name: Publiczny URL Gateway
-        description: Publiczny bazowy URL do otwierania Web UI Gateway w nowej karcie (nie osadzone).
+        description: Publiczny URL do otwierania Hermes Web UI w nowej karcie (nie osadzone).
       enable_openai_api:
         name: Włącz API OpenAI
         description: "Włącza API Assist Hermes (API_SERVER_ENABLED). Extended OpenAI z HA Core: http://<LAN-IP>:8642/v1."

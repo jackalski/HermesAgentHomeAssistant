@@ -104,26 +104,26 @@ configuration:
     description: Port for the web terminal (default 7681). Change if this port conflicts with another service. Verified by Connection tests → Test Terminal.
 
   web_interface:
-    name: Hermes Dashboard
-    description: Separate Hermes admin UI (hermes dashboard) for config, API keys, sessions, logs, and skills. Each field below has a matching test on the add-on Web UI.
+    name: Hermes Web UI
+    description: Hermes admin UI (hermes dashboard) for config, API keys, sessions, logs, and skills. External HTTPS is on gateway_port. Each field below has a matching test on the add-on Web UI.
     fields:
       enable_web_interface:
-        name: Enable Hermes Dashboard
-        description: Run the separate hermes dashboard service inside the add-on. Verified by Connection tests → Test Dashboard.
+        name: Enable Hermes Web UI
+        description: Run the hermes dashboard service inside the add-on. Verified by Connection tests → Test Dashboard.
       auto_start_with_integration:
         name: Auto-Start With Add-on
         description: Start hermes dashboard automatically when the add-on starts. Required for Connection tests → Test Dashboard.
       dashboard_port:
-        name: Dashboard Port
-        description: HTTPS port for the Hermes dashboard (default 9119). In lan_https mode nginx serves it over TLS. Use Connection tests → Test HTTPS Port (when different from gateway_port).
+        name: Dashboard Loopback Port
+        description: "Loopback bind offset only (process listens on dashboard_port + 1 in lan_https, default internal 9120). External HTTPS is on gateway_port. Deprecated as a second LAN port."
 
   gateway_access:
     name: Gateway Access
-    description: Network access, authentication, and Assist API settings for the Hermes gateway. Each field below has a matching test on the add-on Web UI.
+    description: Network access, authentication, and Assist API settings. Each relevant field has a matching test on the add-on Web UI.
     fields:
       access_mode:
         name: Access Mode
-        description: "Simplifies secure access. Overrides bind/auth settings when not Custom. lan_https enables Connection tests → Test Gateway HTTPS."
+        description: "Simplifies secure access. Overrides bind/auth settings when not Custom. lan_https enables Connection tests → Test Web UI HTTPS."
         options:
           custom: "Custom (use individual settings)"
           local_only: "Local Only (loopback + token, Ingress only)"
@@ -132,10 +132,10 @@ configuration:
           tailnet_https: "Tailscale HTTPS (Tailscale bind + token)"
       gateway_port:
         name: Gateway Port
-        description: Port for the Hermes gateway (default 18789). In lan_https, verified by Connection tests → Test Gateway HTTPS.
+        description: HTTPS port for Hermes Web UI (default 18789). In lan_https, verified by Connection tests → Test Web UI HTTPS.
       gateway_public_url:
         name: Gateway Public URL
-        description: Public base URL for opening the Gateway Web UI in a new tab (not embedded).
+        description: Public base URL for opening the Hermes Web UI in a new tab (not embedded).
       enable_openai_api:
         name: Enable OpenAI API
         description: "Enables Hermes Assist API (API_SERVER_ENABLED). Extended OpenAI from HA Core: http://<LAN-IP>:8642/v1. After enabling and restart, use Connection tests → Test Assist API."
