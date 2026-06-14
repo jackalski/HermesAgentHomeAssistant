@@ -53,7 +53,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.25"
+    fallback = "0.0.27"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -117,7 +117,7 @@ def _provider_configured(env_key: str, api_keys: dict, env_presence: dict[str, b
     return bool(env_presence.get(env_key))
 
 
-def _probe_gateway_health(port: int) -> tuple[bool, str | None]:
+def _probe_dashboard_health(port: int) -> tuple[bool, str | None]:
     url = f"http://127.0.0.1:{port}/api/status"
     try:
         req = urllib.request.Request(url, method="GET")
@@ -335,7 +335,7 @@ def _model_fields(cfg: dict | None) -> tuple[str, str, str]:
 
 
 def collect_status_snapshot(payload: dict) -> dict[str, Any]:
-    gateway_port = int(payload.get("gateway_internal_port", 18789))
+    dashboard_port = int(payload.get("dashboard_internal_port", 0) or 0)
     api_keys = payload.get("api_keys", {})
     if not isinstance(api_keys, dict):
         api_keys = {}
@@ -346,13 +346,15 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         cfg = {}
 
     main_provider, main_model, aux_model = _model_fields(cfg)
-    # gateway_running reflects the messaging gateway (hermes gateway run), which
-    # is independent of the separate hermes dashboard. Try the HTTP /api/status
-    # probe first and fall back to a process check when the gateway exposes no
-    # HTTP listener on this port.
-    gateway_running, gateway_probe_at = _probe_gateway_health(gateway_port)
-    if not gateway_running:
-        gateway_running, gateway_probe_at = _probe_gateway_process()
+    # gateway_running reflects the messaging gateway (hermes gateway run).
+    gateway_running, gateway_probe_at = _probe_gateway_process()
+    dashboard_running = False
+    dashboard_probe_at = None
+    if dashboard_port > 0:
+        dashboard_running, dashboard_probe_at = _probe_dashboard_health(dashboard_port)
+    if not gateway_running and dashboard_running:
+        gateway_running = True
+        gateway_probe_at = dashboard_probe_at
     usage = _query_state_db()
     disk_pct = _disk_usage_percent()
 

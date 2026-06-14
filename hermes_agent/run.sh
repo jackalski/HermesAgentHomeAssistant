@@ -419,10 +419,13 @@ case "$ACCESS_MODE" in
 esac
 
 # Hermes dashboard (hermes dashboard) binds loopback only. In lan_https mode nginx
-# terminates TLS on DASHBOARD_PORT and proxies to the loopback internal port; in
+# terminates TLS on GATEWAY_PORT and proxies to the loopback internal port; in
 # other modes the dashboard stays loopback-only (reach it via Ingress/tunnel).
 if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
   DASHBOARD_INTERNAL_PORT=$((DASHBOARD_PORT + 1))
+  if [ "$DASHBOARD_PORT" != "$GATEWAY_PORT" ]; then
+    log_warn "dashboard_port=${DASHBOARD_PORT} is deprecated as an external HTTPS entry; only gateway_port=${GATEWAY_PORT} is published. Bookmarks to :${DASHBOARD_PORT} will not work."
+  fi
 else
   DASHBOARD_INTERNAL_PORT="$DASHBOARD_PORT"
 fi
@@ -886,7 +889,7 @@ run_hermes_dashboard() {
   fi
 
   if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
-    log_info "Starting Hermes dashboard on ${host}:${port} (nginx HTTPS proxy on 0.0.0.0:${DASHBOARD_PORT}) ..."
+    log_info "Starting Hermes dashboard on ${host}:${port} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT}) ..."
   else
     log_info "Starting Hermes dashboard on ${host}:${port} (loopback only; reach it via Ingress/tunnel) ..."
   fi
@@ -1752,6 +1755,7 @@ build_status_exporter_payload() {
   jq -n \
     --argjson mqtt_settings "$mqtt_settings_json" \
     --arg gateway_internal_port "$GATEWAY_INTERNAL_PORT" \
+    --arg dashboard_internal_port "$DASHBOARD_INTERNAL_PORT" \
     --arg gateway_mode "$GATEWAY_MODE" \
     --arg access_mode "$ACCESS_MODE" \
     --arg setup_profile "$SETUP_PROFILE" \
@@ -1770,6 +1774,7 @@ build_status_exporter_payload() {
     '{
       mqtt_settings: $mqtt_settings,
       gateway_internal_port: ($gateway_internal_port | tonumber),
+      dashboard_internal_port: ($dashboard_internal_port | tonumber),
       gateway_mode: $gateway_mode,
       access_mode: $access_mode,
       setup_profile: $setup_profile,
@@ -1987,10 +1992,10 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ] \
     sleep 2
   done
   if [ "$DASHBOARD_BIND_OK" = "true" ]; then
-    log_info "Hermes dashboard listening on 127.0.0.1:${DASHBOARD_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${DASHBOARD_PORT})"
+    log_info "Hermes dashboard listening on 127.0.0.1:${DASHBOARD_INTERNAL_PORT} (nginx HTTPS proxy on 0.0.0.0:${GATEWAY_PORT})"
   else
     log_error "Hermes dashboard did not bind port ${DASHBOARD_INTERNAL_PORT} within 30s."
-    log_error "https://<LAN-IP>:${DASHBOARD_PORT}/ will return 502 until the dashboard is healthy."
+    log_error "https://<LAN-IP>:${GATEWAY_PORT}/ will return 502 until the dashboard is healthy."
     log_error "The dashboard is a separate service started with 'hermes dashboard' (needs hermes-agent[web])."
     log_error "Run 'hermes dashboard --port ${DASHBOARD_INTERNAL_PORT} --host 127.0.0.1 --no-open' in the terminal for startup errors."
     log_error "If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."

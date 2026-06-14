@@ -104,18 +104,18 @@ configuration:
     description: Port für das Web-Terminal (Standard 7681). Verbindungstests → Test Terminal.
 
   web_interface:
-    name: Hermes-Dashboard
-    description: Separate Hermes-Admin-Oberfläche (hermes dashboard). Jedes Feld unten hat einen passenden Test in der Add-on-Web-Oberfläche.
+    name: Hermes Web UI
+    description: Hermes-Admin-Oberfläche (hermes dashboard). Externes HTTPS auf gateway_port. Jedes Feld hat einen Test in der Add-on-Web-Oberfläche.
     fields:
       enable_web_interface:
-        name: Hermes-Dashboard aktivieren
-        description: Startet den separaten Dienst hermes dashboard im Add-on. Verbindungstests → Test Dashboard.
+        name: Hermes Web UI aktivieren
+        description: Startet hermes dashboard im Add-on. Verbindungstests → Test Dashboard.
       auto_start_with_integration:
         name: Mit Add-on automatisch starten
-        description: Startet hermes dashboard automatisch beim Add-on-Start. Erforderlich für Verbindungstests → Test Dashboard.
+        description: Startet hermes dashboard beim Add-on-Start. Erforderlich für Verbindungstests → Test Dashboard.
       dashboard_port:
-        name: Dashboard-Port
-        description: HTTPS-Port für das Hermes-Dashboard (Standard 9119). Verbindungstests → Test HTTPS Port (wenn abweichend von gateway_port).
+        name: Dashboard-Loopback-Port
+        description: "Nur Loopback-Offset (Prozess lauscht auf dashboard_port + 1 in lan_https). Externes HTTPS nur auf gateway_port."
 
   gateway_access:
     name: Gateway-Zugriff
@@ -132,10 +132,10 @@ configuration:
           tailnet_https: "Tailscale HTTPS (Tailscale-Bindung + Token)"
       gateway_port:
         name: Gateway-Port
-        description: Port für das Hermes-Gateway (Standard 18789). Verbindungstests → Test Gateway HTTPS (lan_https).
+        description: HTTPS-Port für Hermes Web UI (Standard 18789). Verbindungstests → Test Web UI HTTPS (lan_https).
       gateway_public_url:
         name: Öffentliche Gateway-URL
-        description: Öffentliche Basis-URL zum Öffnen der Gateway-Weboberfläche in einem neuen Tab (nicht eingebettet).
+        description: Öffentliche Basis-URL zum Öffnen der Hermes Web UI in einem neuen Tab (nicht eingebettet).
       enable_openai_api:
         name: OpenAI API aktivieren
         description: "Aktiviert Hermes Assist API (API_SERVER_ENABLED). Nach Neustart: Verbindungstests → Test Assist API."

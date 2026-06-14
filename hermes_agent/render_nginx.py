@@ -44,18 +44,6 @@ def _api_proxy_locations(api_port: str) -> str:
             proxy_http_version 1.1;
             proxy_set_header Host $host;
         }}
-
-        location ^~ /api/ {{
-            proxy_pass http://127.0.0.1:{api_port};
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
-            proxy_buffering off;
-        }}
 """
 
 
@@ -90,7 +78,6 @@ def main():
     access_mode = os.environ.get('ACCESS_MODE', 'custom')
     enable_openai_api = os.environ.get('ENABLE_OPENAI_API', 'false').lower() in ('1', 'true', 'yes')
     api_server_port = os.environ.get('API_SERVER_PORT', '8642')
-    dashboard_port = os.environ.get('DASHBOARD_PORT', '9119')
     dashboard_internal_port = os.environ.get('DASHBOARD_INTERNAL_PORT', '')
 
     disk_total = os.environ.get('DISK_TOTAL', '')
@@ -132,18 +119,12 @@ def main():
             api_locations = _api_proxy_locations(api_server_port)
 
         listen_lines = f"listen {https_port} ssl;"
-        if (
-            web_interface_active
-            and dashboard_port
-            and str(dashboard_port) != str(https_port)
-        ):
-            listen_lines += f"\n        listen {dashboard_port} ssl;"
 
         if web_interface_active and dashboard_internal_port:
             root_upstream = _dashboard_upstream_proxy(dashboard_internal_port)
             root_comment = (
-                '# Hermes dashboard (hermes dashboard) — web UI on gateway_port '
-                'and optional dashboard_port'
+                '# Hermes Web UI (hermes dashboard) — HTTPS on gateway_port; '
+                '/api/* proxied to loopback dashboard'
             )
         else:
             root_upstream = """
@@ -203,7 +184,6 @@ def main():
     landing = landing.replace('__SETUP_ASSIST__', setup_assist)
     landing = landing.replace('__SETUP_GATEWAY_URL_HINT__', gateway_url_hint)
     landing = landing.replace('__ENABLE_WEB_INTERFACE__', 'yes' if web_interface_active else 'no')
-    landing = landing.replace('__DASHBOARD_PORT__', dashboard_port if (enable_https and web_interface_active) else '')
 
     out_dir = Path('/etc/nginx/html')
     out_dir.mkdir(parents=True, exist_ok=True)

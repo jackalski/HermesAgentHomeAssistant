@@ -6,10 +6,12 @@ Canonical setup and operations guide. This add-on is marked **Experimental** in 
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Hermes Gateway | 18789 (configurable) | HTTPS entry to `hermes dashboard` (gateway web UI) + Assist API routes when enabled |
-| Hermes Dashboard | 9119 (configurable) | Second HTTPS entry to the same `hermes dashboard` admin UI |
+| Hermes Web UI (HTTPS) | 18789 (`gateway_port`) | TLS entry to `hermes dashboard` admin UI; `/api/*` for dashboard REST/WebSocket; `/v1/` and `/health` to Assist API when enabled |
+| Assist API (HTTP) | 8642 | Extended OpenAI / voice from HA Core (`http://<LAN-IP>:8642/v1`) |
 | nginx (Ingress) | 48099 | Landing page, **Connection tests** (`/test/`), `/status.json` |
 | ttyd (terminal) | 7681 (configurable) | Browser terminal |
+
+The `hermes gateway run` messaging process has **no HTTP listener** on `gateway.port` in Hermes 0.16+. Loopback dashboard binds `dashboard_port + 1` (default **9120** when `dashboard_port` is 9119); `dashboard_port` no longer opens a second external HTTPS port.
 
 Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`, `.linuxbrew`, `.node_global`, etc.). System tools (`hermes`, `uv`, `mcp`) install to **`/usr/local`**; user npm skills from the dashboard go to **`/config/.node_global`**.
 
@@ -67,7 +69,7 @@ Set `access_mode` in add-on configuration:
 | `tailnet_https` | Tailscale |
 | `custom` | Manual `gateway_bind_mode` / `gateway_auth_mode` |
 
-Set `gateway_public_url` for the **Open Gateway Web UI** button (auto-filled from LAN IP in `lan_https` when empty).
+Set `gateway_public_url` for the **Open Hermes Web UI** button (auto-filled from LAN IP in `lan_https` when empty).
 
 ### Cloudflare Tunnel (Cloudflared add-on)
 
@@ -146,11 +148,11 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `default_provider` | `openrouter` | `nous`, `openrouter`, `google`, `anthropic`, `ollama`, `minimax`, `xai`, `openai` |
 | `default_model_preset` | `custom` | `custom` only — set model ID in `default_model` |
 | `access_mode` | `lan_https` | See access modes above |
-| `gateway_port` | `18789` | External HTTPS port in `lan_https` |
+| `gateway_port` | `18789` | External HTTPS port for Hermes Web UI in `lan_https`; Assist API `/v1/` proxied here when enabled |
 | `hass_url` | *(empty)* | Autodetect on HAOS |
 | `homeassistant_token` | *(empty)* | Enables MCP + `.env` sync |
 | `auto_configure_mcp` | `false` | Auto-on when profile + token set |
-| `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` on **18789** |
+| `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` and `/health` on **18789** |
 | `enable_ha_status_sensors` | `true` | MQTT + status.json |
 | **Home Assistant** panel | — | `hass_url`, `homeassistant_token`, `auto_configure_mcp` |
 | **Gateway Access** panel | `lan_https` | `access_mode`, `gateway_port`, trusted proxies, Assist API, etc. |
@@ -158,7 +160,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |
 | **Router SSH** panel | — | `host`, `user`, `key_path` (default `/config/keys/router_ssh`) |
 | **Tool Bootstrap** panel | browser ON | Telegram / browser / Skills Hub auto-install toggles |
-| **Hermes Dashboard** panel | ON / auto-start / 9119 | `enable_web_interface`, `auto_start_with_integration`, `dashboard_port` — runs the separate `hermes dashboard` admin UI; exposed over HTTPS on `dashboard_port` in `lan_https` (no built-in auth, binds loopback) |
+| **Hermes Web UI** panel | ON / auto-start / 9119 | `enable_web_interface`, `auto_start_with_integration`, `dashboard_port` (loopback offset only — external HTTPS is on `gateway_port`) |
 | **Advanced Settings** panel | — | `http_proxy`, `nginx_log_level`, `gateway_env_vars`, Hermes version |
 | `addon_log_level` | `info` | Add-on startup log verbosity |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
@@ -178,8 +180,8 @@ Home Assistant add-on Configuration has no native **Test** buttons. Instead, ope
 |-------|-------|
 | **Home Assistant Integration** | **Test URL** (`hass_url`), **Test Token** (`homeassistant_token`), **Test MCP** (`auto_configure_mcp`) |
 | **MQTT Status Sensors** | **Test Broker** (`broker_host` / autodetect), **Test Auth** (`broker_username` / `broker_password`) |
-| **Hermes Dashboard** | **Test Dashboard** (loopback process), **Test HTTPS Port** (`dashboard_port` when different from `gateway_port`) |
-| **Gateway Access** | **Test Gateway** (local process), **Test Gateway HTTPS** (`gateway_port` in `lan_https`), **Test Remote** (`gateway_remote_url` when `gateway_mode=remote`), **Test Assist API** (`enable_openai_api`) |
+| **Hermes Web UI** | **Test Dashboard** (loopback process), **Test Web UI HTTPS** (`gateway_port` in `lan_https`) |
+| **Gateway Access** | **Test Gateway** (local process), **Test Remote** (`gateway_remote_url` when `gateway_mode=remote`), **Test Assist API** (`enable_openai_api`) |
 | **Web Terminal** | **Test Terminal** (`enable_terminal` / `terminal_port`) |
 | **Run all** | Every test above (skipped entries count as OK) |
 
@@ -207,7 +209,10 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |
 | `no such gateway 'default'` in terminal | Use `hermes gateway run` (not `hermes-agent gateway run`); ensure `HOME=/config` and `HERMES_HOME=/config/.hermes` (ttyd sets this automatically) |
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
-| `502 Bad Gateway` on `https://<LAN-IP>:18789/` or `:9119/` | In `lan_https`, nginx proxies both ports to **`hermes dashboard`** on loopback (`dashboard_port + 1`, default **9120**). 502 means the dashboard is not listening — check `enable_web_interface`, `hermes-agent[web]`, and add-on logs. **`Invalid Host header`** on 9119 was fixed in **0.0.22+** (nginx must send `Host: 127.0.0.1:<internal>`). |
+| `502 Bad Gateway` on `https://<LAN-IP>:18789/` | In `lan_https`, nginx proxies to **`hermes dashboard`** on loopback (`dashboard_port + 1`, default **9120**). 502 means the dashboard is not listening — check `enable_web_interface`, `hermes-agent[web]`, and add-on logs. |
+| `/api/status` 404 on HTTPS `gateway_port` | Fixed in **0.0.27+** — Assist API no longer steals `/api/*`. Dashboard `/api/*` is served on `gateway_port`; Assist uses `/v1/` (HTTPS) or `http://LAN:8642/v1` (HA Core). |
+| `/api/sessions` 401 from curl | Expected without auth — pass `Authorization: Bearer <gateway token>`. The `?token=` query on the Web UI URL is for browser bootstrap, not REST clients. |
+| Chat PTY WebSocket 403 | Fixed in **0.0.27+** when caused by `/api/pty` routed to Assist API. Open **Hermes Web UI** via the landing button with token; use Chat from the UI. |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
 | `HA (http) — failed` in MCP Servers | Add HA **Model Context Protocol Server** integration; verify token; leave `hass_url` empty on HAOS; run probe below |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
@@ -228,23 +233,29 @@ Gateway token (if CLI redacts secrets):
 jq -r '.gateway.auth.token' /config/.hermes/hermes.json
 ```
 
-Gateway + dashboard upstream probe (`lan_https` — add-on terminal):
+Gateway + Web UI upstream probe (`lan_https` — add-on terminal):
 
 ```sh
-ss -tlnp | grep -E ':18789|:18790|:9119|:9120'
-curl -sS -m 5 -o /dev/null -w "gateway HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:18789/"
-curl -sS -m 5 -o /dev/null -w "dashboard HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:9119/"
-curl -sS -m 5 -o /dev/null -w "dashboard loopback: HTTP %{http_code}\n" "http://127.0.0.1:9120/"
+ss -tlnp | grep -E ':18789|:18790|:9120|:8642'
+curl -sS -m 5 -o /dev/null -w "Web UI HTTPS: HTTP %{http_code}\n" -k "https://127.0.0.1:18789/"
+curl -sS -m 5 -o /dev/null -w "dashboard loopback /api/status: HTTP %{http_code}\n" "http://127.0.0.1:9120/api/status"
+curl -sS -m 5 -o /dev/null -w "Assist API /health: HTTP %{http_code}\n" "http://127.0.0.1:8642/health"
 jq '{port:.gateway.port,bind:.gateway.bind,mode:.gateway.mode}' /config/.hermes/hermes.json
+```
+
+Dashboard REST API (requires bearer token):
+
+```sh
+TOKEN="$(jq -r '.gateway.auth.token' /config/.hermes/hermes.json)"
+curl -sk -H "Authorization: Bearer $TOKEN" "https://<LAN-IP>:18789/api/sessions?limit=50"
 ```
 
 | Check | Healthy |
 |-------|---------|
-| `:18789` listener | nginx TLS proxy → gateway Control UI (external URL) |
-| `:9119` listener | nginx TLS proxy → Hermes **dashboard** (`dashboard_port`) |
-| `:9120` listener | Hermes **dashboard** loopback upstream (`hermes dashboard`) |
+| `:18789` listener | nginx TLS proxy → Hermes Web UI (`hermes dashboard`) |
+| `:9120` listener | Hermes Web UI loopback upstream (`hermes dashboard`) |
+| Loopback `/api/status` on `:9120` | HTTP 200 |
 | Messaging gateway | `hermes gateway run` + `${HERMES_HOME}/gateway.pid` |
-| Loopback curl to `:9120` | Not connection refused (200/302 from dashboard is fine) |
 
 If **9120 is missing**: dashboard failed to start — read add-on log for `Starting Hermes dashboard` errors, or run:
 

@@ -2,6 +2,17 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.27] - 2026-06-14
+
+### Fixed
+- **Dashboard API routing**: nginx no longer sends all `/api/*` to the Assist API server when `enable_openai_api` is enabled. Dashboard routes (`/api/status`, `/api/sessions`, `/api/pty`, WebSocket chat) now reach the loopback `hermes dashboard` on HTTPS `gateway_port`. Assist API remains on `/v1/` and `/health` (and direct `http://LAN:8642/v1` from HA Core).
+- **Status exporter health probe**: probes `/api/status` on `dashboard_internal_port` (loopback dashboard) instead of the gateway WebSocket internal port.
+
+### Changed
+- **Single HTTPS Web UI entry**: external TLS is published only on `gateway_port` (default 18789). The second listener on `dashboard_port` (9119) is removed; `dashboard_port` is deprecated as an external alias and only controls the loopback bind offset (`dashboard_port + 1`).
+- **Unified naming**: landing page **Open Hermes Web UI**; configuration panel renamed to **Hermes Web UI**; Connection tests regrouped (Test Web UI HTTPS on `gateway_port`).
+- Landing page gateway health uses Ingress `./status.json` instead of LAN `/api/status`.
+
 ## [0.0.25] - 2026-06-14
 
 ### Fixed
