@@ -83,43 +83,43 @@ configuration:
 
   home_assistant:
     name: Integración con Home Assistant
-    description: Conecta Hermes a su instancia de Home Assistant para MCP, scripts y autodetección.
+    description: Conecta Hermes a su instancia de Home Assistant para MCP, scripts y autodetección. Cada campo tiene un test en la interfaz web (Pruebas de conexión).
     fields:
       hass_url:
         name: URL de Home Assistant
-        description: "Déjela vacía para autodetección en HAOS (recomendado). Se sincroniza como HOMEASSISTANT_URL en /config/.hermes/.env cuando hay token."
+        description: "Déjela vacía para autodetección en HAOS (recomendado). Pruebas de conexión → Test URL."
       homeassistant_token:
         name: Token de Home Assistant
-        description: Token de larga duración para MCP y scripts de HA. Enmascarado tras guardar. Persistido en /config/secrets/homeassistant.token.
+        description: Token de larga duración para MCP y scripts de HA. Pruebas de conexión → Test Token.
       auto_configure_mcp:
         name: Configurar MCP automáticamente para Home Assistant
-        description: "Cuando está ACTIVADO y el token está configurado, registra Home Assistant en Hermes MCP (mcp_servers) en cada inicio."
+        description: "Cuando está ACTIVADO y el token está configurado, registra Home Assistant en MCP al iniciar. Tras reiniciar: Pruebas de conexión → Test MCP."
 
   enable_terminal:
     name: Activar terminal web
-    description: Activar botón de terminal web dentro de Home Assistant (Ingress) mediante ttyd
+    description: Activar terminal web en Ingress. Pruebas de conexión → Test Terminal.
 
   terminal_port:
     name: Puerto del terminal
-    description: Puerto para el terminal web (predeterminado 7681). Cambie si este puerto entra en conflicto con otro servicio.
+    description: Puerto del terminal web (predeterminado 7681). Pruebas de conexión → Test Terminal.
 
   web_interface:
     name: Panel de Hermes (dashboard)
-    description: Interfaz de administración independiente de Hermes (hermes dashboard) para configuración, claves API, sesiones, registros y skills. Sin autenticación integrada; se expone por HTTPS en el puerto del panel en modo lan_https. Independiente de la Control UI del gateway.
+    description: Panel Hermes (hermes dashboard). Cada campo tiene un test en Pruebas de conexión.
     fields:
       enable_web_interface:
         name: Activar panel de Hermes
-        description: Ejecuta el servicio independiente hermes dashboard en el complemento. Es distinto de la Control UI del gateway, que siempre se inicia.
+        description: Ejecuta hermes dashboard. Pruebas de conexión → Test Dashboard.
       auto_start_with_integration:
         name: Inicio automático con el complemento
         description: Inicia hermes dashboard al arrancar el complemento. Desactivar = iniciar solo el gateway.
       dashboard_port:
         name: Puerto del panel
-        description: Puerto HTTPS del panel de Hermes (por defecto 9119). En modo lan_https nginx lo sirve por TLS; el panel solo escucha en loopback.
+        description: Puerto HTTPS del panel (9119). Pruebas de conexión → Test HTTPS Port.
 
   gateway_access:
     name: Acceso al Gateway
-    description: Acceso de red, autenticación y configuración de la API Assist para el gateway de Hermes.
+    description: Acceso de red y API Assist. Cada campo relevante tiene un test en Pruebas de conexión.
     fields:
       access_mode:
         name: Modo de acceso
@@ -132,22 +132,22 @@ configuration:
           tailnet_https: "Tailscale HTTPS (Tailscale + token)"
       gateway_port:
         name: Puerto del Gateway
-        description: Puerto del gateway de Hermes (predeterminado 18789).
+        description: Puerto del gateway (18789). Pruebas de conexión → Test Gateway HTTPS.
       gateway_public_url:
         name: URL pública del Gateway
         description: URL base pública para abrir la interfaz web del Gateway en una nueva pestaña (no integrada).
       enable_openai_api:
         name: Activar API OpenAI
-        description: "Activa la API Assist de Hermes (API_SERVER_ENABLED). Extended OpenAI desde HA Core: http://<LAN-IP>:8642/v1."
+        description: "Activa la API Assist. Tras reiniciar: Pruebas de conexión → Test Assist API."
       gateway_mode:
         name: Modo del Gateway
-        description: Local (gateway en el complemento) o remoto (conexión a gateway externo).
+        description: Local (Test Gateway) o remoto (Test Remote).
         options:
           local: "Local (recomendado)"
           remote: "Remoto"
       gateway_remote_url:
         name: URL del Gateway Remoto
-        description: URL WebSocket cuando el Modo del Gateway es Remoto.
+        description: URL WebSocket en modo remoto. Pruebas de conexión → Test Remote.
       gateway_bind_mode:
         name: Modo de enlace del Gateway
         description: Enlace loopback, LAN o Tailscale. Anulado por preajustes del modo de acceso.
@@ -181,20 +181,20 @@ configuration:
 
   mqtt_settings:
     name: Sensores de estado MQTT
-    description: Conexión al broker y publicación de sensores de estado de Home Assistant (MQTT discovery + /status.json).
+    description: Conexión al broker y sensores MQTT. Cada campo del broker tiene un test en Pruebas de conexión.
     fields:
       broker_host:
         name: Host del broker MQTT
-        description: "IP o nombre de host del broker. Déjelo vacío para autodetectar Mosquitto (supervisor/bashio/loopback)."
+        description: "IP o nombre de host del broker. Vacío = autodetectar Mosquitto. Pruebas de conexión → Test Broker."
       broker_port:
         name: Puerto del broker MQTT
-        description: Puerto del broker MQTT (predeterminado 1883).
+        description: Puerto del broker MQTT (1883). Incluido en Test Broker.
       broker_username:
         name: Usuario MQTT
-        description: Usuario Mosquitto opcional (dejar vacío si la autenticación está desactivada).
+        description: Usuario Mosquitto opcional. Pruebas de conexión → Test Auth si está configurado.
       broker_password:
         name: Contraseña MQTT
-        description: Contraseña Mosquitto opcional. Enmascarada tras guardar. Persistida en /config/secrets/mqtt.password.
+        description: Contraseña Mosquitto opcional. Pruebas de conexión → Test Auth.
       enable_ha_status_sensors:
         name: Sensores de estado HA
         description: Publica configuración, salud del gateway, modelo/proveedor y métricas de uso a Home Assistant.

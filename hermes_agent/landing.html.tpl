@@ -70,17 +70,14 @@
 
     <!-- ==================== ACTION BUTTONS ==================== -->
     <div class="row" style="margin-bottom:6px">
-      <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__?token=__GATEWAY_TOKEN__" target="_blank" rel="noopener noreferrer">Open Gateway Web UI</a>
-      <a class="btn green hidden" id="dashbtn" href="" target="_blank" rel="noopener noreferrer">Open Hermes Dashboard</a>
+      <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__?token=__GATEWAY_TOKEN__" target="_blank" rel="noopener noreferrer">Open Web UI</a>
+      <a class="btn green hidden" id="dashbtn" href="" target="_blank" rel="noopener noreferrer">Open Dashboard</a>
       <a class="btn secondary" href="./terminal/" target="_self">Open Terminal (full page)</a>
       <a class="btn green hidden" id="certBtn" href="" target="_blank" rel="noopener noreferrer">Download CA Certificate</a>
     </div>
     <div class="banner info hidden" id="webUiDisabledBanner">
-      <b>Hermes dashboard is disabled.</b> The dashboard (<code>hermes dashboard</code>) is a separate
-      admin UI for config, API keys, sessions, logs, and skills. Enable
-      <code>web_interface.enable_web_interface</code> and <code>auto_start_with_integration</code> in
-      add-on Configuration, then restart. It is exposed over HTTPS on port
-      <code id="dashPortHint">9119</code> in <code>lan_https</code> mode.
+      <b>Hermes dashboard is disabled.</b> Enable <code>web_interface.enable_web_interface</code> and
+      <code>auto_start_with_integration</code>, then restart.
     </div>
     <div class="banner warn hidden" id="dashLoopbackBanner">
       <b>Hermes dashboard is loopback-only in this access mode.</b> It listens on
@@ -108,6 +105,50 @@
 
     <!-- ==================== SUCCESS BANNER ==================== -->
     <div class="banner success hidden" id="successBanner"></div>
+
+    <!-- ==================== CONNECTION TESTS ==================== -->
+    <details open>
+      <summary>Connection tests</summary>
+      <div class="muted" style="margin-top:6px;font-size:13px">
+        One test per add-on Configuration entry. Save Configuration first; MQTT and HA URL/token
+        probes read saved options without a restart.
+      </div>
+
+      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Home Assistant Integration</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn secondary" type="button" data-test="hass_url">Test URL</button>
+        <button class="btn secondary" type="button" data-test="homeassistant_token">Test Token</button>
+        <button class="btn secondary" type="button" data-test="mcp">Test MCP</button>
+      </div>
+
+      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">MQTT Status Sensors</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn secondary" type="button" data-test="mqtt_broker">Test Broker</button>
+        <button class="btn secondary" type="button" data-test="mqtt_auth">Test Auth</button>
+      </div>
+
+      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Hermes Dashboard</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn secondary" type="button" data-test="dashboard">Test Dashboard</button>
+        <button class="btn secondary" type="button" data-test="dashboard_https">Test HTTPS Port</button>
+      </div>
+
+      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Gateway Access</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn secondary" type="button" data-test="gateway">Test Gateway</button>
+        <button class="btn secondary" type="button" data-test="gateway_https">Test Gateway HTTPS</button>
+        <button class="btn secondary" type="button" data-test="gateway_remote">Test Remote</button>
+        <button class="btn secondary" type="button" data-test="assist_api">Test Assist API</button>
+      </div>
+
+      <div class="muted" style="font-size:12px;margin-top:12px;font-weight:600;color:#d1d5db">Web Terminal</div>
+      <div class="row" style="margin-top:6px;margin-bottom:6px">
+        <button class="btn secondary" type="button" data-test="terminal">Test Terminal</button>
+        <button class="btn amber" type="button" data-test="all">Run all</button>
+      </div>
+
+      <div id="testResults" class="banner info hidden" style="margin-top:10px;font-size:13px;white-space:pre-wrap"></div>
+    </details>
 
     <!-- ==================== SETUP READINESS ==================== -->
     <details open>
@@ -259,15 +300,18 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
 
     // The separate Hermes dashboard (hermes dashboard) is gated by web_interface options.
     if (ENABLE_WEB_INTERFACE === 'yes') {
-      if (ACCESS_MODE === 'lan_https' && DASHBOARD_PORT) {
-        const dashbtn = $('dashbtn');
-        if (dashbtn) {
-          const host = window.location.hostname || 'homeassistant.local';
-          dashbtn.href = 'https://' + host + ':' + DASHBOARD_PORT + '/';
-          dashbtn.classList.remove('hidden');
+      if (ACCESS_MODE === 'lan_https') {
+        // In lan_https the dashboard is served over TLS via "Open Web UI" on the
+        // gateway port. Only surface a second button when dashboard_port is a
+        // distinct HTTPS entry; equal ports need no banner (not loopback-only).
+        if (DASHBOARD_PORT && DASHBOARD_PORT !== HTTPS_PORT) {
+          const dashbtn = $('dashbtn');
+          if (dashbtn) {
+            const host = window.location.hostname || 'homeassistant.local';
+            dashbtn.href = 'https://' + host + ':' + DASHBOARD_PORT + '/';
+            dashbtn.classList.remove('hidden');
+          }
         }
-        const hint = $('dashPortHint');
-        if (hint) hint.textContent = DASHBOARD_PORT;
       } else {
         const loopbackBanner = $('dashLoopbackBanner');
         if (loopbackBanner) loopbackBanner.classList.remove('hidden');
@@ -286,6 +330,39 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
     formatSetupFlag($('setupModel'));
     formatSetupFlag($('setupMcp'));
     formatSetupFlag($('setupAssist'));
+
+    document.querySelectorAll('[data-test]').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const name = btn.getAttribute('data-test');
+        const el = $('testResults');
+        if (!el) return;
+        el.classList.remove('hidden', 'info', 'success', 'error', 'warn');
+        el.classList.add('info');
+        el.textContent = 'Running ' + name + ' test…';
+        try {
+          const r = await fetch('./test/' + encodeURIComponent(name), { cache: 'no-store' });
+          const j = await r.json();
+          if (name === 'all' && j.checks) {
+            const lines = Object.entries(j.checks).map(function(entry) {
+              const id = entry[0];
+              const row = entry[1];
+              return (row.ok || row.skipped ? '✅' : '❌') + ' ' + id + ': ' + (row.summary || '');
+            });
+            el.textContent = lines.join('\n');
+          } else {
+            el.textContent = (j.ok || j.skipped ? '✅ ' : '❌ ') + (j.summary || 'No result') +
+              (j.detail ? '\n' + j.detail : '');
+          }
+          el.classList.remove('info');
+          el.classList.add(j.ok || j.skipped ? 'success' : 'error');
+        } catch (err) {
+          el.classList.remove('info');
+          el.classList.add('error');
+          el.textContent = 'Test failed: ' + err;
+        }
+      });
+    });
+
     const gatewayHint = '__SETUP_GATEWAY_URL_HINT__';
     if (gatewayHint && $('setupGatewayHint')) {
       $('setupGatewayHint').innerHTML =
@@ -433,7 +510,7 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
       wizardContent.innerHTML = `
         <div class="banner success">✅ Built-in HTTPS proxy is active on port <b>${HTTPS_PORT}</b>.</div>
         <ol>
-          <li>Click <b>Open Gateway Web UI</b> above — it will use HTTPS automatically.</li>
+          <li>Click <b>Open Web UI</b> above — it uses HTTPS on port <b>${HTTPS_PORT}</b>.</li>
           <li>Your browser may show a certificate warning the first time. Click <b>Advanced → Proceed</b> to continue.</li>
           <li><b>For phones/tablets (one-time):</b> Click <b>Download CA Certificate</b>, then install it:
             <ul style="margin:4px 0;padding-left:18px">

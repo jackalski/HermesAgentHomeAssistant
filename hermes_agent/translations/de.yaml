@@ -83,43 +83,43 @@ configuration:
 
   home_assistant:
     name: Home Assistant Integration
-    description: Verbindet Hermes mit Ihrer Home Assistant-Instanz für MCP, Skripte und Autodetektion.
+    description: Verbindet Hermes mit Ihrer Home Assistant-Instanz für MCP, Skripte und Autodetektion. Jedes Feld unten hat einen passenden Test in der Add-on-Web-Oberfläche (Verbindungstests).
     fields:
       hass_url:
         name: Home Assistant URL
-        description: "Leer lassen für Autodetektion auf HAOS (empfohlen). Wird als HOMEASSISTANT_URL in /config/.hermes/.env synchronisiert, wenn ein Token gesetzt ist."
+        description: "Leer lassen für Autodetektion auf HAOS (empfohlen). Wird als HOMEASSISTANT_URL in /config/.hermes/.env synchronisiert, wenn ein Token gesetzt ist. Nach dem Speichern: Verbindungstests → Test URL."
       homeassistant_token:
         name: Home Assistant Token
-        description: Langlebiger Zugriffstoken für MCP und HA-Skripte. Nach dem Speichern maskiert. Gespeichert unter /config/secrets/homeassistant.token.
+        description: Langlebiger Zugriffstoken für MCP und HA-Skripte. Nach dem Speichern maskiert. Gespeichert unter /config/secrets/homeassistant.token. Verbindungstests → Test Token.
       auto_configure_mcp:
         name: MCP für Home Assistant automatisch konfigurieren
-        description: "Wenn AN und Token gesetzt ist, wird Home Assistant bei jedem Start in Hermes MCP (mcp_servers) registriert."
+        description: "Wenn AN und Token gesetzt ist, wird Home Assistant bei jedem Start in Hermes MCP (mcp_servers) registriert. Nach Neustart: Verbindungstests → Test MCP."
 
   enable_terminal:
     name: Web-Terminal aktivieren
-    description: Web-Terminal-Schaltfläche in Home Assistant (Ingress) über ttyd aktivieren
+    description: Web-Terminal-Schaltfläche in Home Assistant (Ingress) über ttyd aktivieren. Verbindungstests → Test Terminal.
 
   terminal_port:
     name: Terminal-Port
-    description: Port für das Web-Terminal (Standard 7681). Ändern Sie diesen, wenn dieser Port mit einem anderen Dienst in Konflikt steht.
+    description: Port für das Web-Terminal (Standard 7681). Verbindungstests → Test Terminal.
 
   web_interface:
     name: Hermes-Dashboard
-    description: Separate Hermes-Admin-Oberfläche (hermes dashboard) für Konfiguration, API-Schlüssel, Sitzungen, Logs und Skills. Keine eingebaute Authentifizierung; im Modus lan_https über HTTPS auf dem Dashboard-Port erreichbar. Unabhängig von der Gateway-Control-UI.
+    description: Separate Hermes-Admin-Oberfläche (hermes dashboard). Jedes Feld unten hat einen passenden Test in der Add-on-Web-Oberfläche.
     fields:
       enable_web_interface:
         name: Hermes-Dashboard aktivieren
-        description: Startet den separaten Dienst hermes dashboard im Add-on. Dies ist unabhängig von der Gateway-Control-UI, die immer startet.
+        description: Startet den separaten Dienst hermes dashboard im Add-on. Verbindungstests → Test Dashboard.
       auto_start_with_integration:
         name: Mit Add-on automatisch starten
-        description: Startet hermes dashboard automatisch beim Add-on-Start. AUS = nur das Gateway starten.
+        description: Startet hermes dashboard automatisch beim Add-on-Start. Erforderlich für Verbindungstests → Test Dashboard.
       dashboard_port:
         name: Dashboard-Port
-        description: HTTPS-Port für das Hermes-Dashboard (Standard 9119). Im Modus lan_https stellt nginx es über TLS bereit; das Dashboard selbst bindet nur an Loopback.
+        description: HTTPS-Port für das Hermes-Dashboard (Standard 9119). Verbindungstests → Test HTTPS Port (wenn abweichend von gateway_port).
 
   gateway_access:
     name: Gateway-Zugriff
-    description: Netzwerkzugriff, Authentifizierung und Assist-API-Einstellungen für das Hermes-Gateway.
+    description: Netzwerkzugriff, Authentifizierung und Assist-API-Einstellungen. Jedes relevante Feld hat einen Test in der Add-on-Web-Oberfläche.
     fields:
       access_mode:
         name: Zugriffsmodus
@@ -132,22 +132,22 @@ configuration:
           tailnet_https: "Tailscale HTTPS (Tailscale-Bindung + Token)"
       gateway_port:
         name: Gateway-Port
-        description: Port für das Hermes-Gateway (Standard 18789).
+        description: Port für das Hermes-Gateway (Standard 18789). Verbindungstests → Test Gateway HTTPS (lan_https).
       gateway_public_url:
         name: Öffentliche Gateway-URL
         description: Öffentliche Basis-URL zum Öffnen der Gateway-Weboberfläche in einem neuen Tab (nicht eingebettet).
       enable_openai_api:
         name: OpenAI API aktivieren
-        description: "Aktiviert Hermes Assist API (API_SERVER_ENABLED). Extended OpenAI von HA Core: http://<LAN-IP>:8642/v1."
+        description: "Aktiviert Hermes Assist API (API_SERVER_ENABLED). Nach Neustart: Verbindungstests → Test Assist API."
       gateway_mode:
         name: Gateway-Modus
-        description: Lokal (Gateway im Add-on) oder remote (Verbindung zu externem Gateway).
+        description: Lokal (Test Gateway) oder remote (Test Remote).
         options:
           local: "Lokal (empfohlen)"
           remote: "Remote"
       gateway_remote_url:
         name: Remote Gateway-URL
-        description: WebSocket-URL wenn Gateway-Modus Remote ist.
+        description: WebSocket-URL wenn Gateway-Modus Remote ist. Verbindungstests → Test Remote.
       gateway_bind_mode:
         name: Gateway-Bindungsmodus
         description: Loopback-, LAN- oder Tailscale-Bindung. Wird durch Zugriffsmodus-Voreinstellungen überschrieben.
@@ -181,20 +181,20 @@ configuration:
 
   mqtt_settings:
     name: MQTT-Status-Sensoren
-    description: Broker-Verbindung und Veröffentlichung von Home Assistant-Status-Sensoren (MQTT Discovery + /status.json).
+    description: Broker-Verbindung und Status-Sensoren. Jedes Broker-Feld hat einen Test in der Add-on-Web-Oberfläche.
     fields:
       broker_host:
         name: MQTT-Broker-Host
-        description: "Broker-IP oder Hostname. Leer lassen für Mosquitto-Autodetektion (supervisor/bashio/loopback)."
+        description: "Broker-IP oder Hostname. Leer lassen für Mosquitto-Autodetektion. Verbindungstests → Test Broker."
       broker_port:
         name: MQTT-Broker-Port
-        description: MQTT-Broker-Port (Standard 1883).
+        description: MQTT-Broker-Port (Standard 1883). In Verbindungstests → Test Broker enthalten.
       broker_username:
         name: MQTT-Benutzername
-        description: Optionaler Mosquitto-Benutzername (leer lassen wenn Auth deaktiviert ist).
+        description: Optionaler Mosquitto-Benutzername. Verbindungstests → Test Auth wenn gesetzt.
       broker_password:
         name: MQTT-Passwort
-        description: Optionales Mosquitto-Passwort. Nach dem Speichern maskiert. Gespeichert unter /config/secrets/mqtt.password.
+        description: Optionales Mosquitto-Passwort. Verbindungstests → Test Auth.
       enable_ha_status_sensors:
         name: HA-Status-Sensoren aktivieren
         description: Veröffentlicht Setup, Gateway-Status, Modell/Provider und Nutzungsmetriken an Home Assistant.
