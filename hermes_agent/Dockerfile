@@ -122,7 +122,7 @@ USER root
 RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false \
     && npm config set audit false \
-    && npm install -g hermes-agent@0.16.0 \
+    && npm install -g hermes-agent@0.17.0 \
     && npm install -g agent-browser@latest
 
 # Safety net if a Hermes PyPI wheel omits hermes_cli subpackages (upstream #34701 on older releases).

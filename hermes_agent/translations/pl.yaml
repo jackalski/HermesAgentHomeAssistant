@@ -260,10 +260,10 @@ configuration:
         description: Pakiet npm dla CLI `hermes` — latest lub własna wersja.
         options:
           latest: "Latest (npm @latest)"
-          custom: "Wersja niestandardowa (domyślnie 0.16.0)"
+          custom: "Wersja niestandardowa (domyślnie 0.17.0)"
       hermes_agent_version_custom:
         name: Wersja Hermes Agent (niestandardowa)
-        description: dist-tag npm lub semver gdy preset to niestandardowy (domyślnie 0.16.0).
+        description: dist-tag npm lub semver gdy preset to niestandardowy (domyślnie 0.17.0).
       clean_session_locks_on_start:
         name: Wyczyść blokady sesji przy starcie
         description: Usuń przestarzałe pliki blokad sesji gdy dodatek się uruchamia.

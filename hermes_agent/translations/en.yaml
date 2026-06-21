@@ -260,10 +260,10 @@ configuration:
         description: npm package for the `hermes` CLI — latest or custom pin.
         options:
           latest: "Latest (npm @latest)"
-          custom: "Custom version (default 0.16.0)"
+          custom: "Custom version (default 0.17.0)"
       hermes_agent_version_custom:
         name: Hermes Agent Version (custom)
-        description: npm dist-tag or semver when preset is custom (default 0.16.0).
+        description: npm dist-tag or semver when preset is custom (default 0.17.0).
       clean_session_locks_on_start:
         name: Clean Session Locks on Start
         description: Remove stale session lock files when the add-on starts.

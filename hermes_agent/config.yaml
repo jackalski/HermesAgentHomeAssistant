@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.27"
+version: "0.0.28"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -113,7 +113,7 @@ options:
     nginx_log_level: minimal
     gateway_env_vars: []
     hermes_agent_version_preset: custom
-    hermes_agent_version_custom: "0.16.0"
+    hermes_agent_version_custom: "0.17.0"
     clean_session_locks_on_start: true
     clean_session_locks_on_exit: true
 

@@ -163,7 +163,7 @@ GITHUB_TOKEN_OPT="$(read_provider_option github_token)"
 XAI_API_KEY_OPT="$(read_provider_option xai_api_key)"
 HERMES_AGENT_VERSION_PRESET="$(read_nested_option advanced_settings hermes_agent_version_preset)"
 HERMES_AGENT_VERSION_CUSTOM="$(read_nested_option advanced_settings hermes_agent_version_custom)"
-ADDON_HERMES_DEFAULT_VERSION="0.16.0"
+ADDON_HERMES_DEFAULT_VERSION="0.17.0"
 IMAGE_BAKED_HERMES_SPEC="${ADDON_HERMES_DEFAULT_VERSION}"
 GW_ENV_VARS_TYPE=$(jq -r 'if (.advanced_settings.gateway_env_vars // .gateway_env_vars) == null then "null" else ((.advanced_settings.gateway_env_vars // .gateway_env_vars) | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.advanced_settings.gateway_env_vars // .gateway_env_vars // empty' "$OPTIONS_FILE")
@@ -200,7 +200,7 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$TOOL_SKILLS_HUB_ENABLED" ] && TOOL_SKILLS_HUB_ENABLED="true"
 [ -z "$TOOL_TELEGRAM_ENABLED" ] && TOOL_TELEGRAM_ENABLED="false"
 [ -z "$HERMES_AGENT_VERSION_PRESET" ] && HERMES_AGENT_VERSION_PRESET="custom"
-[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.16.0"
+[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.17.0"
 [ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
 [ -z "$PUBLISH_MQTT_DISCOVERY" ] && PUBLISH_MQTT_DISCOVERY="true"
 [ -z "$STATUS_POLL_INTERVAL_RAW" ] && STATUS_POLL_INTERVAL_RAW="60"
