@@ -70,7 +70,7 @@
 
     <!-- ==================== ACTION BUTTONS ==================== -->
     <div class="row" style="margin-bottom:6px">
-      <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__?token=__GATEWAY_TOKEN__" target="_blank" rel="noopener noreferrer">Open Hermes Web UI</a>
+      <a class="btn" id="gwbtn" href="__GATEWAY_PUBLIC_URL____GW_PUBLIC_URL_PATH__" target="_blank" rel="noopener noreferrer">Open Hermes Web UI</a>
       <a class="btn secondary" href="./terminal/" target="_self">Open Terminal (full page)</a>
       <a class="btn green hidden" id="certBtn" href="" target="_blank" rel="noopener noreferrer">Download CA Certificate</a>
     </div>
@@ -289,7 +289,6 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
     const ACCESS_MODE = '__ACCESS_MODE__';
     const HTTPS_PORT = '__HTTPS_PORT__';
     const GW_PUBLIC_URL = '__GATEWAY_PUBLIC_URL__';
-    const GW_TOKEN = '__GATEWAY_TOKEN__';
     const DISK_PCT = '__DISK_PCT__';
     const DISK_AVAIL = '__DISK_AVAIL__';
     const DISK_USED = '__DISK_USED__';

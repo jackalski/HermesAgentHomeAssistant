@@ -2,6 +2,12 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.30] - 2026-06-22
+
+### Fixed
+- **Chat WebSocket failures** (`CONNECTION_REFUSED`, PTY code **1006**): nginx now clears `Origin` when proxying WebSocket upgrades to the loopback `hermes dashboard`. Browsers send the public entry URL as Origin (LAN IP, tunnel hostname, etc.) but the dashboard rejects non-loopback origins on `/api/ws`, `/api/events`, and `/api/pty`. REST `/api/*` was unaffected. Uses standard `$connection_upgrade` map for WebSocket proxying.
+- **Open Hermes Web UI link**: removed misleading `?token=` query (gateway auth token ≠ dashboard session token).
+
 ## [0.0.29] - 2026-06-14
 
 ### Fixed
