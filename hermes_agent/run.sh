@@ -770,14 +770,20 @@ bootstrap_selected_tools() {
   install_python_package_if_missing "mcp" "mcp"
   install_python_package_if_missing "edge_tts" "edge-tts"
   install_python_package_if_missing "ddgs" "ddgs"
+  install_python_package_if_missing "aiohttp" "aiohttp"
+
+  # Hermes 0.17+ bundled raft-platform plugin probes for `raft` on PATH during
+  # gateway config loads. Install the canonical CLI so logs stay quiet for users
+  # who do not use RAFT_PROFILE (optional Raft messaging integration).
+  install_npm_package_if_missing "raft" "@botiverse/raft@0.0.15"
 
   if [ "$TOOL_TELEGRAM_ENABLED" = "true" ] || [ "$TOOL_TELEGRAM_ENABLED" = "1" ]; then
     install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]==22.6"
   fi
 
   if [ -n "$DISCORD_BOT_TOKEN_OPT" ]; then
-    install_python_package_if_missing "discord" "discord.py[voice]==2.7.1"
-    install_python_package_if_missing "brotlicffi" "brotlicffi==1.2.0.1"
+    install_python_package_if_missing "discord" "discord.py[voice]>=2.7.1"
+    install_python_package_if_missing "brotlicffi" "brotlicffi>=1.2.0.1"
   fi
 
   if [ "$TOOL_BROWSER_ENABLED" = "true" ] || [ "$TOOL_BROWSER_ENABLED" = "1" ]; then

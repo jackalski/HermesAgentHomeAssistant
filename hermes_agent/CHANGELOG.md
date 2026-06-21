@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.29] - 2026-06-14
+
+### Fixed
+- **`[raft] raft CLI not found in PATH` log spam** (Hermes 0.17+): image and startup bootstrap now install the canonical **`@botiverse/raft`** npm package (`raft` / `slock` CLI on PATH). Also ensures **`aiohttp`** is available for the optional Raft platform adapter.
+
 ## [0.0.28] - 2026-06-14
 
 ### Changed

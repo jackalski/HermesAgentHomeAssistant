@@ -53,7 +53,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.28"
+    fallback = "0.0.29"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",

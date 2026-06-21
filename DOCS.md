@@ -224,7 +224,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.17.0 > /config/.hermes/.addon-managed-hermes-version` |
-| `pip install not officially supported` banner in Hermes CLI | Fixed in **0.0.19+** — add-on stamps `/config/.hermes/.install_method` as `docker` on startup. Manual fix: `echo docker > /config/.hermes/.install_method` and restart |
+| `[raft] raft CLI not found in PATH` in gateway logs | Fixed in **0.0.29+** — add-on installs `@botiverse/raft` globally. Only needed if you use Raft messaging (`RAFT_PROFILE` in `/config/.hermes/.env`); see [Hermes Raft docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/raft). |
 | Mosquitto log spam (`New connection` / `disconnected` every minute) | Fixed in **0.0.19+** — persistent MQTT client + one-shot discovery. Optional: Mosquitto `connection_messages false` in customize |
 
 Gateway token (if CLI redacts secrets):
