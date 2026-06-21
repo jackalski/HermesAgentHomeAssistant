@@ -53,11 +53,15 @@ def _dashboard_upstream_proxy(internal_port: str) -> str:
             proxy_pass http://127.0.0.1:{internal_port};
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
+            proxy_set_header Connection $connection_upgrade;
             # Dashboard binds 127.0.0.1 and validates Host against its bind address
             # (DNS rebinding protection). Forward the loopback Host, not the client Host.
             proxy_set_header Host 127.0.0.1:{internal_port};
             proxy_set_header X-Forwarded-Proto https;
+            # Clear Origin on the upstream hop: browsers send the public entry URL
+            # (LAN IP, tunnel hostname, etc.) but Hermes loopback WS guard requires
+            # loopback Origin or none. Host + peer-IP checks still apply.
+            proxy_set_header Origin "";
             # Do not set X-Forwarded-For — the dashboard WS loopback gate expects nginx
             # (127.0.0.1) as the immediate peer, not the original browser IP.
             proxy_read_timeout 86400s;

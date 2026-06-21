@@ -88,6 +88,8 @@ ingress:
 
 3. Set `gateway_public_url` to `https://hermes.example.com` and restart.
 
+Cloudflared forwards WebSockets to the add-on HTTPS origin on `:18789`; add-on nginx normalizes proxy headers (including `Origin`) before the loopback dashboard.
+
 > Nabu Casa remote access only proxies port 8123 — use Cloudflared or your own tunnel for Hermes.
 
 **Alternative** — `lan_reverse_proxy` only if your proxy sends `X-Forwarded-User` (e.g. NPM custom header). Add proxy CIDRs under **Gateway Trusted Proxies** (one IP/CIDR per row). If the list is empty, the add-on applies defaults (`127.0.0.1,172.30.0.0/16,10.0.0.0/8`) and logs a hint when Cloudflared is detected.
@@ -97,6 +99,8 @@ ingress:
 1. `access_mode`: `lan_reverse_proxy`
 2. `gateway_trusted_proxies`: proxy source CIDR (e.g. `172.30.0.0/16`)
 3. NPM: forward to `http://<HA-LAN-IP>:18789`, enable WebSockets, add header `X-Forwarded-User: hermes-agent`
+
+The add-on nginx on `:18789` normalizes WebSocket proxy headers (including `Origin`) before forwarding to the loopback dashboard. External proxies must still pass WebSocket upgrades through to `:18789`; they do not need to rewrite `Origin` themselves.
 
 ## Home Assistant integration
 
@@ -211,8 +215,9 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
 | `502 Bad Gateway` on `https://<LAN-IP>:18789/` | In `lan_https`, nginx proxies to **`hermes dashboard`** on loopback (`dashboard_port + 1`, default **9120**). 502 means the dashboard is not listening — check `enable_web_interface`, `hermes-agent[web]`, and add-on logs. |
 | `/api/status` 404 on HTTPS `gateway_port` | Fixed in **0.0.27+** — Assist API no longer steals `/api/*`. Dashboard `/api/*` is served on `gateway_port`; Assist uses `/v1/` (HTTPS) or `http://LAN:8642/v1` (HA Core). |
-| `/api/sessions` 401 from curl | Expected without auth — pass `Authorization: Bearer <gateway token>`. The `?token=` query on the Web UI URL is for browser bootstrap, not REST clients. |
-| Chat PTY WebSocket 403 | Fixed in **0.0.27+** when caused by `/api/pty` routed to Assist API. Open **Hermes Web UI** via the landing button with token; use Chat from the UI. |
+| `/api/sessions` 401 from curl | Expected without auth — pass `Authorization: Bearer <gateway token>`. Browser Chat uses dashboard session tokens from the Web UI, not the gateway token. |
+| Chat WebSocket `CONNECTION_REFUSED` / PTY **1006** | Fixed in **0.0.30+** — browser `Origin` (LAN IP or tunnel hostname) was forwarded to the loopback dashboard, which rejects non-loopback origins on WebSocket upgrades. Add-on nginx clears `Origin` on the upstream hop; REST was unaffected. Update add-on and restart. |
+| Chat PTY WebSocket 403 | Fixed in **0.0.27+** when caused by `/api/pty` routed to Assist API; fixed in **0.0.30+** when caused by Origin mismatch behind nginx. Open **Hermes Web UI** via the landing button; use Chat from the UI. |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
 | `HA (http) — failed` in MCP Servers | Add HA **Model Context Protocol Server** integration; verify token; leave `hass_url` empty on HAOS; run probe below |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
