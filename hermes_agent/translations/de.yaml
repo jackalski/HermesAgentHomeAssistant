@@ -260,10 +260,10 @@ configuration:
         description: npm-Paket für die `hermes`-CLI — latest oder benutzerdefinierte Version.
         options:
           latest: "Latest (npm @latest)"
-          custom: "Benutzerdefinierte Version (Standard 0.16.0)"
+          custom: "Benutzerdefinierte Version (Standard 0.17.0)"
       hermes_agent_version_custom:
         name: Hermes-Agent-Version (benutzerdefiniert)
-        description: npm dist-tag oder Semver wenn Voreinstellung custom ist (Standard 0.16.0).
+        description: npm dist-tag oder Semver wenn Voreinstellung custom ist (Standard 0.17.0).
       clean_session_locks_on_start:
         name: Sitzungssperren beim Start bereinigen
         description: Veraltete Sitzungssperrdateien beim Start des Add-ons entfernen.
