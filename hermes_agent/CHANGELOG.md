@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.31] - 2026-07-05
+
+### Changed
+- Default upstream **Hermes Agent** pin updated from **0.17.0** to **0.18.0** (`v2026.7.1`, "The Judgment Release"): Docker image bake, `hermes_agent_version_custom` default, runtime reconcile fallback, and all locale translations.
+
 ## [0.0.30] - 2026-06-22
 
 ### Fixed

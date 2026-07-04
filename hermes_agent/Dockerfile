@@ -122,7 +122,7 @@ USER root
 RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false \
     && npm config set audit false \
-    && npm install -g hermes-agent@0.17.0 \
+    && npm install -g hermes-agent@0.18.0 \
     && npm install -g @botiverse/raft@0.0.15 \
     && npm install -g agent-browser@latest
 

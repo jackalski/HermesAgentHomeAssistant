@@ -170,7 +170,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
-| `hermes_agent_version_custom` | `0.17.0` | npm tag/semver when preset is `custom` |
+| `hermes_agent_version_custom` | `0.18.0` | npm tag/semver when preset is `custom` |
 
 Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
 
@@ -228,7 +228,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists.
 | MQTT status sensors missing / "MQTT broker not available" | Install and start **Mosquitto broker** add-on; use **Connection tests → Test Broker** / **Test Auth** on the Web UI after saving broker settings; fixed in **0.0.15+** (Supervisor API + retry) |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
-| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.17.0 > /config/.hermes/.addon-managed-hermes-version` |
+| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.18.0 > /config/.hermes/.addon-managed-hermes-version` |
 | `[raft] raft CLI not found in PATH` in gateway logs | Fixed in **0.0.29+** — add-on installs `@botiverse/raft` globally. Only needed if you use Raft messaging (`RAFT_PROFILE` in `/config/.hermes/.env`); see [Hermes Raft docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/raft). |
 | Mosquitto log spam (`New connection` / `disconnected` every minute) | Fixed in **0.0.19+** — persistent MQTT client + one-shot discovery. Optional: Mosquitto `connection_messages false` in customize |
 
