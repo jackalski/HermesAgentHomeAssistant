@@ -131,6 +131,29 @@ configuration:
         name: Show Reasoning
         description: Stream model thinking traces (display.show_reasoning). Recommended ON.
 
+
+  webhooks:
+    name: Webhooks
+    description: "Optional Hermes webhook adapter (host network). Direct-delivery can push HA notifications without an LLM call."
+    fields:
+      enable_webhooks:
+        name: Enable Webhooks
+        description: "When ON, sets WEBHOOK_* in .env and seeds platforms.webhook (port 8644). HMAC secret at /config/secrets/webhook.secret."
+      webhook_port:
+        name: Webhook Port
+        description: "HTTP port for POST /webhooks/<route> (host network). Default 8644."
+      seed_ha_direct_delivery_route:
+        name: Seed HA Direct-Delivery Route
+        description: "When ON and webhooks are new, seed route ha-alert (deliver_only → homeassistant). Payload field {message}."
+
+  backup:
+    name: Backup
+    description: "Write Hermes backups under /share/hermes/backups (visible in HAOS share)."
+    fields:
+      auto_backup_on_start:
+        name: Auto Backup on Start
+        description: "When ON, run a quick hermes backup to /share/hermes/backups on each add-on start. Manual: hermes-backup-share."
+
   enable_terminal:
     name: Активиране на уеб терминал
     description: Активиране на уеб терминал бутона в Home Assistant (Ingress) чрез ttyd
@@ -300,6 +323,16 @@ configuration:
       hermes_agent_version_custom:
         name: Hermes Agent Version (custom)
         description: npm dist-tag or semver when preset is custom (default 0.19.0).
+
+      fallback_providers:
+        name: Fallback Providers
+        description: "Bootstrap fallback_providers when missing. Entries like openrouter or openrouter/google/gemini-2.5-flash. Empty = skip."
+      nous_tool_gateway:
+        name: Nous Tool Gateway
+        description: "When ON, seed use_gateway: true on web/image_gen/tts/browser (requires Nous Portal subscription)."
+      gateway_drain_seconds:
+        name: Gateway Drain Seconds
+        description: "Seconds to wait for gateway drain on add-on stop (0–120). Default 15."
       clean_session_locks_on_start:
         name: Изчистване на заключвания при стартиране
         description: Remove stale session lock files when the add-on starts.

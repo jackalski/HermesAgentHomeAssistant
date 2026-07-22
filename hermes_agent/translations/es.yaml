@@ -131,6 +131,29 @@ configuration:
         name: Mostrar reasoning
         description: Transmitir trazas de pensamiento del modelo (display.show_reasoning). Recomendado ACTIVADO.
 
+
+  webhooks:
+    name: Webhooks
+    description: "Adaptador webhook opcional de Hermes (red del host). Direct-delivery puede enviar notificaciones HA sin LLM."
+    fields:
+      enable_webhooks:
+        name: Activar webhooks
+        description: "Si está ACTIVADO, configura WEBHOOK_* en .env y rellena platforms.webhook (puerto 8644). Secreto HMAC en /config/secrets/webhook.secret."
+      webhook_port:
+        name: Puerto de webhooks
+        description: "Puerto HTTP para POST /webhooks/<route> (red del host). Predeterminado 8644."
+      seed_ha_direct_delivery_route:
+        name: Sembrar ruta HA direct-delivery
+        description: "Si está ACTIVADO y los webhooks son nuevos, siembra la ruta ha-alert (deliver_only → homeassistant). Campo {message}."
+
+  backup:
+    name: Copia de seguridad
+    description: "Escribe copias de Hermes en /share/hermes/backups (visible en el share de HAOS)."
+    fields:
+      auto_backup_on_start:
+        name: Copia automática al iniciar
+        description: "Si está ACTIVADO, copia rápida a /share/hermes/backups en cada arranque. Manual: hermes-backup-share."
+
   enable_terminal:
     name: Activar terminal web
     description: Activar terminal web en Ingress. Pruebas de conexión → Test Terminal.
@@ -300,6 +323,16 @@ configuration:
       hermes_agent_version_custom:
         name: Versión de Hermes Agent (personalizada)
         description: dist-tag npm o semver cuando el preajuste es personalizado (predeterminado 0.19.0).
+
+      fallback_providers:
+        name: Proveedores de respaldo
+        description: "Bootstrap de fallback_providers si faltan. Entradas como openrouter u openrouter/google/gemini-2.5-flash. Vacío = omitir."
+      nous_tool_gateway:
+        name: Nous Tool Gateway
+        description: "Si está ACTIVADO, siembra use_gateway: true en web/image_gen/tts/browser (requiere suscripción Nous Portal)."
+      gateway_drain_seconds:
+        name: Segundos de drain del gateway
+        description: "Segundos de espera del drain al detener el complemento (0–120). Predeterminado 15."
       clean_session_locks_on_start:
         name: Limpiar bloqueos de sesión al iniciar
         description: Eliminar archivos de bloqueo de sesión obsoletos cuando el complemento inicia.

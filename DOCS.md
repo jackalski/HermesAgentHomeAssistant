@@ -134,6 +134,37 @@ Upstream Hermes also has a **Home Assistant messaging platform** (WebSocket `sta
 - Agent replies on this platform use HA **persistent notifications**.
 - See [Hermes HA messaging docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/homeassistant).
 
+### Webhooks + direct delivery (opt-in)
+
+Enable **`webhooks.enable_webhooks`**, restart, then POST to `http://<HA-LAN-IP>:8644/webhooks/<route>` (host network). HMAC secret: `/config/secrets/webhook.secret` (never logged).
+
+Default seeded route **`ha-alert`** (when seed option is ON):
+
+- `deliver_only: true` → **no LLM cost**
+- `deliver: homeassistant` → HA persistent notification
+- Body JSON field `message` rendered into the notification
+
+Example from HA (shell_command / curl on the HA host network):
+
+```bash
+# Read secret from the add-on share/secret path you copied into an HA secret
+MSG='{"message":"Front door opened"}'
+SECRET="$(cat /config/secrets/webhook.secret)"  # inside the Hermes add-on terminal
+# See Hermes docs for HMAC header format (X-Hub-Signature-256 / X-Hermes-Signature).
+curl -fsS -X POST "http://127.0.0.1:8644/webhooks/ha-alert" \
+  -H "Content-Type: application/json" \
+  --data "$MSG"
+```
+
+Prefer validating HMAC per [Hermes webhooks docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/webhooks). For local testing only, routes can use `INSECURE_NO_AUTH` (not recommended on exposed networks).
+
+### Backup / restore
+
+- Manual: open the add-on terminal and run `hermes-backup-share` (full) or `hermes-backup-share --quick`.
+- Archives land in **`/share/hermes/backups/`** (HAOS Share).
+- Restore: `hermes import /share/hermes/backups/<file>.zip --force` then restart the add-on.
+- Optional: set **`backup.auto_backup_on_start: true`**.
+
 ### Status sensors
 
 With `enable_ha_status_sensors` (default ON):
@@ -179,6 +210,12 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `prefer_supervisor_token` | `true` | Use `SUPERVISOR_TOKEN` when no pasted token |
 | `auto_configure_mcp` | `false` | Auto-on when profile + token set |
 | `enable_native_ha_platform` | `false` | Seed `platforms.homeassistant` event filters |
+| `enable_webhooks` | `false` | Webhook adapter + `WEBHOOK_*` env |
+| `webhook_port` | `8644` | Host-network webhook listen port |
+| `auto_backup_on_start` | `false` | Quick backup to `/share/hermes/backups` |
+| `fallback_providers` | `[]` | Bootstrap Hermes fallback chain if missing |
+| `nous_tool_gateway` | `false` | Seed `use_gateway` on managed tools |
+| `gateway_drain_seconds` | `15` | Drain wait on add-on stop |
 | `approval_mode` | `smart` | Bootstraps `approvals.mode` if missing |
 | `reasoning_effort` | `medium` | Bootstraps `agent.reasoning_effort` if missing |
 | `show_reasoning` | `true` | Bootstraps `display.show_reasoning` if missing |
@@ -224,12 +261,13 @@ Results appear inline on the landing page. Configuration field descriptions refe
 |------|----------|
 | `/config/.hermes/` | `hermes.json`, `config.yaml`, skills, `state.db` |
 | `/config/hermesd/` | Workspace |
-| `/config/secrets/` | `homeassistant.token` |
+| `/config/secrets/` | `homeassistant.token`, `webhook.secret` |
 | `/config/keys/` | Router SSH private keys (default `router_ssh`) |
 | `/config/secrets/mqtt.password` | Persisted MQTT broker password (when set in add-on config) |
 | `/config/certs/` | TLS certs (`lan_https`) |
+| `/share/hermes/backups/` | `hermes-backup-share` archives |
 
-Hermes binary in the image is replaced on update; `/config/` data persists.
+Hermes binary in the image is replaced on update; `/config/` data persists. When the add-on reconciles a different `hermes-agent` npm version, logs show **`Update progress [1/3]`…`[3/3]`** lines — open the add-on **Log** tab to follow long installs on HAOS.
 
 ## Troubleshooting
 

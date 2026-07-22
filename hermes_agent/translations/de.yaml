@@ -131,6 +131,29 @@ configuration:
         name: Reasoning anzeigen
         description: Denkspuren des Modells streamen (display.show_reasoning). Empfohlen EIN.
 
+
+  webhooks:
+    name: Webhooks
+    description: "Optionaler Hermes-Webhook-Adapter (Host-Netzwerk). Direct-Delivery kann HA-Benachrichtigungen ohne LLM senden."
+    fields:
+      enable_webhooks:
+        name: Webhooks aktivieren
+        description: "Wenn AN, setzt WEBHOOK_* in .env und seedet platforms.webhook (Port 8644). HMAC-Geheimnis unter /config/secrets/webhook.secret."
+      webhook_port:
+        name: Webhook-Port
+        description: "HTTP-Port für POST /webhooks/<route> (Host-Netzwerk). Standard 8644."
+      seed_ha_direct_delivery_route:
+        name: HA-Direct-Delivery-Route seeden
+        description: "Wenn AN und Webhooks neu sind, Route ha-alert seeden (deliver_only → homeassistant). Payload-Feld {message}."
+
+  backup:
+    name: Backup
+    description: "Schreibt Hermes-Backups nach /share/hermes/backups (im HAOS-Share sichtbar)."
+    fields:
+      auto_backup_on_start:
+        name: Auto-Backup beim Start
+        description: "Wenn AN, schnelles hermes-Backup nach /share/hermes/backups bei jedem Start. Manuell: hermes-backup-share."
+
   enable_terminal:
     name: Web-Terminal aktivieren
     description: Web-Terminal-Schaltfläche in Home Assistant (Ingress) über ttyd aktivieren. Verbindungstests → Test Terminal.
@@ -300,6 +323,16 @@ configuration:
       hermes_agent_version_custom:
         name: Hermes-Agent-Version (benutzerdefiniert)
         description: npm dist-tag oder Semver wenn Voreinstellung custom ist (Standard 0.19.0).
+
+      fallback_providers:
+        name: Fallback-Provider
+        description: "Bootstrap von fallback_providers wenn fehlend. Einträge wie openrouter oder openrouter/google/gemini-2.5-flash. Leer = überspringen."
+      nous_tool_gateway:
+        name: Nous Tool Gateway
+        description: "Wenn AN, seedet use_gateway: true für web/image_gen/tts/browser (Nous-Portal-Abo erforderlich)."
+      gateway_drain_seconds:
+        name: Gateway-Drain-Sekunden
+        description: "Wartezeit für Gateway-Drain beim Stoppen (0–120). Standard 15."
       clean_session_locks_on_start:
         name: Sitzungssperren beim Start bereinigen
         description: Veraltete Sitzungssperrdateien beim Start des Add-ons entfernen.

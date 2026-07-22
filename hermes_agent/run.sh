@@ -97,6 +97,13 @@ HA_SYSTEM_PROMPT_HINT="$(read_nested_option home_assistant ha_system_prompt_hint
 APPROVAL_MODE="$(read_nested_option agent_behavior approval_mode)"
 REASONING_EFFORT="$(read_nested_option agent_behavior reasoning_effort)"
 SHOW_REASONING="$(read_nested_option agent_behavior show_reasoning)"
+ENABLE_WEBHOOKS="$(read_nested_option webhooks enable_webhooks)"
+WEBHOOK_PORT_RAW="$(read_nested_option webhooks webhook_port)"
+SEED_HA_DIRECT_DELIVERY="$(read_nested_option webhooks seed_ha_direct_delivery_route)"
+AUTO_BACKUP_ON_START="$(read_nested_option backup auto_backup_on_start)"
+FALLBACK_PROVIDERS_JSON="$(jq -c '.advanced_settings.fallback_providers // []' "$OPTIONS_FILE" 2>/dev/null || echo '[]')"
+NOUS_TOOL_GATEWAY="$(read_nested_option advanced_settings nous_tool_gateway)"
+GATEWAY_DRAIN_SECONDS_RAW="$(read_nested_option advanced_settings gateway_drain_seconds)"
 # HA redacts password fields after save — reuse persisted token when the option is empty.
 if [ -z "$HA_TOKEN" ] && [ -f /config/secrets/homeassistant.token ]; then
   HA_TOKEN="$(tr -d '\r\n' < /config/secrets/homeassistant.token)"
@@ -230,6 +237,25 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$REASONING_EFFORT" ] && REASONING_EFFORT="medium"
 [ -z "$SHOW_REASONING" ] && SHOW_REASONING="true"
 [ -z "$TZNAME" ] && TZNAME="auto"
+[ -z "$ENABLE_WEBHOOKS" ] && ENABLE_WEBHOOKS="false"
+[ -z "$WEBHOOK_PORT_RAW" ] && WEBHOOK_PORT_RAW="8644"
+[ -z "$SEED_HA_DIRECT_DELIVERY" ] && SEED_HA_DIRECT_DELIVERY="true"
+[ -z "$AUTO_BACKUP_ON_START" ] && AUTO_BACKUP_ON_START="false"
+[ -z "$NOUS_TOOL_GATEWAY" ] && NOUS_TOOL_GATEWAY="false"
+[ -z "$GATEWAY_DRAIN_SECONDS_RAW" ] && GATEWAY_DRAIN_SECONDS_RAW="15"
+[ -z "$FALLBACK_PROVIDERS_JSON" ] && FALLBACK_PROVIDERS_JSON="[]"
+
+if [[ "$WEBHOOK_PORT_RAW" =~ ^[0-9]+$ ]] && [ "$WEBHOOK_PORT_RAW" -ge 1024 ] && [ "$WEBHOOK_PORT_RAW" -le 65535 ]; then
+  WEBHOOK_PORT="$WEBHOOK_PORT_RAW"
+else
+  log_error "Invalid webhook_port '$WEBHOOK_PORT_RAW'. Must be numeric 1024-65535. Using default 8644."
+  WEBHOOK_PORT="8644"
+fi
+if [[ "$GATEWAY_DRAIN_SECONDS_RAW" =~ ^[0-9]+$ ]] && [ "$GATEWAY_DRAIN_SECONDS_RAW" -ge 0 ] && [ "$GATEWAY_DRAIN_SECONDS_RAW" -le 120 ]; then
+  GATEWAY_DRAIN_SECONDS="$GATEWAY_DRAIN_SECONDS_RAW"
+else
+  GATEWAY_DRAIN_SECONDS="15"
+fi
 
 # SECURITY: Validate DASHBOARD_PORT (the hermes dashboard web UI port) to keep
 # the value safe for nginx config injection and shell use.
@@ -592,6 +618,8 @@ resolve_hermes_agent_npm_spec() {
 install_hermes_agent_npm() {
   local spec="$1"
   local image_npm_prefix="/usr/local"
+  local line
+  local step=0
 
   rm -rf "/config/.node_global/lib/node_modules/hermes-agent" 2>/dev/null || true
   rm -f "/config/.node_global/bin/hermes" "/config/.node_global/bin/hermes-agent" 2>/dev/null || true
@@ -600,11 +628,29 @@ install_hermes_agent_npm() {
   rm -rf "${image_npm_prefix}/lib/node_modules/hermes-agent" 2>/dev/null || true
   rm -f "${image_npm_prefix}/bin/hermes" "${image_npm_prefix}/bin/hermes-agent" 2>/dev/null || true
 
+  log_info "Update progress [1/3]: preparing hermes-agent@${spec} install..."
+  # Stream npm output into add-on logs so HA Supervisor "Log" shows update progress.
+  # npm progress bars are TTY-only; --loglevel info emits line-oriented status.
+  set +e
   HOME=/root \
     NPM_CONFIG_PREFIX="${image_npm_prefix}" \
     NPM_CONFIG_USERCONFIG=/root/.npmrc \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
-    npm install -g "hermes-agent@${spec}" --prefix "${image_npm_prefix}"
+    npm install -g "hermes-agent@${spec}" --prefix "${image_npm_prefix}" --loglevel info --no-fund --no-audit 2>&1 \
+    | while IFS= read -r line || [ -n "$line" ]; do
+        step=$((step + 1))
+        # Keep logs readable: skip empty lines; prefix every ~npm status line.
+        [ -z "$line" ] && continue
+        log_info "Update progress [2/3]: ${line}"
+      done
+  local npm_rc=${PIPESTATUS[0]}
+  set -e
+  if [ "${npm_rc}" -eq 0 ]; then
+    log_info "Update progress [3/3]: hermes-agent@${spec} install finished."
+    return 0
+  fi
+  log_error "Update progress [3/3]: hermes-agent@${spec} install failed (exit ${npm_rc})."
+  return 1
 }
 
 reconcile_hermes_agent_version() {
@@ -642,6 +688,7 @@ reconcile_hermes_agent_version() {
   fi
 
   log_info "Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
+  log_info "This may take several minutes on HAOS — watch add-on logs for Update progress lines."
   if install_hermes_agent_npm "$spec"; then
     printf '%s\n' "$spec" > "$marker"
     chmod 600 "$marker" 2>/dev/null || true
@@ -1258,6 +1305,21 @@ if [ -n "$HA_TOKEN" ] && [ "$HA_TOKEN_SOURCE" = "user" ]; then
   printf '%s' "$HA_TOKEN" > /config/secrets/homeassistant.token
 fi
 
+# Webhook HMAC secret (persisted; never logged).
+WEBHOOK_SECRET=""
+if [ "$ENABLE_WEBHOOKS" = "true" ] || [ "$ENABLE_WEBHOOKS" = "1" ]; then
+  mkdir -p /config/secrets
+  umask 077
+  if [ -f /config/secrets/webhook.secret ]; then
+    WEBHOOK_SECRET="$(tr -d '\r\n' < /config/secrets/webhook.secret)"
+  fi
+  if [ -z "$WEBHOOK_SECRET" ]; then
+    WEBHOOK_SECRET="$(openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | xxd -p | head -c 48)"
+    printf '%s' "$WEBHOOK_SECRET" > /config/secrets/webhook.secret
+    log_info "Generated webhook HMAC secret at /config/secrets/webhook.secret"
+  fi
+fi
+
 
 # ------------------------------------------------------------------------------
 # Hermes config is managed by Hermes itself (onboarding / configure).
@@ -1267,6 +1329,7 @@ fi
 # Convenience info for later (router SSH access path & HA token file)
 cat > /config/CONNECTION_NOTES.txt <<EOF
 Home Assistant token (if set): /config/secrets/homeassistant.token
+Webhook secret (if webhooks enabled): /config/secrets/webhook.secret
 Router SSH (generic):
   host=${ROUTER_HOST}
   user=${ROUTER_USER}
@@ -1307,11 +1370,19 @@ shutdown() {
   fi
 
   if [ -n "${GW_PID}" ] && kill -0 "${GW_PID}" >/dev/null 2>&1; then
+    log_info "Draining Hermes gateway (up to ${GATEWAY_DRAIN_SECONDS}s)..."
+    # Prefer upstream drain when available (0.18+), then TERM.
+    if command -v hermes >/dev/null 2>&1; then
+      hermes gateway stop --drain 2>/dev/null || hermes gateway drain 2>/dev/null || true
+    fi
     kill -TERM "${GW_PID}" >/dev/null 2>&1 || true
     # wait reaps child PIDs; for non-child (re-tracked) PIDs it fails instantly,
     # so fall back to a timed kill -0 poll to let the gateway finish cleanly.
     if ! wait "${GW_PID}" 2>/dev/null; then
-      for _i in 1 2 3 4 5; do
+      local _i
+      local _max="${GATEWAY_DRAIN_SECONDS:-15}"
+      [ "$_max" -lt 1 ] && _max=1
+      for _i in $(seq 1 "$_max"); do
         kill -0 "${GW_PID}" 2>/dev/null || break
         sleep 1
       done
@@ -1464,6 +1535,18 @@ bootstrap_hermes_first_run() {
   if [ "$ENABLE_NATIVE_HA_PLATFORM" = "true" ] || [ "$ENABLE_NATIVE_HA_PLATFORM" = "1" ]; then
     native_ha_json="true"
   fi
+  local enable_webhooks_json="false"
+  if [ "$ENABLE_WEBHOOKS" = "true" ] || [ "$ENABLE_WEBHOOKS" = "1" ]; then
+    enable_webhooks_json="true"
+  fi
+  local seed_ha_direct_json="true"
+  if [ "$SEED_HA_DIRECT_DELIVERY" = "false" ] || [ "$SEED_HA_DIRECT_DELIVERY" = "0" ]; then
+    seed_ha_direct_json="false"
+  fi
+  local nous_tg_json="false"
+  if [ "$NOUS_TOOL_GATEWAY" = "true" ] || [ "$NOUS_TOOL_GATEWAY" = "1" ]; then
+    nous_tg_json="true"
+  fi
 
   local bootstrap_json
   local mcp_configured_json="false"
@@ -1487,9 +1570,15 @@ bootstrap_hermes_first_run() {
     --arg approval_mode "$APPROVAL_MODE" \
     --arg reasoning_effort "$REASONING_EFFORT" \
     --arg ha_system_prompt_hint "$HA_SYSTEM_PROMPT_HINT" \
+    --arg webhook_secret "$WEBHOOK_SECRET" \
+    --argjson webhook_port "$WEBHOOK_PORT" \
     --argjson browser_enabled "$browser_enabled_json" \
     --argjson show_reasoning "$show_reasoning_json" \
     --argjson enable_native_ha_platform "$native_ha_json" \
+    --argjson enable_webhooks "$enable_webhooks_json" \
+    --argjson seed_ha_direct_delivery_route "$seed_ha_direct_json" \
+    --argjson nous_tool_gateway "$nous_tg_json" \
+    --argjson fallback_providers "$FALLBACK_PROVIDERS_JSON" \
     --arg openai "$OPENAI_API_KEY_OPT" \
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
     --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
@@ -1516,6 +1605,12 @@ bootstrap_hermes_first_run() {
       show_reasoning: $show_reasoning,
       enable_native_ha_platform: $enable_native_ha_platform,
       ha_system_prompt_hint: $ha_system_prompt_hint,
+      enable_webhooks: $enable_webhooks,
+      webhook_port: $webhook_port,
+      webhook_secret: $webhook_secret,
+      seed_ha_direct_delivery_route: $seed_ha_direct_delivery_route,
+      nous_tool_gateway: $nous_tool_gateway,
+      fallback_providers: $fallback_providers,
       api_keys: {
         OPENROUTER_API_KEY: $openrouter,
         ANTHROPIC_API_KEY: $anthropic,
@@ -1533,6 +1628,26 @@ bootstrap_hermes_first_run() {
 }
 
 bootstrap_hermes_first_run
+
+# Sync webhook env for Hermes gateway (secrets never logged).
+if [ "$ENABLE_WEBHOOKS" = "true" ] || [ "$ENABLE_WEBHOOKS" = "1" ]; then
+  if [ -f "$HELPER_PATH" ] && [ -n "$WEBHOOK_SECRET" ]; then
+    python3 "$HELPER_PATH" upsert-env WEBHOOK_ENABLED true >/dev/null 2>&1 || true
+    python3 "$HELPER_PATH" upsert-env WEBHOOK_PORT "$WEBHOOK_PORT" >/dev/null 2>&1 || true
+    python3 "$HELPER_PATH" upsert-env WEBHOOK_SECRET "$WEBHOOK_SECRET" >/dev/null 2>&1 || true
+    log_info "Webhooks enabled on port ${WEBHOOK_PORT} (HMAC secret in /config/secrets/webhook.secret)"
+  fi
+fi
+
+# Optional startup backup of HERMES_HOME → /share/hermes/backups
+if [ "$AUTO_BACKUP_ON_START" = "true" ] || [ "$AUTO_BACKUP_ON_START" = "1" ]; then
+  if command -v hermes-backup-share >/dev/null 2>&1; then
+    log_info "Running auto backup to /share/hermes/backups ..."
+    hermes-backup-share --quick || log_warn "Auto backup failed (non-fatal)"
+  else
+    log_warn "hermes-backup-share not found; skipping auto backup"
+  fi
+fi
 
 if [ -f "$HERMES_CONFIG_PATH" ]; then
   if [ -f "$HELPER_PATH" ]; then

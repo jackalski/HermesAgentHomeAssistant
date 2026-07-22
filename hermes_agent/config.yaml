@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.33"
+version: "0.0.34"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -67,6 +67,16 @@ options:
     reasoning_effort: medium
     show_reasoning: true
 
+  # --- Webhooks (gateway adapter on host network) ---
+  webhooks:
+    enable_webhooks: false
+    webhook_port: 8644
+    seed_ha_direct_delivery_route: true
+
+  # --- Backup to /share ---
+  backup:
+    auto_backup_on_start: false
+
   # --- Web terminal (Ingress) ---
   enable_terminal: true
   terminal_port: 7681
@@ -124,8 +134,14 @@ options:
     gateway_env_vars: []
     hermes_agent_version_preset: custom
     hermes_agent_version_custom: "0.19.0"
+    # Bootstrap fallback_providers in Hermes config.yaml when the key is missing.
+    # Entries: "provider" or "provider/model" (e.g. openrouter or openrouter/google/gemini-2.5-flash).
+    fallback_providers: []
+    # When ON, seed use_gateway: true on web/image_gen/tts/browser (Nous Tool Gateway).
+    nous_tool_gateway: false
     clean_session_locks_on_start: true
     clean_session_locks_on_exit: true
+    gateway_drain_seconds: 15
 
 schema:
   timezone: str
@@ -157,6 +173,12 @@ schema:
     approval_mode: list(smart|manual|off)?
     reasoning_effort: list(none|minimal|low|medium|high|xhigh|max|ultra)?
     show_reasoning: bool?
+  webhooks:
+    enable_webhooks: bool?
+    webhook_port: port?
+    seed_ha_direct_delivery_route: bool?
+  backup:
+    auto_backup_on_start: bool?
   enable_terminal: bool?
   terminal_port: port?
   web_interface:
@@ -203,5 +225,9 @@ schema:
         value: str
     hermes_agent_version_preset: list(latest|custom)?
     hermes_agent_version_custom: str?
+    fallback_providers:
+      - str
+    nous_tool_gateway: bool?
     clean_session_locks_on_start: bool?
     clean_session_locks_on_exit: bool?
+    gateway_drain_seconds: int(0,120)?

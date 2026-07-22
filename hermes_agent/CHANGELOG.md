@@ -2,6 +2,19 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.34] - 2026-07-22
+
+### Added
+- **Webhooks panel** (opt-in): `WEBHOOK_*` env + `platforms.webhook` bootstrap; optional `ha-alert` **direct-delivery** route to Home Assistant persistent notifications (zero LLM).
+- **`hermes-backup-share`**: backup Hermes home to `/share/hermes/backups` (optional `auto_backup_on_start`).
+- **`fallback_providers`** bootstrap (entries like `openrouter` or `openrouter/model`) when the Hermes key is missing.
+- **`nous_tool_gateway`**: opt-in seed of `use_gateway: true` on web / image_gen / tts / browser.
+- **Gateway drain** on stop (`gateway_drain_seconds`, default 15) with best-effort `hermes gateway stop --drain`.
+- **Update progress logging**: npm hermes-agent reconcile streams `Update progress [n/3]` lines into add-on logs.
+
+### Changed
+- Status exporter add-on version fallback aligned to **0.0.34**.
+
 ## [0.0.33] - 2026-07-22
 
 ### Added
@@ -21,7 +34,7 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 - Status exporter add-on version fallback aligned to **0.0.32**.
 
 ### Notes
-- Roadmap remaining: webhook direct-delivery examples, `hermes backup` to `/share`, scale-to-zero knobs.
+- Roadmap remaining: ntfy optional, Piper/LM Studio schema, Automation Blueprints, companion Integration polish.
 
 ## [0.0.31] - 2026-07-05
 

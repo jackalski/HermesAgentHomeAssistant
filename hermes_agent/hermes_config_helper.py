@@ -901,6 +901,140 @@ def bootstrap_ha_platform_if_enabled(
     return False
 
 
+def _parse_fallback_entry(raw: str):
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if "/" in text:
+        provider, model = text.split("/", 1)
+        provider = provider.strip()
+        model = model.strip()
+        if not provider:
+            return None
+        entry = {"provider": provider}
+        if model:
+            entry["model"] = model
+        return entry
+    return {"provider": text}
+
+
+def bootstrap_fallback_providers_if_missing(entries):
+    """Seed top-level fallback_providers only when the key is absent."""
+    if not isinstance(entries, list) or not entries:
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    if "fallback_providers" in cfg:
+        return True
+
+    parsed = []
+    for item in entries:
+        entry = _parse_fallback_entry(str(item))
+        if entry:
+            parsed.append(entry)
+    if not parsed:
+        return True
+
+    cfg["fallback_providers"] = parsed
+    if write_yaml_config(cfg):
+        print(
+            f"INFO: Bootstrapped fallback_providers ({len(parsed)} entr"
+            f"{'y' if len(parsed) == 1 else 'ies'}) in {YAML_CONFIG_PATH}"
+        )
+        return True
+    return False
+
+
+def bootstrap_nous_tool_gateway_if_enabled(enabled: bool):
+    """Opt-in: set use_gateway on web/image_gen/tts/browser when flags are missing."""
+    if not enabled:
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    changed = False
+    for key in ("web", "image_gen", "tts", "browser"):
+        block = cfg.get(key)
+        if not isinstance(block, dict):
+            block = {}
+        if "use_gateway" in block:
+            continue
+        block["use_gateway"] = True
+        cfg[key] = block
+        changed = True
+
+    if not changed:
+        return True
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped Nous Tool Gateway use_gateway flags in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+def bootstrap_webhooks_if_enabled(
+    enabled: bool,
+    port: int,
+    secret: str,
+    seed_ha_direct_delivery: bool,
+):
+    """Enable platforms.webhook + optional HA direct-delivery example route (no overwrite)."""
+    if not enabled:
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    platforms = cfg.get("platforms")
+    if not isinstance(platforms, dict):
+        platforms = {}
+    webhook = platforms.get("webhook")
+    if not isinstance(webhook, dict):
+        webhook = {}
+
+    # Do not clobber a user-tuned webhook block that already has routes.
+    extra = webhook.get("extra")
+    if isinstance(extra, dict) and isinstance(extra.get("routes"), dict) and extra.get("routes"):
+        return True
+
+    if not isinstance(extra, dict):
+        extra = {}
+    try:
+        port_i = int(port)
+    except (TypeError, ValueError):
+        port_i = 8644
+    if port_i < 1024 or port_i > 65535:
+        port_i = 8644
+
+    extra["port"] = port_i
+    if secret and not extra.get("secret"):
+        extra["secret"] = secret
+
+    routes = extra.get("routes")
+    if not isinstance(routes, dict):
+        routes = {}
+    if seed_ha_direct_delivery and "ha-alert" not in routes:
+        routes["ha-alert"] = {
+            "secret": secret or "INSECURE_NO_AUTH",
+            "deliver": "homeassistant",
+            "deliver_only": True,
+            "prompt": "{message}",
+        }
+    extra["routes"] = routes
+    webhook["enabled"] = True
+    webhook["extra"] = extra
+    platforms["webhook"] = webhook
+    cfg["platforms"] = platforms
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped platforms.webhook (port={port_i}) in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
 def sync_homeassistant_env(url: str, token: str):
     base = (url or "").strip().rstrip("/")
     tok = (token or "").strip()
@@ -953,6 +1087,23 @@ def bootstrap_first_run(payload: dict):
         "yes",
     )
     ha_system_prompt_hint = str(payload.get("ha_system_prompt_hint", ""))
+    fallback_providers = payload.get("fallback_providers", [])
+    nous_tool_gateway = str(payload.get("nous_tool_gateway", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    enable_webhooks = str(payload.get("enable_webhooks", "false")).lower() in ("1", "true", "yes")
+    seed_ha_direct_delivery = str(payload.get("seed_ha_direct_delivery_route", "true")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    try:
+        webhook_port = int(payload.get("webhook_port", 8644) or 8644)
+    except (TypeError, ValueError):
+        webhook_port = 8644
+    webhook_secret = str(payload.get("webhook_secret", "") or "")
 
     if not isinstance(api_keys, dict):
         api_keys = {}
@@ -966,6 +1117,14 @@ def bootstrap_first_run(payload: dict):
     ok = bootstrap_approvals_if_missing(approval_mode) and ok
     ok = bootstrap_reasoning_if_missing(reasoning_effort, show_reasoning) and ok
     ok = bootstrap_ha_platform_if_enabled(enable_native_ha_platform, ha_system_prompt_hint) and ok
+    ok = bootstrap_fallback_providers_if_missing(fallback_providers) and ok
+    ok = bootstrap_nous_tool_gateway_if_enabled(nous_tool_gateway) and ok
+    ok = (
+        bootstrap_webhooks_if_enabled(
+            enable_webhooks, webhook_port, webhook_secret, seed_ha_direct_delivery
+        )
+        and ok
+    )
     ok = bootstrap_browser_if_enabled(browser_enabled) and ok
     ok = bootstrap_web_search_if_missing(firecrawl_key, searxng_url) and ok
     ok = bootstrap_kanban_toolset_if_missing(setup_profile) and ok
@@ -1117,6 +1276,11 @@ def main():
             print(f"ERROR: Invalid JSON for bootstrap-first-run: {e}", file=sys.stderr)
             sys.exit(1)
         sys.exit(0 if bootstrap_first_run(payload) else 1)
+    elif cmd == "upsert-env":
+        if len(sys.argv) < 4:
+            print("Usage: hermes_config_helper.py upsert-env <KEY> <value>", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0 if upsert_env_var(sys.argv[2], sys.argv[3]) else 1)
     elif cmd == "sync-homeassistant-env":
         if len(sys.argv) < 4:
             print("Usage: hermes_config_helper.py sync-homeassistant-env <url> <token>", file=sys.stderr)

@@ -131,6 +131,29 @@ configuration:
         name: Pokazuj reasoning
         description: Przesyłaj ślady myślenia modelu (display.show_reasoning). Zalecane WŁĄCZONE.
 
+
+  webhooks:
+    name: Webhooki
+    description: "Opcjonalny adapter webhook Hermes (host network). Direct-delivery może wypchnąć powiadomienia HA bez wywołania LLM."
+    fields:
+      enable_webhooks:
+        name: Włącz webhooki
+        description: "Gdy WŁĄCZONE, ustawia WEBHOOK_* w .env i seeduje platforms.webhook (port 8644). Sekret HMAC w /config/secrets/webhook.secret."
+      webhook_port:
+        name: Port webhooków
+        description: "Port HTTP dla POST /webhooks/<route> (host network). Domyślnie 8644."
+      seed_ha_direct_delivery_route:
+        name: Seed trasy HA direct-delivery
+        description: "Gdy WŁĄCZONE i webhooki są nowe, seeduje trasę ha-alert (deliver_only → homeassistant). Pole payload {message}."
+
+  backup:
+    name: Kopia zapasowa
+    description: "Zapisuje kopie Hermes w /share/hermes/backups (widoczne w udziale HAOS)."
+    fields:
+      auto_backup_on_start:
+        name: Auto-backup przy starcie
+        description: "Gdy WŁĄCZONE, szybki hermes backup do /share/hermes/backups przy każdym starcie. Ręcznie: hermes-backup-share."
+
   enable_terminal:
     name: Włącz terminal webowy
     description: Włącz przycisk terminala webowego w Home Assistant (Ingress) przez ttyd
@@ -300,6 +323,16 @@ configuration:
       hermes_agent_version_custom:
         name: Wersja Hermes Agent (niestandardowa)
         description: dist-tag npm lub semver gdy preset to niestandardowy (domyślnie 0.19.0).
+
+      fallback_providers:
+        name: Dostawcy zapasowi
+        description: "Bootstrap fallback_providers gdy brak. Wpisy jak openrouter lub openrouter/google/gemini-2.5-flash. Puste = pomiń."
+      nous_tool_gateway:
+        name: Nous Tool Gateway
+        description: "Gdy WŁĄCZONE, seeduje use_gateway: true dla web/image_gen/tts/browser (wymaga subskrypcji Nous Portal)."
+      gateway_drain_seconds:
+        name: Sekundy drain gateway
+        description: "Czas oczekiwania na drain gateway przy zatrzymaniu add-onu (0–120). Domyślnie 15."
       clean_session_locks_on_start:
         name: Wyczyść blokady sesji przy starcie
         description: Usuń przestarzałe pliki blokad sesji gdy dodatek się uruchamia.
