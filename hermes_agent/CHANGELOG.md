@@ -2,6 +2,18 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.35] - 2026-07-22
+
+### Added
+- **Status sensors**: MQTT/`status.json` now expose `gateway_ready` and redacted `last_error`.
+- **ntfy panel** (opt-in): sync `NTFY_*` env for push/cron delivery (`ntfy_publish_only` default ON).
+- **`lm_studio` provider**: first-run bootstrap as Hermes `custom` + `lm_studio_base_url`.
+- **Example no_agent scripts** (`disk-alert.sh`, `morning-heartbeat.sh`) seeded into `/config/.hermes/scripts/` when `seed_example_scripts` is ON.
+- DOCS: Assist `X-Hermes-Session-Key`, no_agent cron recipes, Chronos scale-to-zero note (Nous-hosted only — not for HAOS).
+
+### Changed
+- Status exporter add-on version fallback aligned to **0.0.35**.
+
 ## [0.0.34] - 2026-07-22
 
 ### Added
@@ -34,7 +46,7 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 - Status exporter add-on version fallback aligned to **0.0.32**.
 
 ### Notes
-- Roadmap remaining: ntfy optional, Piper/LM Studio schema, Automation Blueprints, companion Integration polish.
+- Roadmap remaining: Piper TTS packaging, Automation Blueprints store, privacy.redact_pii UI.
 
 ## [0.0.31] - 2026-07-05
 

@@ -171,8 +171,32 @@ With `enable_ha_status_sensors` (default ON):
 
 - **MQTT** entities when Mosquitto is installed (device: Hermes Agent Integration).
 - **JSON API** at Ingress `/status.json` and `/share/hermes/status.json`.
+- Includes **`gateway_ready`** (gateway up + setup complete) and redacted **`last_error`** from Hermes logs.
 
 Options: `publish_mqtt_discovery` (one-shot per add-on version — marker `/config/.hermes/.mqtt_discovery_published`), `status_poll_interval_seconds` (30–300), `mqtt_state_prefix`.
+
+### ntfy (opt-in)
+
+Enable **`ntfy.enable_ntfy`**, set **`ntfy_topic`**, restart. Env is written to `/config/.hermes/.env`. With **`ntfy_publish_only`** (default ON), Hermes pushes alerts without accepting inbound ntfy chat.
+
+### LM Studio (local OpenAI-compatible)
+
+Set **`default_provider: lm_studio`**, **`lm_studio_base_url`** (e.g. `http://192.168.1.50:1234/v1`), and **`default_model`**. First-run bootstrap writes Hermes `model.provider: custom` with that base URL (only when model config is still empty).
+
+### no_agent cron (zero LLM)
+
+Example scripts are seeded under `/config/.hermes/scripts/` when **`seed_example_scripts`** is ON:
+
+```bash
+hermes cron create "*/15 * * * *" --no-agent --script disk-alert.sh --deliver homeassistant --name disk-alert
+hermes cron create "0 8 * * *" --no-agent --script morning-heartbeat.sh --deliver ntfy --name morning-heartbeat
+```
+
+See [Script-only cron](https://hermes-agent.nousresearch.com/docs/guides/cron-script-only). Empty stdout = silent tick.
+
+### Scale-to-zero note
+
+Upstream **Chronos** cron (`cron.provider: chronos`) is for Nous-hosted scale-to-zero gateways. On HAOS the add-on stays running; use **webhook wake**, **no_agent cron**, and **`gateway_drain_seconds`** on stop instead.
 
 ### Chat, voice, Assist
 
@@ -191,7 +215,10 @@ HTTPS on port 18789 still works for browsers and `curl -k`; HA Core rejects the 
 
 - Restart add-on after enabling Assist API or after first `hermes onboard` (gateway reads `API_SERVER_*` at startup).
 - In **Settings → Voice assistants**, set conversation agent to Extended OpenAI Conversation and expose entities.
-- For Assist session memory continuity, clients can send Hermes session headers such as `X-Hermes-Session-Key` (see upstream API docs).
+- For Assist session memory continuity, clients can send Hermes session headers:
+  - `X-Hermes-Session-Key: ha-assist-<device_id>` (stable per device/conversation)
+  - optional `X-Hermes-Session-Name: Assist Kitchen`
+  - Without a session key, each Assist request may start a fresh Hermes session.
 
 ## Configuration reference
 
@@ -201,8 +228,9 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 |--------|---------|-------|
 | `setup_profile` | `home_assistant` | Preset for first-run behavior |
 | `timezone` | `auto` | Detect from HA Core via Supervisor; fallback `Etc/UTC` |
-| `default_provider` | `openrouter` | `nous`, `openrouter`, `google`, `anthropic`, `ollama`, `minimax`, `xai`, `openai` |
+| `default_provider` | `openrouter` | `nous`, `openrouter`, `google`, `anthropic`, `ollama`, `minimax`, `xai`, `openai`, `lm_studio` |
 | `default_model_preset` | `custom` | `custom` only — set model ID in `default_model` |
+| `lm_studio_base_url` | `http://127.0.0.1:1234/v1` | Used when provider is `lm_studio` |
 | `access_mode` | `lan_https` | See access modes above |
 | `gateway_port` | `18789` | External HTTPS port for Hermes Web UI in `lan_https`; Assist API `/v1/` proxied here when enabled |
 | `hass_url` | *(empty)* | Autodetect on HAOS |
@@ -216,6 +244,8 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `fallback_providers` | `[]` | Bootstrap Hermes fallback chain if missing |
 | `nous_tool_gateway` | `false` | Seed `use_gateway` on managed tools |
 | `gateway_drain_seconds` | `15` | Drain wait on add-on stop |
+| `enable_ntfy` | `false` | Sync `NTFY_*` for push/cron |
+| `seed_example_scripts` | `true` | Seed no_agent example scripts |
 | `approval_mode` | `smart` | Bootstraps `approvals.mode` if missing |
 | `reasoning_effort` | `medium` | Bootstraps `agent.reasoning_effort` if missing |
 | `show_reasoning` | `true` | Bootstraps `display.show_reasoning` if missing |

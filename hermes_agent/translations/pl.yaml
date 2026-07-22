@@ -32,6 +32,7 @@ configuration:
       minimax: "MiniMax"
       xai: "xAI (Grok)"
       openai: "OpenAI"
+      lm_studio: "LM Studio (lokal)"
 
   default_model_preset:
     name: Preset modelu
@@ -42,6 +43,10 @@ configuration:
   default_model:
     name: Domyślny model
     description: "ID modelu dla wybranego dostawcy (np. google/gemini-2.5-flash dla OpenRouter, claude-sonnet-4-6 dla Anthropic, gpt-oss:120b dla Ollama Cloud). Bootstrap tylko przy pierwszym uruchomieniu, gdy model nie jest skonfigurowany."
+
+  lm_studio_base_url:
+    name: Adres bazowy LM Studio
+    description: "OpenAI-compatible base URL gdy default_provider=lm_studio (np. http://192.168.1.10:1234/v1)."
 
   provider_api_keys:
     name: Klucze API dostawców
@@ -153,6 +158,27 @@ configuration:
       auto_backup_on_start:
         name: Auto-backup przy starcie
         description: "Gdy WŁĄCZONE, szybki hermes backup do /share/hermes/backups przy każdym starcie. Ręcznie: hermes-backup-share."
+
+
+  ntfy:
+    name: ntfy
+    description: "Opcjonalna platforma ntfy (push / cron). Domyślnie WYŁĄCZONE."
+    fields:
+      enable_ntfy:
+        name: Włącz ntfy
+        description: "Gdy WŁĄCZONE i topic ustawiony, synchronizuje NTFY_* do /config/.hermes/.env."
+      ntfy_topic:
+        name: Temat ntfy
+        description: Nazwa tematu do publish/subscribe.
+      ntfy_server_url:
+        name: URL serwera ntfy
+        description: "Domyślnie https://ntfy.sh — użyj własnego serwera dla prywatności."
+      ntfy_token:
+        name: Token ntfy
+        description: "Opcjonalny bearer lub user:pass. Ukryty po zapisie; w /config/secrets/ntfy.token."
+      ntfy_publish_only:
+        name: Tylko publikacja
+        description: "Gdy WŁĄCZONE, tryb push-only (bez czatu przychodzącego). Zalecane dla alertów HA."
 
   enable_terminal:
     name: Włącz terminal webowy
@@ -294,6 +320,9 @@ configuration:
       tool_skills_hub_enabled:
         name: Włącz bootstrap Skills Hub
         description: Inicjalizuj katalog Skills Hub przy starcie (jak `hermes skills list` przy pierwszym uruchomieniu).
+      seed_example_scripts:
+        name: Seed przykładowych skryptów
+        description: "Kopiuje disk-alert.sh i morning-heartbeat.sh do /config/.hermes/scripts/ gdy brak (dla cron no_agent)."
 
   advanced_settings:
     name: Ustawienia zaawansowane

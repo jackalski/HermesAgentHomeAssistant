@@ -53,7 +53,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.34"
+    fallback = "0.0.35"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -76,6 +76,11 @@ STATUS_FILE = Path("/share/hermes/status.json")
 DISCOVERY_MARKER = HERMES_STATE_DIR / ".mqtt_discovery_published"
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
+ERROR_LOG_CANDIDATES = (
+    HERMES_STATE_DIR / "logs" / "errors.log",
+    HERMES_STATE_DIR / "logs" / "gateway.log",
+    HERMES_STATE_DIR / "gateway.log",
+)
 
 PROVIDER_SENSOR_NAMES = (
     ("openrouter", "OPENROUTER_API_KEY"),
@@ -182,6 +187,40 @@ def _disk_usage_percent() -> int | None:
         return int(pct)
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
+
+
+def _redact_secrets(text: str) -> str:
+    import re
+
+    out = text
+    # Bearer / token-like fragments
+    out = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._\-]{8,}", r"\1***", out)
+    out = re.sub(
+        r"(?i)(token|api[_-]?key|password|secret)\s*[:=]\s*\S+",
+        r"\1=***",
+        out,
+    )
+    out = re.sub(r"sk-[A-Za-z0-9]{10,}", "sk-***", out)
+    return out[:240]
+
+
+def _read_last_error() -> str:
+    """Best-effort last error line from Hermes logs (never includes secrets)."""
+    for path in ERROR_LOG_CANDIDATES:
+        if not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines[-400:]):
+            low = line.lower()
+            if "error" not in low and "exception" not in low and "traceback" not in low:
+                continue
+            cleaned = _redact_secrets(line.strip())
+            if cleaned:
+                return cleaned
+    return ""
 
 
 def _query_state_db() -> dict[str, Any]:
@@ -372,6 +411,8 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
     assist_ok = str(payload.get("enable_openai_api", "false")).lower() in ("1", "true", "yes")
     ha_token_set = bool(str(payload.get("homeassistant_token", "")).strip())
     setup_complete = any_api_key and model_ok and (mcp_ok if ha_token_set else True)
+    last_error = _read_last_error()
+    gateway_ready = bool(gateway_running) and bool(setup_complete)
 
     hermes_version = _hermes_agent_version()
 
@@ -384,7 +425,9 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         "access_mode": str(payload.get("access_mode", "") or ""),
         "gateway_mode": str(payload.get("gateway_mode", "") or ""),
         "gateway_running": gateway_running,
+        "gateway_ready": gateway_ready,
         "gateway_health_probe_at": gateway_probe_at,
+        "last_error": last_error or "none",
         "api_key_configured": any_api_key,
         "model_configured": model_ok,
         "mcp_configured": mcp_ok,
@@ -603,6 +646,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
 
     binaries = [
         ("gateway_running", "Gateway Running", "connectivity"),
+        ("gateway_ready", "Gateway Ready", "connectivity"),
         ("api_key_configured", "API Key Configured", None),
         ("model_configured", "Model Configured", None),
         ("mcp_configured", "MCP Configured", None),
@@ -650,6 +694,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         ("setup_profile", "Setup Profile"),
         ("access_mode", "Access Mode"),
         ("gateway_mode", "Gateway Mode"),
+        ("last_error", "Last Error"),
     ]
     for key, label in text_sensors:
         cfg = {
@@ -724,6 +769,7 @@ def publish_mqtt_state(snapshot: dict[str, Any], publisher: MqttPublisher, prefi
         publisher.publish(f"{base}/status/{key}", "true" if value else "false")
 
     pub_bool("gateway_running", bool(snapshot.get("gateway_running")))
+    pub_bool("gateway_ready", bool(snapshot.get("gateway_ready")))
     pub_bool("api_key_configured", bool(snapshot.get("api_key_configured")))
     pub_bool("model_configured", bool(snapshot.get("model_configured")))
     pub_bool("mcp_configured", bool(snapshot.get("mcp_configured")))
@@ -744,6 +790,7 @@ def publish_mqtt_state(snapshot: dict[str, Any], publisher: MqttPublisher, prefi
         "setup_profile",
         "access_mode",
         "gateway_mode",
+        "last_error",
     ):
         publisher.publish(f"{base}/status/{key}", str(snapshot.get(key, "unknown")))
 

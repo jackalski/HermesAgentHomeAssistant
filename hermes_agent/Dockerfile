@@ -172,6 +172,7 @@ COPY hermes_connection_tests.py /hermes_connection_tests.py
 COPY render_nginx.py /render_nginx.py
 COPY hermes-cleanup.sh /usr/local/bin/hermes-cleanup
 COPY hermes-backup-share.sh /usr/local/bin/hermes-backup-share
+COPY example_scripts/ /opt/hermes-example-scripts/
 COPY hermes-proxy-shim.cjs /usr/local/lib/hermes-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
@@ -179,6 +180,7 @@ COPY landing.html.tpl /etc/nginx/landing.html.tpl
 # version (status exporter) without depending on the Supervisor API.
 COPY config.yaml /addon_config.yaml
 RUN chmod +x /run.sh /addon_log.sh /hermes_config_helper.py /hermes_status_exporter.py /hermes_mqtt_resolver.py /hermes_connection_tests.py /render_nginx.py /repair_hermes_wheel.py /usr/local/bin/hermes-cleanup /usr/local/bin/hermes-backup-share \
+    && chmod +x /opt/hermes-example-scripts/*.sh \
     && mkdir -p /run/nginx
 
 CMD [ "/run.sh" ]

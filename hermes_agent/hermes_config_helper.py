@@ -58,6 +58,7 @@ ADDON_PROVIDER_TO_HERMES = {
     "minimax": "minimax",
     "xai": "xai",
     "openai": "openai",
+    "lm_studio": "custom",
 }
 
 PROVIDER_ENV_KEYS = {
@@ -69,6 +70,7 @@ PROVIDER_ENV_KEYS = {
     "minimax": "MINIMAX_API_KEY",
     "xai": "XAI_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "custom": None,
 }
 
 AUXILIARY_TITLE_MODEL = "google/gemini-2.5-flash"
@@ -625,13 +627,32 @@ def sync_router_ssh_env(host: str, user: str, key_path: str):
 
 
 def bootstrap_model_if_missing(
-    default_provider: str, default_model: str, api_keys: dict
+    default_provider: str, default_model: str, api_keys: dict, lm_studio_base_url: str = ""
 ):
     cfg = read_yaml_config()
     if cfg is None:
         return False
     if not model_needs_bootstrap(cfg):
         return True
+
+    ui_provider = (default_provider or "").strip().lower()
+    if ui_provider == "lm_studio":
+        base = (lm_studio_base_url or "").strip().rstrip("/") or "http://127.0.0.1:1234/v1"
+        model_id = (default_model or "").strip() or "local-model"
+        cfg["model"] = {
+            "provider": "custom",
+            "default": model_id,
+            "base_url": base,
+            "api_mode": "chat_completions",
+        }
+        if write_yaml_config(cfg):
+            print(
+                "INFO: Bootstrapped Hermes LM Studio (custom) model in "
+                f"{YAML_CONFIG_PATH}: {base} / {model_id}"
+            )
+            write_readiness_marker(".bootstrap-model-ok", True)
+            return True
+        return False
 
     provider, model_id = infer_provider_and_model(
         default_provider, default_model, api_keys
@@ -1035,6 +1056,72 @@ def bootstrap_webhooks_if_enabled(
     return False
 
 
+def sync_ntfy_env(
+    enabled: bool,
+    topic: str,
+    server_url: str,
+    token: str,
+    publish_only: bool,
+):
+    """Sync NTFY_* env vars when ntfy is enabled and a topic is set."""
+    if not enabled:
+        return True
+    topic = (topic or "").strip()
+    if not topic:
+        print("WARN: enable_ntfy=true but ntfy_topic is empty; skipping ntfy env sync")
+        return True
+
+    ok = upsert_env_var("NTFY_TOPIC", topic)
+    server = (server_url or "").strip() or "https://ntfy.sh"
+    ok = upsert_env_var("NTFY_SERVER_URL", server) and ok
+    tok = (token or "").strip()
+    if tok:
+        ok = upsert_env_var("NTFY_TOKEN", tok) and ok
+    if publish_only:
+        ok = upsert_env_var("NTFY_PUBLISH_TOPIC", topic) and ok
+        ok = upsert_env_var("NTFY_HOME_CHANNEL", topic) and ok
+    if ok:
+        print("INFO: Synced ntfy env (NTFY_TOPIC set; token redacted)")
+    return ok
+
+
+def seed_example_scripts_if_enabled(enabled: bool, source_dir: str = "/opt/hermes-example-scripts"):
+    """Copy bundled example no_agent scripts into HERMES_HOME/scripts when missing."""
+    if not enabled:
+        return True
+    src = Path(source_dir)
+    if not src.is_dir():
+        # Dev / non-image layout
+        alt = Path(__file__).resolve().parent / "example_scripts"
+        src = alt if alt.is_dir() else src
+    if not src.is_dir():
+        return True
+
+    dest = Path(os.environ.get("HERMES_HOME", str(HERMES_STATE_DIR))) / "scripts"
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        print(f"WARN: Cannot create scripts dir {dest}: {e}", file=sys.stderr)
+        return False
+
+    copied = []
+    for path in sorted(src.glob("*")):
+        if not path.is_file():
+            continue
+        target = dest / path.name
+        if target.exists():
+            continue
+        try:
+            target.write_bytes(path.read_bytes())
+            target.chmod(0o755)
+            copied.append(path.name)
+        except OSError as e:
+            print(f"WARN: Failed to seed script {path.name}: {e}", file=sys.stderr)
+    if copied:
+        print(f"INFO: Seeded example scripts in {dest}: {', '.join(copied)}")
+    return True
+
+
 def sync_homeassistant_env(url: str, token: str):
     base = (url or "").strip().rstrip("/")
     tok = (token or "").strip()
@@ -1104,6 +1191,17 @@ def bootstrap_first_run(payload: dict):
     except (TypeError, ValueError):
         webhook_port = 8644
     webhook_secret = str(payload.get("webhook_secret", "") or "")
+    lm_studio_base_url = str(payload.get("lm_studio_base_url", "") or "")
+    enable_ntfy = str(payload.get("enable_ntfy", "false")).lower() in ("1", "true", "yes")
+    ntfy_topic = str(payload.get("ntfy_topic", "") or "")
+    ntfy_server_url = str(payload.get("ntfy_server_url", "") or "")
+    ntfy_token = str(payload.get("ntfy_token", "") or "")
+    ntfy_publish_only = str(payload.get("ntfy_publish_only", "true")).lower() in ("1", "true", "yes")
+    seed_example_scripts = str(payload.get("seed_example_scripts", "true")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     if not isinstance(api_keys, dict):
         api_keys = {}
@@ -1125,12 +1223,17 @@ def bootstrap_first_run(payload: dict):
         )
         and ok
     )
+    ok = (
+        sync_ntfy_env(enable_ntfy, ntfy_topic, ntfy_server_url, ntfy_token, ntfy_publish_only)
+        and ok
+    )
+    ok = seed_example_scripts_if_enabled(seed_example_scripts) and ok
     ok = bootstrap_browser_if_enabled(browser_enabled) and ok
     ok = bootstrap_web_search_if_missing(firecrawl_key, searxng_url) and ok
     ok = bootstrap_kanban_toolset_if_missing(setup_profile) and ok
     ok = (
         bootstrap_model_if_missing(
-            str(default_provider), resolved_model, api_keys
+            str(default_provider), resolved_model, api_keys, lm_studio_base_url
         )
         and ok
     )

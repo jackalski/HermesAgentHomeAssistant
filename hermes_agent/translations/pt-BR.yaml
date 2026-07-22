@@ -32,6 +32,7 @@ configuration:
       minimax: "MiniMax"
       xai: "xAI (Grok)"
       openai: "OpenAI"
+      lm_studio: "LM Studio (local)"
 
   default_model_preset:
     name: Predefinição de modelo
@@ -42,6 +43,10 @@ configuration:
   default_model:
     name: Modelo padrão
     description: "ID do modelo para o provedor selecionado (ex. google/gemini-2.5-flash para OpenRouter, claude-sonnet-4-6 para Anthropic, gpt-oss:120b para Ollama Cloud). Bootstrap apenas na primeira execução quando nenhum modelo estiver configurado."
+
+  lm_studio_base_url:
+    name: URL base do LM Studio
+    description: "URL base compatível com OpenAI quando default_provider=lm_studio (ex. http://192.168.1.10:1234/v1)."
 
   provider_api_keys:
     name: Chaves API de provedores
@@ -153,6 +158,27 @@ configuration:
       auto_backup_on_start:
         name: Backup automático no início
         description: "Quando LIGADO, backup rápido para /share/hermes/backups a cada start. Manual: hermes-backup-share."
+
+
+  ntfy:
+    name: ntfy
+    description: "Plataforma ntfy opcional (push/cron). Padrão DESLIGADO."
+    fields:
+      enable_ntfy:
+        name: Ativar ntfy
+        description: "Quando LIGADO e topic definido, sincroniza NTFY_* em /config/.hermes/.env."
+      ntfy_topic:
+        name: Tópico ntfy
+        description: Nome do tópico para publish/subscribe.
+      ntfy_server_url:
+        name: URL do servidor ntfy
+        description: "Padrão https://ntfy.sh — use servidor próprio para privacidade."
+      ntfy_token:
+        name: Token ntfy
+        description: "Bearer opcional ou user:pass. Mascarado; em /config/secrets/ntfy.token."
+      ntfy_publish_only:
+        name: Somente publicação
+        description: "Quando LIGADO, só push (sem chat de entrada). Recomendado para alertas HA."
 
   enable_terminal:
     name: Habilitar Terminal Web
@@ -294,6 +320,9 @@ configuration:
       tool_skills_hub_enabled:
         name: Habilitar bootstrap do Skills Hub
         description: Inicializar o diretório do Skills Hub na inicialização (como `hermes skills list` na primeira execução).
+      seed_example_scripts:
+        name: Semear scripts de exemplo
+        description: "Copia disk-alert.sh e morning-heartbeat.sh para /config/.hermes/scripts/ se ausentes (para cron no_agent)."
 
   advanced_settings:
     name: Configurações avançadas

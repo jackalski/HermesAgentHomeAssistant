@@ -101,6 +101,11 @@ ENABLE_WEBHOOKS="$(read_nested_option webhooks enable_webhooks)"
 WEBHOOK_PORT_RAW="$(read_nested_option webhooks webhook_port)"
 SEED_HA_DIRECT_DELIVERY="$(read_nested_option webhooks seed_ha_direct_delivery_route)"
 AUTO_BACKUP_ON_START="$(read_nested_option backup auto_backup_on_start)"
+ENABLE_NTFY="$(read_nested_option ntfy enable_ntfy)"
+NTFY_TOPIC="$(read_nested_option ntfy ntfy_topic)"
+NTFY_SERVER_URL="$(read_nested_option ntfy ntfy_server_url)"
+NTFY_TOKEN="$(read_nested_option ntfy ntfy_token)"
+NTFY_PUBLISH_ONLY="$(read_nested_option ntfy ntfy_publish_only)"
 FALLBACK_PROVIDERS_JSON="$(jq -c '.advanced_settings.fallback_providers // []' "$OPTIONS_FILE" 2>/dev/null || echo '[]')"
 NOUS_TOOL_GATEWAY="$(read_nested_option advanced_settings nous_tool_gateway)"
 GATEWAY_DRAIN_SECONDS_RAW="$(read_nested_option advanced_settings gateway_drain_seconds)"
@@ -163,6 +168,7 @@ SETUP_PROFILE=$(jq -r '.setup_profile // "home_assistant"' "$OPTIONS_FILE")
 DEFAULT_PROVIDER=$(jq -r '.default_provider // "openrouter"' "$OPTIONS_FILE")
 DEFAULT_MODEL_PRESET=$(jq -r '.default_model_preset // "custom"' "$OPTIONS_FILE")
 DEFAULT_MODEL_OPT=$(jq -r '.default_model // empty' "$OPTIONS_FILE")
+LM_STUDIO_BASE_URL=$(jq -r '.lm_studio_base_url // "http://127.0.0.1:1234/v1"' "$OPTIONS_FILE")
 HASS_URL="$(read_nested_option home_assistant hass_url)"
 ACCESS_MODE="$(read_nested_option gateway_access access_mode)"
 FIRECRAWL_API_KEY_OPT="$(read_provider_option firecrawl_api_key)"
@@ -174,6 +180,7 @@ AUTO_CONFIGURE_MCP="$(read_nested_option home_assistant auto_configure_mcp)"
 TOOL_TELEGRAM_ENABLED="$(read_nested_option tools_bootstrap tool_telegram_enabled)"
 TOOL_BROWSER_ENABLED="$(read_nested_option tools_bootstrap tool_browser_enabled)"
 TOOL_SKILLS_HUB_ENABLED="$(read_nested_option tools_bootstrap tool_skills_hub_enabled)"
+SEED_EXAMPLE_SCRIPTS="$(read_nested_option tools_bootstrap seed_example_scripts)"
 OPENAI_API_KEY_OPT="$(read_provider_option openai_api_key)"
 OPENROUTER_API_KEY_OPT="$(read_provider_option openrouter_api_key)"
 ANTHROPIC_API_KEY_OPT="$(read_provider_option anthropic_api_key)"
@@ -221,6 +228,11 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$TOOL_BROWSER_ENABLED" ] && TOOL_BROWSER_ENABLED="true"
 [ -z "$TOOL_SKILLS_HUB_ENABLED" ] && TOOL_SKILLS_HUB_ENABLED="true"
 [ -z "$TOOL_TELEGRAM_ENABLED" ] && TOOL_TELEGRAM_ENABLED="false"
+[ -z "$SEED_EXAMPLE_SCRIPTS" ] && SEED_EXAMPLE_SCRIPTS="true"
+[ -z "$ENABLE_NTFY" ] && ENABLE_NTFY="false"
+[ -z "$NTFY_SERVER_URL" ] && NTFY_SERVER_URL="https://ntfy.sh"
+[ -z "$NTFY_PUBLISH_ONLY" ] && NTFY_PUBLISH_ONLY="true"
+[ -z "$LM_STUDIO_BASE_URL" ] && LM_STUDIO_BASE_URL="http://127.0.0.1:1234/v1"
 [ -z "$HERMES_AGENT_VERSION_PRESET" ] && HERMES_AGENT_VERSION_PRESET="custom"
 [ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.19.0"
 [ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
@@ -1305,6 +1317,16 @@ if [ -n "$HA_TOKEN" ] && [ "$HA_TOKEN_SOURCE" = "user" ]; then
   printf '%s' "$HA_TOKEN" > /config/secrets/homeassistant.token
 fi
 
+# ntfy token: HA redacts password fields — reuse persisted secret when empty.
+if [ -z "$NTFY_TOKEN" ] && [ -f /config/secrets/ntfy.token ]; then
+  NTFY_TOKEN="$(tr -d '\r\n' < /config/secrets/ntfy.token)"
+fi
+if [ -n "$NTFY_TOKEN" ]; then
+  umask 077
+  mkdir -p /config/secrets
+  printf '%s' "$NTFY_TOKEN" > /config/secrets/ntfy.token
+fi
+
 # Webhook HMAC secret (persisted; never logged).
 WEBHOOK_SECRET=""
 if [ "$ENABLE_WEBHOOKS" = "true" ] || [ "$ENABLE_WEBHOOKS" = "1" ]; then
@@ -1547,6 +1569,18 @@ bootstrap_hermes_first_run() {
   if [ "$NOUS_TOOL_GATEWAY" = "true" ] || [ "$NOUS_TOOL_GATEWAY" = "1" ]; then
     nous_tg_json="true"
   fi
+  local enable_ntfy_json="false"
+  if [ "$ENABLE_NTFY" = "true" ] || [ "$ENABLE_NTFY" = "1" ]; then
+    enable_ntfy_json="true"
+  fi
+  local ntfy_publish_only_json="true"
+  if [ "$NTFY_PUBLISH_ONLY" = "false" ] || [ "$NTFY_PUBLISH_ONLY" = "0" ]; then
+    ntfy_publish_only_json="false"
+  fi
+  local seed_scripts_json="true"
+  if [ "$SEED_EXAMPLE_SCRIPTS" = "false" ] || [ "$SEED_EXAMPLE_SCRIPTS" = "0" ]; then
+    seed_scripts_json="false"
+  fi
 
   local bootstrap_json
   local mcp_configured_json="false"
@@ -1559,6 +1593,7 @@ bootstrap_hermes_first_run() {
     --arg default_provider "$DEFAULT_PROVIDER" \
     --arg default_model_preset "$DEFAULT_MODEL_PRESET" \
     --arg default_model "$DEFAULT_MODEL_OPT" \
+    --arg lm_studio_base_url "$LM_STUDIO_BASE_URL" \
     --arg ha_url "$EFFECTIVE_HASS_URL" \
     --arg ha_token "$HA_TOKEN" \
     --arg setup_profile "$SETUP_PROFILE" \
@@ -1571,6 +1606,9 @@ bootstrap_hermes_first_run() {
     --arg reasoning_effort "$REASONING_EFFORT" \
     --arg ha_system_prompt_hint "$HA_SYSTEM_PROMPT_HINT" \
     --arg webhook_secret "$WEBHOOK_SECRET" \
+    --arg ntfy_topic "$NTFY_TOPIC" \
+    --arg ntfy_server_url "$NTFY_SERVER_URL" \
+    --arg ntfy_token "$NTFY_TOKEN" \
     --argjson webhook_port "$WEBHOOK_PORT" \
     --argjson browser_enabled "$browser_enabled_json" \
     --argjson show_reasoning "$show_reasoning_json" \
@@ -1578,6 +1616,9 @@ bootstrap_hermes_first_run() {
     --argjson enable_webhooks "$enable_webhooks_json" \
     --argjson seed_ha_direct_delivery_route "$seed_ha_direct_json" \
     --argjson nous_tool_gateway "$nous_tg_json" \
+    --argjson enable_ntfy "$enable_ntfy_json" \
+    --argjson ntfy_publish_only "$ntfy_publish_only_json" \
+    --argjson seed_example_scripts "$seed_scripts_json" \
     --argjson fallback_providers "$FALLBACK_PROVIDERS_JSON" \
     --arg openai "$OPENAI_API_KEY_OPT" \
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
@@ -1591,6 +1632,7 @@ bootstrap_hermes_first_run() {
       default_provider: $default_provider,
       default_model_preset: $default_model_preset,
       default_model: $default_model,
+      lm_studio_base_url: $lm_studio_base_url,
       browser_enabled: $browser_enabled,
       bootstrap_auxiliary_title: $bootstrap_auxiliary_title,
       enable_openai_api: $enable_openai_api,
@@ -1611,6 +1653,12 @@ bootstrap_hermes_first_run() {
       seed_ha_direct_delivery_route: $seed_ha_direct_delivery_route,
       nous_tool_gateway: $nous_tool_gateway,
       fallback_providers: $fallback_providers,
+      enable_ntfy: $enable_ntfy,
+      ntfy_topic: $ntfy_topic,
+      ntfy_server_url: $ntfy_server_url,
+      ntfy_token: $ntfy_token,
+      ntfy_publish_only: $ntfy_publish_only,
+      seed_example_scripts: $seed_example_scripts,
       api_keys: {
         OPENROUTER_API_KEY: $openrouter,
         ANTHROPIC_API_KEY: $anthropic,

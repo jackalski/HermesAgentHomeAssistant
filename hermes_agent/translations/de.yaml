@@ -32,6 +32,7 @@ configuration:
       minimax: "MiniMax"
       xai: "xAI (Grok)"
       openai: "OpenAI"
+      lm_studio: "LM Studio (lokal)"
 
   default_model_preset:
     name: Modell-Voreinstellung
@@ -42,6 +43,10 @@ configuration:
   default_model:
     name: Standardmodell
     description: "Modell-ID für den gewählten Provider (z. B. google/gemini-2.5-flash für OpenRouter, claude-sonnet-4-6 für Anthropic, gpt-oss:120b für Ollama Cloud). Bootstrap nur beim Erststart, wenn kein Modell konfiguriert ist."
+
+  lm_studio_base_url:
+    name: LM-Studio-Base-URL
+    description: "OpenAI-kompatible Base-URL bei default_provider=lm_studio (z. B. http://192.168.1.10:1234/v1)."
 
   provider_api_keys:
     name: Provider-API-Schlüssel
@@ -153,6 +158,27 @@ configuration:
       auto_backup_on_start:
         name: Auto-Backup beim Start
         description: "Wenn AN, schnelles hermes-Backup nach /share/hermes/backups bei jedem Start. Manuell: hermes-backup-share."
+
+
+  ntfy:
+    name: ntfy
+    description: "Optionale ntfy-Messaging-Plattform (Push/Cron). Standard AUS."
+    fields:
+      enable_ntfy:
+        name: ntfy aktivieren
+        description: "Wenn AN und Topic gesetzt, synchronisiert NTFY_* nach /config/.hermes/.env."
+      ntfy_topic:
+        name: ntfy-Topic
+        description: Topic-Name für Publish/Subscribe.
+      ntfy_server_url:
+        name: ntfy-Server-URL
+        description: "Standard https://ntfy.sh — Self-Hosted für Privatsphäre."
+      ntfy_token:
+        name: ntfy-Token
+        description: "Optional Bearer oder user:pass. Nach Speichern maskiert; unter /config/secrets/ntfy.token."
+      ntfy_publish_only:
+        name: Nur Publish
+        description: "Wenn AN, Push-only (kein Inbound-Chat). Empfohlen für HA-Alerts."
 
   enable_terminal:
     name: Web-Terminal aktivieren
@@ -294,6 +320,9 @@ configuration:
       tool_skills_hub_enabled:
         name: Skills-Hub-Bootstrap aktivieren
         description: Skills-Hub-Verzeichnis beim Start initialisieren (wie `hermes skills list` beim Erststart).
+      seed_example_scripts:
+        name: Beispielskripte seeden
+        description: "Kopiert disk-alert.sh und morning-heartbeat.sh nach /config/.hermes/scripts/ falls fehlend (für no_agent-Cron)."
 
   advanced_settings:
     name: Erweiterte Einstellungen
