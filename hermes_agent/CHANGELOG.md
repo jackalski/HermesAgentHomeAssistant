@@ -2,6 +2,15 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.32] - 2026-07-22
+
+### Changed
+- Default upstream **Hermes Agent** pin updated from **0.18.0** to **0.19.0** ([v2026.7.20](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.7.20), "The Quicksilver Release"): Docker image bake, `hermes_agent_version_custom` default, runtime reconcile fallback, and all locale translations.
+- Status exporter add-on version fallback aligned to **0.0.32**.
+
+### Notes
+- Follow-up roadmap (separate releases): Supervisor/`homeassistant_api` auto-token, native HA gateway platform audit, webhook direct-delivery, `hermes backup` to `/share`, approval/reasoning add-on knobs for headless HA.
+
 ## [0.0.31] - 2026-07-05
 
 ### Changed
