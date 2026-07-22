@@ -1,7 +1,7 @@
 configuration:
   timezone:
     name: Zona horaria
-    description: Zona horaria para el complemento (ej. Europe/Sofia, America/New_York)
+    description: "Zona horaria IANA (p. ej. America/New_York), o auto para detectar desde Home Assistant Core (reserva Etc/UTC)."
 
   addon_log_level:
     name: Nivel de log del complemento
@@ -90,10 +90,46 @@ configuration:
         description: "Déjela vacía para autodetección en HAOS (recomendado). Pruebas de conexión → Test URL."
       homeassistant_token:
         name: Token de Home Assistant
-        description: Token de larga duración para MCP y scripts de HA. Pruebas de conexión → Test Token.
+        description: "Token de larga duración para MCP y herramientas de HA. Opcional cuando prefer_supervisor_token está ACTIVADO (usa SUPERVISOR_TOKEN). Enmascarado tras guardar; los tokens de usuario persisten en /config/secrets/homeassistant.token."
+      prefer_supervisor_token:
+        name: Preferir token del Supervisor
+        description: "Cuando está ACTIVADO y no hay token de larga duración, usa SUPERVISOR_TOKEN (requiere homeassistant_api). No escribe el token del supervisor en secrets."
       auto_configure_mcp:
         name: Configurar MCP automáticamente para Home Assistant
         description: "Cuando está ACTIVADO y el token está configurado, registra Home Assistant en MCP al iniciar. Tras reiniciar: Pruebas de conexión → Test MCP."
+      enable_native_ha_platform:
+        name: Activar plataforma nativa HA del Gateway
+        description: "Opt-in: rellena platforms.homeassistant con filtros de eventos seguros (binary_sensor, alarm, climate). HASS_TOKEN sigue habilitando las herramientas de dispositivos HA de forma independiente. Predeterminado DESACTIVADO — active para eventos state_changed reactivos."
+      ha_system_prompt_hint:
+        name: Sugerencia de system prompt de HA
+        description: Contexto corto opcional almacenado con el bloque de plataforma nativa HA (solo se aplica cuando se ejecuta el bootstrap de plataforma nativa).
+
+  agent_behavior:
+    name: Comportamiento del agente
+    description: Bootstrap de primer arranque para aprobaciones y reasoning de Hermes (escribe claves solo si faltan en /config/.hermes/config.yaml).
+    fields:
+      approval_mode:
+        name: Modo de aprobación
+        description: "Aprobaciones de comandos peligrosos. smart (recomendado para HA headless) usa un LLM auxiliar; manual siempre pregunta; off es YOLO."
+        options:
+          smart: "Smart (predeterminado)"
+          manual: "Manual"
+          off: "Desactivado (yolo)"
+      reasoning_effort:
+        name: Esfuerzo de reasoning
+        description: Esfuerzo de pensamiento predeterminado para modelos que lo admiten (none…ultra).
+        options:
+          none: "none"
+          minimal: "minimal"
+          low: "low"
+          medium: "medium (predeterminado)"
+          high: "high"
+          xhigh: "xhigh"
+          max: "max"
+          ultra: "ultra"
+      show_reasoning:
+        name: Mostrar reasoning
+        description: Transmitir trazas de pensamiento del modelo (display.show_reasoning). Recomendado ACTIVADO.
 
   enable_terminal:
     name: Activar terminal web

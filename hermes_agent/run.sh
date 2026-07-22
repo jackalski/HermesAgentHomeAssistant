@@ -87,13 +87,28 @@ fi
 # Read add-on options (only add-on-specific knobs; Hermes Agent is configured via onboarding)
 # ------------------------------------------------------------------------------
 
-TZNAME=$(jq -r '.timezone // "Europe/Sofia"' "$OPTIONS_FILE")
+TZNAME=$(jq -r '.timezone // "auto"' "$OPTIONS_FILE")
 GW_PUBLIC_URL="$(read_nested_option gateway_access gateway_public_url)"
 HA_TOKEN="$(read_nested_option home_assistant homeassistant_token)"
+HA_TOKEN_SOURCE="user"
+PREFER_SUPERVISOR_TOKEN="$(read_nested_option home_assistant prefer_supervisor_token)"
+ENABLE_NATIVE_HA_PLATFORM="$(read_nested_option home_assistant enable_native_ha_platform)"
+HA_SYSTEM_PROMPT_HINT="$(read_nested_option home_assistant ha_system_prompt_hint)"
+APPROVAL_MODE="$(read_nested_option agent_behavior approval_mode)"
+REASONING_EFFORT="$(read_nested_option agent_behavior reasoning_effort)"
+SHOW_REASONING="$(read_nested_option agent_behavior show_reasoning)"
 # HA redacts password fields after save — reuse persisted token when the option is empty.
 if [ -z "$HA_TOKEN" ] && [ -f /config/secrets/homeassistant.token ]; then
   HA_TOKEN="$(tr -d '\r\n' < /config/secrets/homeassistant.token)"
   log_debug "Loaded homeassistant_token from /config/secrets/homeassistant.token"
+fi
+[ -z "$PREFER_SUPERVISOR_TOKEN" ] && PREFER_SUPERVISOR_TOKEN="true"
+if [ -z "$HA_TOKEN" ] && { [ "$PREFER_SUPERVISOR_TOKEN" = "true" ] || [ "$PREFER_SUPERVISOR_TOKEN" = "1" ]; }; then
+  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    HA_TOKEN="${SUPERVISOR_TOKEN}"
+    HA_TOKEN_SOURCE="supervisor"
+    log_info "Using SUPERVISOR_TOKEN for Home Assistant API (prefer_supervisor_token=true)"
+  fi
 fi
 ADDON_HTTP_PROXY="$(read_nested_option advanced_settings http_proxy)"
 ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
@@ -209,6 +224,12 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$ENABLE_WEB_INTERFACE" ] && ENABLE_WEB_INTERFACE="true"
 [ -z "$AUTO_START_WEB_INTERFACE" ] && AUTO_START_WEB_INTERFACE="true"
 [ -z "$DASHBOARD_PORT_RAW" ] && DASHBOARD_PORT_RAW="9119"
+[ -z "$PREFER_SUPERVISOR_TOKEN" ] && PREFER_SUPERVISOR_TOKEN="true"
+[ -z "$ENABLE_NATIVE_HA_PLATFORM" ] && ENABLE_NATIVE_HA_PLATFORM="false"
+[ -z "$APPROVAL_MODE" ] && APPROVAL_MODE="smart"
+[ -z "$REASONING_EFFORT" ] && REASONING_EFFORT="medium"
+[ -z "$SHOW_REASONING" ] && SHOW_REASONING="true"
+[ -z "$TZNAME" ] && TZNAME="auto"
 
 # SECURITY: Validate DASHBOARD_PORT (the hermes dashboard web UI port) to keep
 # the value safe for nginx config injection and shell use.
@@ -235,11 +256,10 @@ else
   MQTT_STATE_PREFIX_SAFE="hermes"
 fi
 
-export TZ="$TZNAME"
-
-# ------------------------------------------------------------------------------
-# Setup profile — simplify first-run defaults without hiding advanced options
-# ------------------------------------------------------------------------------
+# TZ is finalized after resolve_timezone (auto → HA Core or Etc/UTC).
+if [ -n "$TZNAME" ] && [ "$TZNAME" != "auto" ]; then
+  export TZ="$TZNAME"
+fi
 if [ -f "$HELPER_PATH" ]; then
   PROFILE_JSON=$(jq -n \
     --arg setup_profile "$SETUP_PROFILE" \
@@ -345,7 +365,33 @@ resolve_ha_instance_urls() {
   if [ -z "$MCP_HA_URL" ]; then
     MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
   fi
+  # SUPERVISOR_TOKEN authenticates against the Supervisor Core proxy, not :8123.
+  if [ "$HA_TOKEN_SOURCE" = "supervisor" ]; then
+    EFFECTIVE_HASS_URL="http://supervisor/core"
+    MCP_HA_URL="http://supervisor/core/api/mcp"
+    HA_URL_SOURCE="supervisor_token"
+  fi
   log_info "Home Assistant URL (${HA_URL_SOURCE}): ${EFFECTIVE_HASS_URL} (MCP: ${MCP_HA_URL})"
+}
+
+resolve_timezone() {
+  # Explicit IANA zone from Configuration — keep as-is.
+  if [ -n "$TZNAME" ] && [ "$TZNAME" != "auto" ]; then
+    return 0
+  fi
+  local detected=""
+  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    detected=$(curl -fsS -m 5 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+      "http://supervisor/core/api/config" 2>/dev/null \
+      | jq -r '.time_zone // empty' 2>/dev/null || true)
+  fi
+  if [ -n "$detected" ]; then
+    TZNAME="$detected"
+    log_info "Timezone autodetection from Home Assistant Core: ${TZNAME}"
+    return 0
+  fi
+  TZNAME="Etc/UTC"
+  log_info "Timezone autodetection unavailable; using Etc/UTC (set timezone in Configuration to override)"
 }
 
 verify_ha_instance_reachable() {
@@ -358,11 +404,17 @@ verify_ha_instance_reachable() {
     return 0
   fi
   log_warn "Could not verify Home Assistant at ${EFFECTIVE_HASS_URL}"
-  log_warn "If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant:8123 or your external URL)"
+  if [ "$HA_TOKEN_SOURCE" = "supervisor" ]; then
+    log_warn "Supervisor token probe failed — paste a long-lived access token in homeassistant_token if MCP/HA tools fail"
+  else
+    log_warn "If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant:8123 or your external URL)"
+  fi
   return 0
 }
 
 resolve_ha_instance_urls
+resolve_timezone
+export TZ="$TZNAME"
 verify_ha_instance_reachable
 
 apply_reverse_proxy_defaults() {
@@ -1201,7 +1253,7 @@ fi
 # Store tokens / export env vars (optional)
 # ------------------------------------------------------------------------------
 
-if [ -n "$HA_TOKEN" ]; then
+if [ -n "$HA_TOKEN" ] && [ "$HA_TOKEN_SOURCE" = "user" ]; then
   umask 077
   printf '%s' "$HA_TOKEN" > /config/secrets/homeassistant.token
 fi
@@ -1404,6 +1456,14 @@ bootstrap_hermes_first_run() {
   if [ "$TOOL_BROWSER_ENABLED" = "true" ] || [ "$TOOL_BROWSER_ENABLED" = "1" ]; then
     browser_enabled_json="true"
   fi
+  local show_reasoning_json="true"
+  if [ "$SHOW_REASONING" = "false" ] || [ "$SHOW_REASONING" = "0" ]; then
+    show_reasoning_json="false"
+  fi
+  local native_ha_json="false"
+  if [ "$ENABLE_NATIVE_HA_PLATFORM" = "true" ] || [ "$ENABLE_NATIVE_HA_PLATFORM" = "1" ]; then
+    native_ha_json="true"
+  fi
 
   local bootstrap_json
   local mcp_configured_json="false"
@@ -1424,7 +1484,12 @@ bootstrap_hermes_first_run() {
     --arg bootstrap_auxiliary_title "$BOOTSTRAP_AUXILIARY_TITLE" \
     --arg enable_openai_api "$ENABLE_OPENAI_API" \
     --arg mcp_configured "$mcp_configured_json" \
+    --arg approval_mode "$APPROVAL_MODE" \
+    --arg reasoning_effort "$REASONING_EFFORT" \
+    --arg ha_system_prompt_hint "$HA_SYSTEM_PROMPT_HINT" \
     --argjson browser_enabled "$browser_enabled_json" \
+    --argjson show_reasoning "$show_reasoning_json" \
+    --argjson enable_native_ha_platform "$native_ha_json" \
     --arg openai "$OPENAI_API_KEY_OPT" \
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
     --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
@@ -1446,6 +1511,11 @@ bootstrap_hermes_first_run() {
       setup_profile: $setup_profile,
       firecrawl_api_key: $firecrawl,
       searxng_url: $searxng,
+      approval_mode: $approval_mode,
+      reasoning_effort: $reasoning_effort,
+      show_reasoning: $show_reasoning,
+      enable_native_ha_platform: $enable_native_ha_platform,
+      ha_system_prompt_hint: $ha_system_prompt_hint,
       api_keys: {
         OPENROUTER_API_KEY: $openrouter,
         ANTHROPIC_API_KEY: $anthropic,

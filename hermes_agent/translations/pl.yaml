@@ -1,7 +1,7 @@
 configuration:
   timezone:
     name: Strefa czasowa
-    description: Strefa czasowa dla dodatku (np. Europe/Warsaw, America/New_York)
+    description: "Strefa czasowa IANA (np. America/New_York) lub auto do wykrycia z Home Assistant Core (zapasowo Etc/UTC)."
 
   addon_log_level:
     name: Poziom logów dodatku
@@ -90,10 +90,46 @@ configuration:
         description: "Pozostaw puste dla autowykrywania. Testy połączenia → Test URL."
       homeassistant_token:
         name: Token Home Assistant
-        description: Długoterminowy token dostępu dla MCP i skryptów HA. Ukryty po zapisaniu. Zapisany w /config/secrets/homeassistant.token.
+        description: "Długoterminowy token dostępu dla MCP i narzędzi HA. Opcjonalny, gdy prefer_supervisor_token jest WŁĄCZONE (używa SUPERVISOR_TOKEN). Ukryty po zapisaniu; tokeny użytkownika w /config/secrets/homeassistant.token."
+      prefer_supervisor_token:
+        name: Preferuj token Supervisora
+        description: "Gdy WŁĄCZONE i nie wklejono długoterminowego tokenu, użyj SUPERVISOR_TOKEN (wymaga homeassistant_api). Nie zapisuje tokenu supervisora w secrets."
       auto_configure_mcp:
         name: Automatyczna konfiguracja MCP dla Home Assistant
         description: "Rejestruje HA w MCP przy starcie. Po restarcie: Testy połączenia → Test MCP."
+      enable_native_ha_platform:
+        name: Włącz natywną platformę HA Gateway
+        description: "Opt-in: wypełnij platforms.homeassistant bezpiecznymi filtrami zdarzeń (binary_sensor, alarm, climate). HASS_TOKEN nadal niezależnie włącza narzędzia urządzeń HA. Domyślnie WYŁĄCZONE — włącz dla reaktywnych zdarzeń state_changed."
+      ha_system_prompt_hint:
+        name: Podpowiedź system prompt HA
+        description: Opcjonalny krótki kontekst przechowywany z blokiem natywnej platformy HA (stosowany tylko gdy uruchamia się bootstrap natywnej platformy).
+
+  agent_behavior:
+    name: Zachowanie agenta
+    description: Bootstrap pierwszego uruchomienia dla zatwierdzeń i reasoning Hermes (zapisuje klucze tylko gdy brakuje ich w /config/.hermes/config.yaml).
+    fields:
+      approval_mode:
+        name: Tryb zatwierdzania
+        description: "Zatwierdzenia niebezpiecznych poleceń. smart (zalecane dla headless HA) używa pomocniczego LLM; manual zawsze pyta; off to YOLO."
+        options:
+          smart: "Smart (domyślnie)"
+          manual: "Ręczny"
+          off: "Wyłączony (yolo)"
+      reasoning_effort:
+        name: Poziom reasoning
+        description: Domyślny wysiłek myślenia dla modeli, które go obsługują (none…ultra).
+        options:
+          none: "none"
+          minimal: "minimal"
+          low: "low"
+          medium: "medium (domyślnie)"
+          high: "high"
+          xhigh: "xhigh"
+          max: "max"
+          ultra: "ultra"
+      show_reasoning:
+        name: Pokazuj reasoning
+        description: Przesyłaj ślady myślenia modelu (display.show_reasoning). Zalecane WŁĄCZONE.
 
   enable_terminal:
     name: Włącz terminal webowy

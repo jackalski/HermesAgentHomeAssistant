@@ -755,7 +755,7 @@ def bootstrap_kanban_toolset_if_missing(setup_profile: str):
 
 def bootstrap_timezone_if_missing(timezone: str):
     tz = (timezone or "").strip()
-    if not tz:
+    if not tz or tz.lower() == "auto":
         return True
 
     cfg = read_yaml_config()
@@ -767,6 +767,136 @@ def bootstrap_timezone_if_missing(timezone: str):
     cfg["timezone"] = tz
     if write_yaml_config(cfg):
         print(f"INFO: Bootstrapped Hermes timezone in {YAML_CONFIG_PATH}: {tz}")
+        return True
+    return False
+
+
+_APPROVAL_MODES = frozenset({"smart", "manual", "off"})
+_REASONING_EFFORTS = frozenset(
+    {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
+)
+
+
+def bootstrap_approvals_if_missing(approval_mode: str):
+    """Set approvals.mode only when the key is absent (do not clobber user edits)."""
+    mode = (approval_mode or "smart").strip().lower() or "smart"
+    if mode not in _APPROVAL_MODES:
+        print(f"ERROR: Invalid approval_mode: {approval_mode!r}", file=sys.stderr)
+        return False
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    approvals = cfg.get("approvals")
+    if not isinstance(approvals, dict):
+        approvals = {}
+    if approvals.get("mode"):
+        return True
+
+    approvals["mode"] = mode
+    # Headless gateway/cron: deny dangerous commands when no UI can approve.
+    if "cron_mode" not in approvals:
+        approvals["cron_mode"] = "deny"
+    cfg["approvals"] = approvals
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped approvals.mode={mode} in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+def bootstrap_reasoning_if_missing(reasoning_effort: str, show_reasoning: bool):
+    """Set agent.reasoning_effort and display.show_reasoning when missing."""
+    effort = (reasoning_effort or "medium").strip().lower() or "medium"
+    if effort not in _REASONING_EFFORTS:
+        print(f"ERROR: Invalid reasoning_effort: {reasoning_effort!r}", file=sys.stderr)
+        return False
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    changed = False
+    agent = cfg.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
+    if not agent.get("reasoning_effort"):
+        agent["reasoning_effort"] = effort
+        cfg["agent"] = agent
+        changed = True
+
+    display = cfg.get("display")
+    if not isinstance(display, dict):
+        display = {}
+    if "show_reasoning" not in display:
+        display["show_reasoning"] = bool(show_reasoning)
+        cfg["display"] = display
+        changed = True
+
+    if not changed:
+        return True
+    if write_yaml_config(cfg):
+        print(
+            "INFO: Bootstrapped agent.reasoning_effort="
+            f"{effort} display.show_reasoning={bool(show_reasoning)} in {YAML_CONFIG_PATH}"
+        )
+        return True
+    return False
+
+
+def bootstrap_ha_platform_if_enabled(
+    enabled: bool, system_prompt_hint: str = ""
+):
+    """Opt-in Home Assistant gateway platform filters (events are off by default upstream).
+
+    Setting HASS_TOKEN also enables HA device tools. Event forwarding still requires
+    watch_domains / watch_entities / watch_all — we seed safe domain filters when enabled.
+    """
+    if not enabled:
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    platforms = cfg.get("platforms")
+    if not isinstance(platforms, dict):
+        platforms = {}
+    ha = platforms.get("homeassistant")
+    if not isinstance(ha, dict):
+        ha = {}
+
+    # Do not overwrite an existing platform block the user already tuned.
+    if ha.get("enabled") is True and isinstance(ha.get("extra"), dict):
+        return True
+
+    ha["enabled"] = True
+    extra = ha.get("extra")
+    if not isinstance(extra, dict):
+        extra = {}
+    if not extra.get("watch_domains") and not extra.get("watch_entities") and not extra.get(
+        "watch_all"
+    ):
+        extra["watch_domains"] = [
+            "binary_sensor",
+            "alarm_control_panel",
+            "climate",
+        ]
+        extra["cooldown_seconds"] = 30
+        extra["ignore_entities"] = [
+            "sensor.uptime",
+            "sensor.cpu_usage",
+            "sensor.memory_usage",
+        ]
+    hint = (system_prompt_hint or "").strip()
+    if hint and not extra.get("system_prompt_hint"):
+        extra["system_prompt_hint"] = hint
+    ha["extra"] = extra
+    platforms["homeassistant"] = ha
+    cfg["platforms"] = platforms
+    if write_yaml_config(cfg):
+        print(
+            f"INFO: Bootstrapped platforms.homeassistant (native HA gateway events) in {YAML_CONFIG_PATH}"
+        )
         return True
     return False
 
@@ -814,6 +944,15 @@ def bootstrap_first_run(payload: dict):
     searxng_url = str(payload.get("searxng_url", ""))
     enable_openai_api = str(payload.get("enable_openai_api", "false")).lower() in ("1", "true", "yes")
     mcp_configured = str(payload.get("mcp_configured", "false")).lower() in ("1", "true", "yes")
+    approval_mode = str(payload.get("approval_mode", "smart"))
+    reasoning_effort = str(payload.get("reasoning_effort", "medium"))
+    show_reasoning = str(payload.get("show_reasoning", "true")).lower() in ("1", "true", "yes")
+    enable_native_ha_platform = str(payload.get("enable_native_ha_platform", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    ha_system_prompt_hint = str(payload.get("ha_system_prompt_hint", ""))
 
     if not isinstance(api_keys, dict):
         api_keys = {}
@@ -824,6 +963,9 @@ def bootstrap_first_run(payload: dict):
     if ha_url or ha_token:
         ok = sync_homeassistant_env(str(ha_url), str(ha_token)) and ok
     ok = bootstrap_timezone_if_missing(str(timezone)) and ok
+    ok = bootstrap_approvals_if_missing(approval_mode) and ok
+    ok = bootstrap_reasoning_if_missing(reasoning_effort, show_reasoning) and ok
+    ok = bootstrap_ha_platform_if_enabled(enable_native_ha_platform, ha_system_prompt_hint) and ok
     ok = bootstrap_browser_if_enabled(browser_enabled) and ok
     ok = bootstrap_web_search_if_missing(firecrawl_key, searxng_url) and ok
     ok = bootstrap_kanban_toolset_if_missing(setup_profile) and ok

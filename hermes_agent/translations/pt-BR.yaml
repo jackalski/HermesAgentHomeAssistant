@@ -1,7 +1,7 @@
 configuration:
   timezone:
     name: Fuso Horário
-    description: Fuso horário do add-on (ex., America/Sao_Paulo, America/Fortaleza)
+    description: "Fuso horário IANA (ex. America/Sao_Paulo), ou auto para detectar pelo Home Assistant Core (reserva Etc/UTC)."
 
   addon_log_level:
     name: Nível de log do add-on
@@ -90,10 +90,46 @@ configuration:
         description: "Deixe vazio para autodetecção no HAOS (recomendado). Sincronizada como HOMEASSISTANT_URL em /config/.hermes/.env quando o token estiver definido."
       homeassistant_token:
         name: Token do Home Assistant
-        description: Token de longa duração para MCP e scripts do HA. Mascarado após salvar. Persistido em /config/secrets/homeassistant.token.
+        description: "Token de longa duração para MCP e ferramentas do HA. Opcional quando prefer_supervisor_token estiver LIGADO (usa SUPERVISOR_TOKEN). Mascarado após salvar; tokens de usuário em /config/secrets/homeassistant.token."
+      prefer_supervisor_token:
+        name: Preferir token do Supervisor
+        description: "Quando LIGADO e nenhum token de longa duração for colado, usa SUPERVISOR_TOKEN (requer homeassistant_api). Não grava o token do supervisor em secrets."
       auto_configure_mcp:
         name: Configurar MCP automaticamente para o Home Assistant
         description: "Quando LIGADO e o token estiver definido, registra o Home Assistant no MCP do Hermes (mcp_servers) a cada inicialização."
+      enable_native_ha_platform:
+        name: Ativar plataforma nativa HA do Gateway
+        description: "Opt-in: preenche platforms.homeassistant com filtros de eventos seguros (binary_sensor, alarm, climate). HASS_TOKEN ainda habilita ferramentas de dispositivos HA de forma independente. Padrão DESLIGADO — ative para eventos state_changed reativos."
+      ha_system_prompt_hint:
+        name: Dica de system prompt do HA
+        description: Contexto curto opcional armazenado com o bloco da plataforma nativa HA (aplicado somente quando o bootstrap da plataforma nativa é executado).
+
+  agent_behavior:
+    name: Comportamento do agente
+    description: Bootstrap de primeira execução para aprovações e reasoning do Hermes (grava chaves somente se estiverem ausentes em /config/.hermes/config.yaml).
+    fields:
+      approval_mode:
+        name: Modo de aprovação
+        description: "Aprovações de comandos perigosos. smart (recomendado para HA headless) usa um LLM auxiliar; manual sempre pergunta; off é YOLO."
+        options:
+          smart: "Smart (padrão)"
+          manual: "Manual"
+          off: "Desligado (yolo)"
+      reasoning_effort:
+        name: Esforço de reasoning
+        description: Esforço de pensamento padrão para modelos que o suportam (none…ultra).
+        options:
+          none: "none"
+          minimal: "minimal"
+          low: "low"
+          medium: "medium (padrão)"
+          high: "high"
+          xhigh: "xhigh"
+          max: "max"
+          ultra: "ultra"
+      show_reasoning:
+        name: Mostrar reasoning
+        description: Transmitir rastros de pensamento do modelo (display.show_reasoning). Recomendado LIGADO.
 
   enable_terminal:
     name: Habilitar Terminal Web

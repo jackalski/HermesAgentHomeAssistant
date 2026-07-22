@@ -1,7 +1,7 @@
 configuration:
   timezone:
     name: Часова зона
-    description: Часова зона за добавката (напр. Europe/Sofia, America/New_York)
+    description: "IANA часова зона (напр. America/New_York), или auto за автоматично откриване от Home Assistant Core (резервно Etc/UTC)."
 
   addon_log_level:
     name: Add-on Log Level
@@ -90,10 +90,46 @@ configuration:
         description: "Leave empty for autodetection on HAOS (recommended). Synced to HOMEASSISTANT_URL in /config/.hermes/.env when a token is set."
       homeassistant_token:
         name: Home Assistant Token
-        description: Long-lived access token for MCP and HA scripts. Masked after save; persisted under /config/secrets/homeassistant.token.
+        description: "Long-lived access token for MCP and HA tools. Optional when prefer_supervisor_token is ON (uses SUPERVISOR_TOKEN). Masked after save; user tokens persist under /config/secrets/homeassistant.token."
+      prefer_supervisor_token:
+        name: Prefer Supervisor Token
+        description: "When ON and no long-lived token is pasted, use SUPERVISOR_TOKEN (requires homeassistant_api). Does not write the supervisor token to secrets."
       auto_configure_mcp:
         name: Auto-Configure MCP for Home Assistant
         description: "When ON and token is set, registers Home Assistant in Hermes MCP (mcp_servers) on each startup."
+      enable_native_ha_platform:
+        name: Enable Native HA Gateway Platform
+        description: "Opt-in: seed platforms.homeassistant with safe event filters (binary_sensor, alarm, climate). HASS_TOKEN still enables HA device tools independently. Default OFF — enable for reactive state_changed events."
+      ha_system_prompt_hint:
+        name: HA System Prompt Hint
+        description: Optional short context stored with the native HA platform block (only applied when native platform bootstrap runs).
+
+  agent_behavior:
+    name: Agent Behavior
+    description: First-run bootstrap for Hermes approvals and reasoning (writes keys only if missing in /config/.hermes/config.yaml).
+    fields:
+      approval_mode:
+        name: Approval Mode
+        description: "Dangerous-command approvals. smart (recommended for headless HA) uses an aux LLM; manual always prompts; off is YOLO."
+        options:
+          smart: "Smart (default)"
+          manual: "Manual"
+          off: "Off (yolo)"
+      reasoning_effort:
+        name: Reasoning Effort
+        description: Default thinking effort for models that support it (none…ultra).
+        options:
+          none: "none"
+          minimal: "minimal"
+          low: "low"
+          medium: "medium (default)"
+          high: "high"
+          xhigh: "xhigh"
+          max: "max"
+          ultra: "ultra"
+      show_reasoning:
+        name: Show Reasoning
+        description: Stream model thinking traces (display.show_reasoning). Recommended ON.
 
   enable_terminal:
     name: Активиране на уеб терминал

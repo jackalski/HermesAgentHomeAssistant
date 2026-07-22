@@ -104,16 +104,35 @@ The add-on nginx on `:18789` normalizes WebSocket proxy headers (including `Orig
 
 ## Home Assistant integration
 
+### Tokens (Supervisor vs long-lived)
+
+With **`homeassistant_api`** / **`hassio_api`** enabled (default from **0.0.33**), the add-on can use **`SUPERVISOR_TOKEN`** when:
+
+- `prefer_supervisor_token` is ON (default), and
+- no long-lived token is pasted / stored under `/config/secrets/homeassistant.token`
+
+Supervisor tokens are **not** written to secrets. If HA tools/MCP return 401, paste a **long-lived access token** from your HA profile instead.
+
+When the supervisor token is active, `HASS_URL` is set to `http://supervisor/core`.
+
 ### MCP (control HA from Hermes)
 
 **Prerequisite:** enable Home Assistant’s **Model Context Protocol Server** integration (Settings → Devices & services → Add integration). Without it, `/api/mcp` returns 404 and Hermes shows `HA (http) — failed`.
 
-1. Create a long-lived token in your HA profile.
-2. Paste into `homeassistant_token`; enable `auto_configure_mcp` (or use `setup_profile: home_assistant` with token set).
+1. Prefer Supervisor token (default) **or** create a long-lived token and paste into `homeassistant_token`.
+2. Enable `auto_configure_mcp` (or use `setup_profile: home_assistant` with a token available).
 3. Leave `hass_url` empty on HAOS (MCP URL becomes `http://supervisor/core/api/mcp`).
-4. Restart. Logs should show `MCP server 'HA' registered` and `Home Assistant URL (supervisor): ... (MCP: http://supervisor/core/api/mcp)`.
+4. Restart. Logs should show `MCP server 'HA' registered` and a Home Assistant URL line with MCP endpoint.
 5. In gateway chat: `/reload-mcp` if tools are missing.
 6. In HA: open the MCP Server integration → expose entities you want Hermes to control.
+
+### Native HA gateway platform (opt-in)
+
+Upstream Hermes also has a **Home Assistant messaging platform** (WebSocket `state_changed` → agent). Setting `HASS_TOKEN` enables HA **device tools** (`ha_*`). Event forwarding still requires filters.
+
+- Leave **`enable_native_ha_platform: false`** (default) unless you want the add-on to seed `platforms.homeassistant` with safe `watch_domains` (binary_sensor, alarm_control_panel, climate).
+- Agent replies on this platform use HA **persistent notifications**.
+- See [Hermes HA messaging docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/homeassistant).
 
 ### Status sensors
 
@@ -141,6 +160,7 @@ HTTPS on port 18789 still works for browsers and `curl -k`; HA Core rejects the 
 
 - Restart add-on after enabling Assist API or after first `hermes onboard` (gateway reads `API_SERVER_*` at startup).
 - In **Settings → Voice assistants**, set conversation agent to Extended OpenAI Conversation and expose entities.
+- For Assist session memory continuity, clients can send Hermes session headers such as `X-Hermes-Session-Key` (see upstream API docs).
 
 ## Configuration reference
 
@@ -149,16 +169,23 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | Option | Default | Notes |
 |--------|---------|-------|
 | `setup_profile` | `home_assistant` | Preset for first-run behavior |
+| `timezone` | `auto` | Detect from HA Core via Supervisor; fallback `Etc/UTC` |
 | `default_provider` | `openrouter` | `nous`, `openrouter`, `google`, `anthropic`, `ollama`, `minimax`, `xai`, `openai` |
 | `default_model_preset` | `custom` | `custom` only — set model ID in `default_model` |
 | `access_mode` | `lan_https` | See access modes above |
 | `gateway_port` | `18789` | External HTTPS port for Hermes Web UI in `lan_https`; Assist API `/v1/` proxied here when enabled |
 | `hass_url` | *(empty)* | Autodetect on HAOS |
-| `homeassistant_token` | *(empty)* | Enables MCP + `.env` sync |
+| `homeassistant_token` | *(empty)* | Optional if `prefer_supervisor_token` |
+| `prefer_supervisor_token` | `true` | Use `SUPERVISOR_TOKEN` when no pasted token |
 | `auto_configure_mcp` | `false` | Auto-on when profile + token set |
+| `enable_native_ha_platform` | `false` | Seed `platforms.homeassistant` event filters |
+| `approval_mode` | `smart` | Bootstraps `approvals.mode` if missing |
+| `reasoning_effort` | `medium` | Bootstraps `agent.reasoning_effort` if missing |
+| `show_reasoning` | `true` | Bootstraps `display.show_reasoning` if missing |
 | `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` and `/health` on **18789** |
 | `enable_ha_status_sensors` | `true` | MQTT + status.json |
-| **Home Assistant** panel | — | `hass_url`, `homeassistant_token`, `auto_configure_mcp` |
+| **Home Assistant** panel | — | URL, token, prefer supervisor, MCP, native platform |
+| **Agent Behavior** panel | smart / medium / ON | Approvals + reasoning bootstrap |
 | **Gateway Access** panel | `lan_https` | `access_mode`, `gateway_port`, trusted proxies, Assist API, etc. |
 | **MQTT Status Sensors** panel | autodetect | `broker_host` / `broker_port` / `broker_username` / `broker_password`; leave host empty for Mosquitto autodetect |
 | **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |

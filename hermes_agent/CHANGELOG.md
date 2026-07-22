@@ -2,6 +2,18 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.33] - 2026-07-22
+
+### Added
+- **`prefer_supervisor_token`** (default ON): use `SUPERVISOR_TOKEN` for HA API/MCP when no long-lived token is pasted (`hassio_api` + `homeassistant_api` enabled). Supervisor tokens are never written to `/config/secrets/`.
+- **`agent_behavior` panel**: bootstrap `approvals.mode`, `agent.reasoning_effort`, and `display.show_reasoning` only when those keys are missing (headless-friendly defaults: smart / medium / ON).
+- **`enable_native_ha_platform`** (default OFF): opt-in seed of `platforms.homeassistant` with safe event filters; documents MCP tools vs native gateway events.
+- Optional **`ha_system_prompt_hint`** stored with the native HA platform block when platform bootstrap runs.
+
+### Changed
+- Timezone default is **`auto`** (detect from Home Assistant Core via Supervisor; fallback `Etc/UTC`) instead of hard-coded `Europe/Sofia`.
+- Status exporter add-on version fallback aligned to **0.0.33**.
+
 ## [0.0.32] - 2026-07-22
 
 ### Changed
@@ -9,7 +21,7 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 - Status exporter add-on version fallback aligned to **0.0.32**.
 
 ### Notes
-- Follow-up roadmap (separate releases): Supervisor/`homeassistant_api` auto-token, native HA gateway platform audit, webhook direct-delivery, `hermes backup` to `/share`, approval/reasoning add-on knobs for headless HA.
+- Roadmap remaining: webhook direct-delivery examples, `hermes backup` to `/share`, scale-to-zero knobs.
 
 ## [0.0.31] - 2026-07-05
 

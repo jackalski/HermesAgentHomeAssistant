@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.32"
+version: "0.0.33"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -13,8 +13,8 @@ arch:
 startup: services
 boot: auto
 init: false
-hassio_api: false
-homeassistant_api: false
+hassio_api: true
+homeassistant_api: true
 host_network: true
 
 # Home Assistant Ingress (UI inside the add-on page)
@@ -29,7 +29,8 @@ map:
   - media:rw
 options:
   # --- General ---
-  timezone: "Europe/Sofia"
+  # "auto" = detect from Home Assistant Core (Supervisor); fallback Etc/UTC
+  timezone: "auto"
   addon_log_level: info
 
   # --- First-run setup ---
@@ -55,7 +56,16 @@ options:
   home_assistant:
     hass_url: ""
     homeassistant_token: ""
+    prefer_supervisor_token: true
     auto_configure_mcp: false
+    enable_native_ha_platform: false
+    ha_system_prompt_hint: ""
+
+  # --- Agent behavior (Hermes config.yaml bootstrap) ---
+  agent_behavior:
+    approval_mode: smart
+    reasoning_effort: medium
+    show_reasoning: true
 
   # --- Web terminal (Ingress) ---
   enable_terminal: true
@@ -139,7 +149,14 @@ schema:
   home_assistant:
     hass_url: str?
     homeassistant_token: password?
+    prefer_supervisor_token: bool?
     auto_configure_mcp: bool?
+    enable_native_ha_platform: bool?
+    ha_system_prompt_hint: str?
+  agent_behavior:
+    approval_mode: list(smart|manual|off)?
+    reasoning_effort: list(none|minimal|low|medium|high|xhigh|max|ultra)?
+    show_reasoning: bool?
   enable_terminal: bool?
   terminal_port: port?
   web_interface:

@@ -112,16 +112,30 @@ def _read_env_token() -> str:
     return ""
 
 
-def _ha_token(options: dict[str, Any]) -> str:
+def _ha_token_and_source(options: dict[str, Any]) -> tuple[str, str]:
+    """Return (token, source) matching run.sh: option → secret → supervisor → .env."""
     token = str(_nested(options, "home_assistant", "homeassistant_token", default="") or "").strip()
     if token:
-        return token
+        return token, "user"
+    if TOKEN_SECRET.is_file():
+        secret = TOKEN_SECRET.read_text(encoding="utf-8", errors="replace").strip()
+        if secret:
+            return secret, "secret"
+    prefer_raw = _nested(options, "home_assistant", "prefer_supervisor_token", default=True)
+    prefer_on = str(prefer_raw).strip().lower() not in ("0", "false", "no")
+    if prefer_on:
+        supervisor = str(os.environ.get("SUPERVISOR_TOKEN", "") or "").strip()
+        if supervisor:
+            return supervisor, "supervisor"
     token = _read_env_token()
     if token:
-        return token
-    if TOKEN_SECRET.is_file():
-        return TOKEN_SECRET.read_text(encoding="utf-8", errors="replace").strip()
-    return ""
+        return token, "env"
+    return "", "empty"
+
+
+def _ha_token(options: dict[str, Any]) -> str:
+    token, _source = _ha_token_and_source(options)
+    return token
 
 
 def _bashio_ha_service() -> tuple[str, str]:
@@ -151,6 +165,15 @@ def _bashio_ha_service() -> tuple[str, str]:
 
 
 def _resolve_ha_urls(options: dict[str, Any]) -> dict[str, Any]:
+    # SUPERVISOR_TOKEN authenticates against the Supervisor Core proxy, not :8123.
+    _token, token_source = _ha_token_and_source(options)
+    if token_source == "supervisor":
+        return {
+            "homeassistant_url": "http://supervisor/core",
+            "mcp_url": "http://supervisor/core/api/mcp",
+            "source": "supervisor_token",
+        }
+
     helper = HELPER_PATH if HELPER_PATH.is_file() else Path(__file__).with_name("hermes_config_helper.py")
     if not helper.is_file():
         base = str(_nested(options, "home_assistant", "hass_url", default="") or "").strip().rstrip("/")
@@ -308,7 +331,7 @@ def check_homeassistant_token(options: dict[str, Any]) -> dict[str, Any]:
         return {
             "ok": False,
             "summary": "Home Assistant token missing",
-            "detail": "Paste a long-lived access token in home_assistant.homeassistant_token.",
+            "detail": "Paste a long-lived access token, enable prefer_supervisor_token (with homeassistant_api), or set HOMEASSISTANT_TOKEN in .env.",
         }
     resolved = _resolve_ha_urls(options)
     base = str(resolved.get("homeassistant_url") or "").rstrip("/")
@@ -328,7 +351,7 @@ def check_mcp(options: dict[str, Any]) -> dict[str, Any]:
         return {
             "ok": False,
             "summary": "Home Assistant token missing",
-            "detail": "MCP requires home_assistant.homeassistant_token.",
+            "detail": "Paste a long-lived token, enable prefer_supervisor_token, or set HOMEASSISTANT_TOKEN in .env.",
         }
     url = _mcp_url_from_config()
     if not url:

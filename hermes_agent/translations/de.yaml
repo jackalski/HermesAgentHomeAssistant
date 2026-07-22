@@ -1,7 +1,7 @@
 configuration:
   timezone:
     name: Zeitzone
-    description: Zeitzone für das Add-on (z.B. Europe/Sofia, America/New_York)
+    description: "IANA-Zeitzone (z. B. America/New_York) oder auto zur Erkennung über Home Assistant Core (Fallback Etc/UTC)."
 
   addon_log_level:
     name: Add-on Log-Level
@@ -90,10 +90,46 @@ configuration:
         description: "Leer lassen für Autodetektion auf HAOS (empfohlen). Wird als HOMEASSISTANT_URL in /config/.hermes/.env synchronisiert, wenn ein Token gesetzt ist. Nach dem Speichern: Verbindungstests → Test URL."
       homeassistant_token:
         name: Home Assistant Token
-        description: Langlebiger Zugriffstoken für MCP und HA-Skripte. Nach dem Speichern maskiert. Gespeichert unter /config/secrets/homeassistant.token. Verbindungstests → Test Token.
+        description: "Langlebiger Zugriffstoken für MCP und HA-Tools. Optional, wenn prefer_supervisor_token AN ist (nutzt SUPERVISOR_TOKEN). Nach dem Speichern maskiert; Benutzertoken unter /config/secrets/homeassistant.token."
+      prefer_supervisor_token:
+        name: Supervisor-Token bevorzugen
+        description: "Wenn AN und kein langlebiger Token eingefügt ist, SUPERVISOR_TOKEN verwenden (erfordert homeassistant_api). Schreibt den Supervisor-Token nicht in secrets."
       auto_configure_mcp:
         name: MCP für Home Assistant automatisch konfigurieren
         description: "Wenn AN und Token gesetzt ist, wird Home Assistant bei jedem Start in Hermes MCP (mcp_servers) registriert. Nach Neustart: Verbindungstests → Test MCP."
+      enable_native_ha_platform:
+        name: Native HA-Gateway-Plattform aktivieren
+        description: "Opt-in: platforms.homeassistant mit sicheren Event-Filtern vorbefüllen (binary_sensor, alarm, climate). HASS_TOKEN aktiviert HA-Geräte-Tools weiterhin unabhängig. Standard AUS — für reaktive state_changed-Events aktivieren."
+      ha_system_prompt_hint:
+        name: HA-System-Prompt-Hinweis
+        description: Optionaler kurzer Kontext, gespeichert mit dem nativen HA-Plattformblock (nur angewendet, wenn der native Plattform-Bootstrap läuft).
+
+  agent_behavior:
+    name: Agent-Verhalten
+    description: Erststart-Bootstrap für Hermes-Freigaben und Reasoning (schreibt Schlüssel nur, wenn sie in /config/.hermes/config.yaml fehlen).
+    fields:
+      approval_mode:
+        name: Freigabemodus
+        description: "Freigaben für gefährliche Befehle. smart (empfohlen für headless HA) nutzt ein Hilfs-LLM; manual fragt immer nach; off ist YOLO."
+        options:
+          smart: "Smart (Standard)"
+          manual: "Manuell"
+          off: "Aus (yolo)"
+      reasoning_effort:
+        name: Reasoning-Aufwand
+        description: Standard-Denkaufwand für unterstützte Modelle (none…ultra).
+        options:
+          none: "none"
+          minimal: "minimal"
+          low: "low"
+          medium: "medium (Standard)"
+          high: "high"
+          xhigh: "xhigh"
+          max: "max"
+          ultra: "ultra"
+      show_reasoning:
+        name: Reasoning anzeigen
+        description: Denkspuren des Modells streamen (display.show_reasoning). Empfohlen EIN.
 
   enable_terminal:
     name: Web-Terminal aktivieren
