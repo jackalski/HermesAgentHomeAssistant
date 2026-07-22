@@ -1,6 +1,7 @@
 # Base image is Debian Bookworm (glibc). BUILD_ARCH is supplied by the HA Supervisor build.
 # Replaces deprecated build.yaml (per-arch ghcr.io/home-assistant/*-base-debian:bookworm).
-ARG BUILD_ARCH
+# Default silences Dockerfile lint (InvalidDefaultArgInFrom); Supervisor always passes BUILD_ARCH.
+ARG BUILD_ARCH=amd64
 ARG BUILD_VERSION
 FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:bookworm
 
@@ -119,12 +120,27 @@ RUN if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then \
     fi
 USER root
 
+# Install Hermes + companion CLIs with retries — HAOS builds often hit transient
+# DNS (getaddrinfo EAI_AGAIN) against registry.npmjs.org.
 RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false \
     && npm config set audit false \
-    && npm install -g hermes-agent@0.19.0 \
-    && npm install -g @botiverse/raft@0.0.15 \
-    && npm install -g agent-browser@latest
+    && npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm_install_retry() { \
+         pkg="$1"; \
+         for i in 1 2 3 4 5; do \
+           if npm install -g "${pkg}"; then return 0; fi; \
+           echo "WARN: npm install ${pkg} failed (attempt ${i}/5); retrying..."; \
+           sleep $((i * 15)); \
+         done; \
+         echo "ERROR: npm install ${pkg} failed after 5 attempts"; \
+         return 1; \
+       } \
+    && npm_install_retry "hermes-agent@0.19.0" \
+    && npm_install_retry "@botiverse/raft@0.0.15" \
+    && npm_install_retry "agent-browser@latest"
 
 # Safety net if a Hermes PyPI wheel omits hermes_cli subpackages (upstream #34701 on older releases).
 COPY repair_hermes_wheel.py /repair_hermes_wheel.py

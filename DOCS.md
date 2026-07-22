@@ -303,6 +303,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 
 | Symptom | Fix |
 |---------|-----|
+| Docker build fails with `getaddrinfo EAI_AGAIN` / `registry.npmjs.org` | Transient DNS during Supervisor build (not a config bug). Retry **Repair** / reinstall. Add-on **0.0.36+** retries npm installs automatically. Check HA host DNS / IPv6 if it keeps failing. |
 | `HTTP 400: No models provided` | Set provider API key in add-on config; restart; verify model in `/config/.hermes/config.yaml` |
 | OpenRouter HTTP 402 (insufficient credits) | Add credits at [openrouter.ai/settings/credits](https://openrouter.ai/settings/credits) or use a direct provider key (`google_api_key`, `anthropic_api_key`, …) |
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |

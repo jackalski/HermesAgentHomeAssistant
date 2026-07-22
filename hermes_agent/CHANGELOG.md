@@ -2,6 +2,15 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.36] - 2026-07-22
+
+### Fixed
+- **HAOS Docker build resilience**: npm global installs (`hermes-agent`, raft, agent-browser) now retry on transient DNS failures (`getaddrinfo EAI_AGAIN` against `registry.npmjs.org`) with npm fetch-retries + up to 5 install attempts.
+- Dockerfile `BUILD_ARCH` default (`amd64`) to silence `InvalidDefaultArgInFrom` lint (Supervisor still passes the real arch).
+
+### Changed
+- Status exporter add-on version fallback aligned to **0.0.36**.
+
 ## [0.0.35] - 2026-07-22
 
 ### Added
