@@ -198,9 +198,6 @@ configuration:
       auto_start_with_integration:
         name: Auto-Start With Add-on
         description: Start hermes dashboard automatically when the add-on starts. Required for Connection tests → Test Dashboard.
-      dashboard_port:
-        name: Dashboard Loopback Port
-        description: "Loopback bind offset only (process listens on dashboard_port + 1 in lan_https, default internal 9120). External HTTPS is on gateway_port. Deprecated as a second LAN port."
 
   gateway_access:
     name: Gateway Access
@@ -235,14 +232,14 @@ configuration:
         description: WebSocket URL when Gateway Mode is Remote. Use Connection tests → Test Remote after saving.
       gateway_bind_mode:
         name: Gateway Bind Mode
-        description: Loopback, LAN, or Tailscale bind. Overridden by Access Mode presets.
+        description: "Loopback, LAN, or Tailscale bind. Only takes effect when Access Mode is Custom — other presets set this automatically and ignore this value."
         options:
           loopback: "Loopback (127.0.0.1 only, most secure)"
           lan: "LAN (all interfaces)"
           tailnet: "Tailnet (Tailscale only)"
       gateway_auth_mode:
         name: Gateway Auth Mode
-        description: Token (default) or trusted-proxy for reverse proxies.
+        description: "Token (default) or trusted-proxy for reverse proxies. Only takes effect when Access Mode is Custom — other presets set this automatically and ignore this value."
         options:
           token: "Token (default)"
           trusted-proxy: "Trusted Proxy (for reverse proxies)"
@@ -314,6 +311,9 @@ configuration:
       tool_telegram_enabled:
         name: Enable Telegram Tool Bootstrap
         description: Auto-install Telegram Python dependencies when missing.
+      tool_discord_enabled:
+        name: Enable Discord Tool Bootstrap
+        description: Auto-install Discord Python dependencies when a bot token is set. Turn off to keep a saved token without installing/running the Discord bot.
       tool_browser_enabled:
         name: Enable Browser Tool Bootstrap
         description: Auto-install browser tool dependencies (e.g. agent-browser) when missing.

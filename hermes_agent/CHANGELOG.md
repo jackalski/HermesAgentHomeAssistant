@@ -2,6 +2,21 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.39] - 2026-07-23
+
+### Removed
+- **`dashboard_port` option**: removed from the Hermes Web UI panel. The hermes dashboard now always binds a fixed internal loopback port (9119/9120); this was never externally reachable on its own and had been deprecated as a second LAN port since 0.0.27.
+- **Legacy flat-key options fallback** in `run.sh` (pre-0.0.16 compatibility) and the one-time `/data` → `/config` router SSH key migration: no longer needed since all configuration has used nested option panels since 0.0.16.
+- **Legacy curated model presets** (`gemini_flash`/`claude_sonnet`/`gpt_mini`) in the add-on's config helper: the schema has only accepted `custom` since 0.0.18.
+
+### Changed
+- `router_ssh.*` (`host`, `user`, `key_path`) schema fields are now correctly optional, matching the panel's "Optional router SSH" description.
+- `gateway_bind_mode`/`gateway_auth_mode` descriptions now explicitly state they only take effect when `access_mode` is `custom`.
+- Status exporter add-on version fallback aligned to **0.0.39**.
+
+### Added
+- **`tool_discord_enabled`** toggle in Tool Bootstrap (default on), matching the existing Telegram toggle — lets you keep a saved Discord bot token without installing/running the bot.
+
 ## [0.0.38] - 2026-07-23
 
 ### Fixed

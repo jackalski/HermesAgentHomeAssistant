@@ -198,9 +198,6 @@ configuration:
       auto_start_with_integration:
         name: Auto-start z dodatkiem
         description: Uruchamia hermes dashboard przy starcie dodatku. Wymagane dla Test Dashboard.
-      dashboard_port:
-        name: Port loopback panelu
-        description: Tylko offset loopback (proces na dashboard_port + 1). HTTPS na LAN tylko na gateway_port.
 
   gateway_access:
     name: Dostęp do Gateway
@@ -235,14 +232,14 @@ configuration:
         description: Adres WebSocket gdy Tryb Gateway to Zdalny.
       gateway_bind_mode:
         name: Tryb bindowania Gateway
-        description: Bindowanie loopback, LAN lub Tailscale. Nadpisywane przez ustawienia trybu dostępu.
+        description: "Bindowanie loopback, LAN lub Tailscale. Działa tylko gdy Tryb dostępu to Niestandardowy — inne presety ustawiają to automatycznie i ignorują tę wartość."
         options:
           loopback: "Loopback (tylko 127.0.0.1, najbezpieczniejszy)"
           lan: "LAN (wszystkie interfejsy)"
           tailnet: "Tailnet (tylko Tailscale)"
       gateway_auth_mode:
         name: Tryb uwierzytelniania Gateway
-        description: Token (domyślnie) lub trusted-proxy dla reverse proxy.
+        description: "Token (domyślnie) lub trusted-proxy dla reverse proxy. Działa tylko gdy Tryb dostępu to Niestandardowy — inne presety ustawiają to automatycznie i ignorują tę wartość."
         options:
           token: "Token (domyślnie)"
           trusted-proxy: "Zaufany proxy (dla reverse proxy)"
@@ -314,6 +311,9 @@ configuration:
       tool_telegram_enabled:
         name: Włącz bootstrap narzędzia Telegram
         description: Automatycznie instaluj zależności Python Telegram gdy brakuje.
+      tool_discord_enabled:
+        name: Włącz bootstrap narzędzia Discord
+        description: Automatycznie instaluj zależności Python Discord gdy ustawiony jest token bota. Wyłącz, aby zachować zapisany token bez instalowania/uruchamiania bota Discord.
       tool_browser_enabled:
         name: Włącz bootstrap narzędzia Browser
         description: Automatycznie instaluj zależności przeglądarki (np. agent-browser) gdy brakuje.

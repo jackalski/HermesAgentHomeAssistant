@@ -198,9 +198,6 @@ configuration:
       auto_start_with_integration:
         name: Auto-start with add-on
         description: Starts hermes dashboard on add-on start. Required for Connection tests → Test Dashboard.
-      dashboard_port:
-        name: Dashboard loopback port
-        description: Loopback bind offset only (process listens on dashboard_port + 1 in lan_https). External HTTPS is on gateway_port.
 
   gateway_access:
     name: Gateway Access
@@ -235,14 +232,14 @@ configuration:
         description: WebSocket URL when Gateway Mode is Remote.
       gateway_bind_mode:
         name: Режим на свързване на Gateway
-        description: Loopback, LAN, or Tailscale bind. Overridden by Access Mode presets.
+        description: "Loopback, LAN, or Tailscale bind. Only takes effect when Access Mode is Custom — other presets set this automatically and ignore this value."
         options:
           loopback: "Loopback (само 127.0.0.1, най-сигурен)"
           lan: "LAN (всички интерфейси)"
           tailnet: "Tailnet (само Tailscale)"
       gateway_auth_mode:
         name: Режим на удостоверяване на Gateway
-        description: Token (default) or trusted-proxy for reverse proxies.
+        description: "Token (default) or trusted-proxy for reverse proxies. Only takes effect when Access Mode is Custom — other presets set this automatically and ignore this value."
         options:
           token: "Token (по подразбиране)"
           trusted-proxy: "Доверен прокси (за reverse proxy)"
@@ -314,6 +311,9 @@ configuration:
       tool_telegram_enabled:
         name: Enable Telegram Tool Bootstrap
         description: Auto-install Telegram Python dependencies when missing.
+      tool_discord_enabled:
+        name: Enable Discord Tool Bootstrap
+        description: Auto-install Discord Python dependencies when a bot token is set. Turn off to keep a saved token without installing/running the Discord bot.
       tool_browser_enabled:
         name: Enable Browser Tool Bootstrap
         description: Auto-install browser tool dependencies (e.g. agent-browser) when missing.

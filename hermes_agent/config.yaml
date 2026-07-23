@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.38"
+version: "0.0.39"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -98,9 +98,6 @@ options:
   web_interface:
     enable_web_interface: true
     auto_start_with_integration: true
-    # Internal loopback offset only (process binds dashboard_port + 1 in lan_https).
-    # External HTTPS is published on gateway_port only.
-    dashboard_port: 9119
 
   # --- Gateway access ---
   gateway_access:
@@ -136,6 +133,7 @@ options:
   # --- Tool bootstrap ---
   tools_bootstrap:
     tool_telegram_enabled: false
+    tool_discord_enabled: true
     tool_browser_enabled: true
     tool_skills_hub_enabled: true
     seed_example_scripts: true
@@ -205,7 +203,6 @@ schema:
   web_interface:
     enable_web_interface: bool?
     auto_start_with_integration: bool?
-    dashboard_port: port?
   gateway_access:
     access_mode: list(custom|local_only|lan_https|lan_reverse_proxy|tailnet_https)?
     gateway_port: port?
@@ -230,11 +227,12 @@ schema:
     status_poll_interval_seconds: int(30,300)?
     state_prefix: str?
   router_ssh:
-    host: str
-    user: str
-    key_path: str
+    host: str?
+    user: str?
+    key_path: str?
   tools_bootstrap:
     tool_telegram_enabled: bool?
+    tool_discord_enabled: bool?
     tool_browser_enabled: bool?
     tool_skills_hub_enabled: bool?
     seed_example_scripts: bool?

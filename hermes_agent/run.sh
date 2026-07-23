@@ -29,39 +29,25 @@ if [ ! -f "$OPTIONS_FILE" ]; then
   exit 1
 fi
 
-# Read nested provider_api_keys with legacy flat-key fallback (preserves values after reinstall).
+# Read nested provider_api_keys.
 read_provider_option() {
   local field="$1"
-  local nested flat
-  nested=$(jq -r ".provider_api_keys.${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true)
-  if [ -n "$nested" ]; then
-    printf '%s' "$nested"
-    return 0
-  fi
-  jq -r ".${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true
+  jq -r ".provider_api_keys.${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true
 }
 
-# Read scalar from nested expansion panel with legacy flat-key fallback.
+# Read scalar from nested expansion panel.
 read_nested_option() {
   local group="$1"
   local field="$2"
-  local flat_key="${3:-$field}"
-  local nested
-  nested=$(jq -r ".${group}.${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true)
-  if [ -n "$nested" ] && [ "$nested" != "null" ]; then
-    printf '%s' "$nested"
-    return 0
-  fi
-  jq -r ".${flat_key} // empty" "$OPTIONS_FILE" 2>/dev/null || true
+  jq -r ".${group}.${field} // empty" "$OPTIONS_FILE" 2>/dev/null || true
 }
 
-# Read list from nested group or legacy root key (array rows or comma-separated string).
+# Read list from nested group (array rows or comma-separated string).
 join_nested_list_option_csv() {
   local group="$1"
   local field="$2"
-  local flat_key="${3:-$field}"
-  jq -r --arg group "$group" --arg field "$field" --arg flat "$flat_key" '
-    (.[$group][$field] // .[$flat]) as $v
+  jq -r --arg group "$group" --arg field "$field" '
+    .[$group][$field] as $v
     | if ($v | type) == "array" then
         [ $v[]? | if type == "object" then .value elif type == "string" then . else empty end
           | select(. != null and (. | tostring | length) > 0) ]
@@ -127,7 +113,6 @@ ENABLE_TERMINAL=$(jq -r '.enable_terminal // true' "$OPTIONS_FILE")
 TERMINAL_PORT_RAW=$(jq -r '.terminal_port // 7681' "$OPTIONS_FILE")
 ENABLE_WEB_INTERFACE="$(read_nested_option web_interface enable_web_interface)"
 AUTO_START_WEB_INTERFACE="$(read_nested_option web_interface auto_start_with_integration)"
-DASHBOARD_PORT_RAW="$(read_nested_option web_interface dashboard_port)"
 
 # SECURITY: Validate TERMINAL_PORT to prevent nginx config injection
 # Only allow numeric values in valid port range (1024-65535)
@@ -138,21 +123,18 @@ else
   TERMINAL_PORT="7681"
 fi
 
-# Router SSH (nested panel + legacy flat keys)
-ROUTER_HOST="$(read_nested_option router_ssh host router_ssh_host)"
-ROUTER_USER="$(read_nested_option router_ssh user router_ssh_user)"
-ROUTER_KEY="$(read_nested_option router_ssh key_path router_ssh_key_path)"
+# Router SSH
+ROUTER_HOST="$(read_nested_option router_ssh host)"
+ROUTER_USER="$(read_nested_option router_ssh user)"
+ROUTER_KEY="$(read_nested_option router_ssh key_path)"
 if [ -z "$ROUTER_KEY" ]; then
-  ROUTER_KEY="/config/keys/router_ssh"
-fi
-if [ "$ROUTER_KEY" = "/data/keys/router_ssh" ]; then
   ROUTER_KEY="/config/keys/router_ssh"
 fi
 
 CLEAN_LOCKS_ON_START="$(read_nested_option advanced_settings clean_session_locks_on_start)"
 CLEAN_LOCKS_ON_EXIT="$(read_nested_option advanced_settings clean_session_locks_on_exit)"
 
-# Gateway access (nested panel + legacy flat keys)
+# Gateway access
 GATEWAY_MODE="$(read_nested_option gateway_access gateway_mode)"
 GATEWAY_REMOTE_URL="$(read_nested_option gateway_access gateway_remote_url)"
 GATEWAY_BIND_MODE="$(read_nested_option gateway_access gateway_bind_mode)"
@@ -178,6 +160,7 @@ LOG_GATEWAY_URL_HINT="false"
 NGINX_LOG_LEVEL="$(read_nested_option advanced_settings nginx_log_level)"
 AUTO_CONFIGURE_MCP="$(read_nested_option home_assistant auto_configure_mcp)"
 TOOL_TELEGRAM_ENABLED="$(read_nested_option tools_bootstrap tool_telegram_enabled)"
+TOOL_DISCORD_ENABLED="$(read_nested_option tools_bootstrap tool_discord_enabled)"
 TOOL_BROWSER_ENABLED="$(read_nested_option tools_bootstrap tool_browser_enabled)"
 TOOL_SKILLS_HUB_ENABLED="$(read_nested_option tools_bootstrap tool_skills_hub_enabled)"
 SEED_EXAMPLE_SCRIPTS="$(read_nested_option tools_bootstrap seed_example_scripts)"
@@ -196,9 +179,9 @@ ADDON_HERMES_DEFAULT_VERSION="0.19.0"
 IMAGE_BAKED_HERMES_SPEC="${ADDON_HERMES_DEFAULT_VERSION}"
 GW_ENV_VARS_TYPE=$(jq -r 'if (.advanced_settings.gateway_env_vars // .gateway_env_vars) == null then "null" else ((.advanced_settings.gateway_env_vars // .gateway_env_vars) | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.advanced_settings.gateway_env_vars // .gateway_env_vars // empty' "$OPTIONS_FILE")
-GW_ENV_VARS_JSON=$(jq -c '.advanced_settings.gateway_env_vars // .gateway_env_vars // []' "$OPTIONS_FILE")
+GW_ENV_VARS_JSON=$(jq -c '.advanced_settings.gateway_env_vars // []' "$OPTIONS_FILE")
 
-# MQTT status sensors (nested panel + legacy flat keys)
+# MQTT status sensors
 MQTT_BROKER_HOST="$(read_nested_option mqtt_settings broker_host)"
 MQTT_BROKER_PORT="$(read_nested_option mqtt_settings broker_port)"
 MQTT_BROKER_USER="$(read_nested_option mqtt_settings broker_username)"
@@ -210,9 +193,9 @@ fi
 ENABLE_HA_STATUS_SENSORS="$(read_nested_option mqtt_settings enable_ha_status_sensors)"
 PUBLISH_MQTT_DISCOVERY="$(read_nested_option mqtt_settings publish_mqtt_discovery)"
 STATUS_POLL_INTERVAL_RAW="$(read_nested_option mqtt_settings status_poll_interval_seconds)"
-MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_prefix)"
+MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 
-# Defaults when nested panels are empty (fresh install or legacy options.json).
+# Defaults when nested panels are empty.
 [ -z "$GATEWAY_MODE" ] && GATEWAY_MODE="local"
 [ -z "$GATEWAY_BIND_MODE" ] && GATEWAY_BIND_MODE="loopback"
 [ -z "$GATEWAY_PORT" ] && GATEWAY_PORT="18789"
@@ -228,6 +211,7 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$TOOL_BROWSER_ENABLED" ] && TOOL_BROWSER_ENABLED="true"
 [ -z "$TOOL_SKILLS_HUB_ENABLED" ] && TOOL_SKILLS_HUB_ENABLED="true"
 [ -z "$TOOL_TELEGRAM_ENABLED" ] && TOOL_TELEGRAM_ENABLED="false"
+[ -z "$TOOL_DISCORD_ENABLED" ] && TOOL_DISCORD_ENABLED="true"
 [ -z "$SEED_EXAMPLE_SCRIPTS" ] && SEED_EXAMPLE_SCRIPTS="true"
 [ -z "$ENABLE_NTFY" ] && ENABLE_NTFY="false"
 [ -z "$NTFY_SERVER_URL" ] && NTFY_SERVER_URL="https://ntfy.sh"
@@ -242,7 +226,6 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix mqtt_state_pr
 [ -z "$MQTT_BROKER_PORT" ] && MQTT_BROKER_PORT="1883"
 [ -z "$ENABLE_WEB_INTERFACE" ] && ENABLE_WEB_INTERFACE="true"
 [ -z "$AUTO_START_WEB_INTERFACE" ] && AUTO_START_WEB_INTERFACE="true"
-[ -z "$DASHBOARD_PORT_RAW" ] && DASHBOARD_PORT_RAW="9119"
 [ -z "$PREFER_SUPERVISOR_TOKEN" ] && PREFER_SUPERVISOR_TOKEN="true"
 [ -z "$ENABLE_NATIVE_HA_PLATFORM" ] && ENABLE_NATIVE_HA_PLATFORM="false"
 [ -z "$APPROVAL_MODE" ] && APPROVAL_MODE="smart"
@@ -269,14 +252,8 @@ else
   GATEWAY_DRAIN_SECONDS="15"
 fi
 
-# SECURITY: Validate DASHBOARD_PORT (the hermes dashboard web UI port) to keep
-# the value safe for nginx config injection and shell use.
-if [[ "$DASHBOARD_PORT_RAW" =~ ^[0-9]+$ ]] && [ "$DASHBOARD_PORT_RAW" -ge 1024 ] && [ "$DASHBOARD_PORT_RAW" -le 65535 ]; then
-  DASHBOARD_PORT="$DASHBOARD_PORT_RAW"
-else
-  log_error "Invalid dashboard_port '$DASHBOARD_PORT_RAW'. Must be numeric 1024-65535. Using default 9119."
-  DASHBOARD_PORT="9119"
-fi
+# Internal-only loopback port for the hermes dashboard process (not user-configurable).
+DASHBOARD_PORT="9119"
 
 # Validate status poll interval (30-300 seconds)
 if [[ "$STATUS_POLL_INTERVAL_RAW" =~ ^[0-9]+$ ]] && [ "$STATUS_POLL_INTERVAL_RAW" -ge 30 ] && [ "$STATUS_POLL_INTERVAL_RAW" -le 300 ]; then
@@ -513,18 +490,15 @@ esac
 # other modes the dashboard stays loopback-only (reach it via Ingress/tunnel).
 if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
   DASHBOARD_INTERNAL_PORT=$((DASHBOARD_PORT + 1))
-  if [ "$DASHBOARD_PORT" != "$GATEWAY_PORT" ]; then
-    log_warn "dashboard_port=${DASHBOARD_PORT} is deprecated as an external HTTPS entry; only gateway_port=${GATEWAY_PORT} is published. Bookmarks to :${DASHBOARD_PORT} will not work."
-  fi
 else
   DASHBOARD_INTERNAL_PORT="$DASHBOARD_PORT"
 fi
 
-# Warn (non-fatal) if the dashboard ports collide with other add-on services.
+# Warn (non-fatal) if the dashboard's fixed internal ports collide with other add-on services.
 for _busy_port in "$GATEWAY_PORT" "$GATEWAY_INTERNAL_PORT" "$API_SERVER_PORT" "$TERMINAL_PORT"; do
   [ -z "$_busy_port" ] && continue
   if [ "$DASHBOARD_PORT" = "$_busy_port" ] || [ "$DASHBOARD_INTERNAL_PORT" = "$_busy_port" ]; then
-    log_warn "dashboard_port=${DASHBOARD_PORT} (internal ${DASHBOARD_INTERNAL_PORT}) overlaps another service on ${_busy_port}; pick a different dashboard_port to avoid bind conflicts."
+    log_warn "Internal dashboard port ${DASHBOARD_PORT}/${DASHBOARD_INTERNAL_PORT} overlaps another service on ${_busy_port}; change gateway_port/webhook_port/terminal_port to avoid bind conflicts."
   fi
 done
 
@@ -587,17 +561,6 @@ fi
 if [ -n "$MQTT_BROKER_PASSWORD" ]; then
   printf '%s' "$MQTT_BROKER_PASSWORD" > /config/secrets/mqtt.password
   chmod 600 /config/secrets/mqtt.password 2>/dev/null || true
-fi
-
-# Router SSH keys live on persistent /config storage (migrate legacy /data path once).
-LEGACY_ROUTER_KEY="/data/keys/router_ssh"
-if [ -f "$LEGACY_ROUTER_KEY" ] && [ ! -f "/config/keys/router_ssh" ]; then
-  cp "$LEGACY_ROUTER_KEY" "/config/keys/router_ssh"
-  chmod 600 "/config/keys/router_ssh" 2>/dev/null || true
-  log_info "Migrated router SSH key from ${LEGACY_ROUTER_KEY} to /config/keys/router_ssh"
-fi
-if [ "$ROUTER_KEY" = "$LEGACY_ROUTER_KEY" ] && [ -f "/config/keys/router_ssh" ]; then
-  ROUTER_KEY="/config/keys/router_ssh"
 fi
 
 # ------------------------------------------------------------------------------
@@ -892,7 +855,7 @@ bootstrap_selected_tools() {
     install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]==22.6"
   fi
 
-  if [ -n "$DISCORD_BOT_TOKEN_OPT" ]; then
+  if [ "$TOOL_DISCORD_ENABLED" != "false" ] && [ -n "$DISCORD_BOT_TOKEN_OPT" ]; then
     install_python_package_if_missing "discord" "discord.py[voice]>=2.7.1"
     install_python_package_if_missing "brotlicffi" "brotlicffi>=1.2.0.1"
   fi

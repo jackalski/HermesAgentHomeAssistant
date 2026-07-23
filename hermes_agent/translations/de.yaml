@@ -198,9 +198,6 @@ configuration:
       auto_start_with_integration:
         name: Mit Add-on automatisch starten
         description: Startet hermes dashboard beim Add-on-Start. Erforderlich für Verbindungstests → Test Dashboard.
-      dashboard_port:
-        name: Dashboard-Loopback-Port
-        description: "Nur Loopback-Offset (Prozess lauscht auf dashboard_port + 1 in lan_https). Externes HTTPS nur auf gateway_port."
 
   gateway_access:
     name: Gateway-Zugriff
@@ -235,14 +232,14 @@ configuration:
         description: WebSocket-URL wenn Gateway-Modus Remote ist. Verbindungstests → Test Remote.
       gateway_bind_mode:
         name: Gateway-Bindungsmodus
-        description: Loopback-, LAN- oder Tailscale-Bindung. Wird durch Zugriffsmodus-Voreinstellungen überschrieben.
+        description: "Loopback-, LAN- oder Tailscale-Bindung. Wirkt sich nur aus, wenn Zugriffsmodus auf Benutzerdefiniert steht — andere Voreinstellungen setzen dies automatisch und ignorieren diesen Wert."
         options:
           loopback: "Loopback (nur 127.0.0.1, am sichersten)"
           lan: "LAN (alle Schnittstellen)"
           tailnet: "Tailnet (nur Tailscale)"
       gateway_auth_mode:
         name: Gateway-Authentifizierungsmodus
-        description: Token (Standard) oder trusted-proxy für Reverse-Proxys.
+        description: "Token (Standard) oder trusted-proxy für Reverse-Proxys. Wirkt sich nur aus, wenn Zugriffsmodus auf Benutzerdefiniert steht — andere Voreinstellungen setzen dies automatisch und ignorieren diesen Wert."
         options:
           token: "Token (Standard)"
           trusted-proxy: "Vertrauenswürdiger Proxy (für Reverse-Proxys)"
@@ -314,6 +311,9 @@ configuration:
       tool_telegram_enabled:
         name: Telegram-Tool-Bootstrap aktivieren
         description: Telegram-Python-Abhängigkeiten automatisch installieren wenn fehlend.
+      tool_discord_enabled:
+        name: Discord-Tool-Bootstrap aktivieren
+        description: Discord-Python-Abhängigkeiten automatisch installieren, wenn ein Bot-Token gesetzt ist. Deaktivieren, um einen gespeicherten Token zu behalten, ohne den Discord-Bot zu installieren/auszuführen.
       tool_browser_enabled:
         name: Browser-Tool-Bootstrap aktivieren
         description: Browser-Tool-Abhängigkeiten automatisch installieren (z.B. agent-browser) wenn fehlend.

@@ -198,9 +198,6 @@ configuration:
       auto_start_with_integration:
         name: Inicio automático con el complemento
         description: Inicia hermes dashboard al arrancar. Requerido para Test Dashboard.
-      dashboard_port:
-        name: Puerto loopback del panel
-        description: Solo offset loopback (proceso en dashboard_port + 1). HTTPS externo solo en gateway_port.
 
   gateway_access:
     name: Acceso al Gateway
@@ -235,14 +232,14 @@ configuration:
         description: URL WebSocket en modo remoto. Pruebas de conexión → Test Remote.
       gateway_bind_mode:
         name: Modo de enlace del Gateway
-        description: Enlace loopback, LAN o Tailscale. Anulado por preajustes del modo de acceso.
+        description: "Enlace loopback, LAN o Tailscale. Solo tiene efecto cuando el Modo de acceso es Personalizado — otros preajustes lo configuran automáticamente e ignoran este valor."
         options:
           loopback: "Loopback (solo 127.0.0.1, más seguro)"
           lan: "LAN (todas las interfaces)"
           tailnet: "Tailnet (solo Tailscale)"
       gateway_auth_mode:
         name: Modo de autenticación del Gateway
-        description: Token (predeterminado) o trusted-proxy para proxys inversos.
+        description: "Token (predeterminado) o trusted-proxy para proxys inversos. Solo tiene efecto cuando el Modo de acceso es Personalizado — otros preajustes lo configuran automáticamente e ignoran este valor."
         options:
           token: "Token (predeterminado)"
           trusted-proxy: "Proxy de confianza (para proxys inversos)"
@@ -314,6 +311,9 @@ configuration:
       tool_telegram_enabled:
         name: Activar bootstrap de herramienta Telegram
         description: Instalar automáticamente dependencias Python de Telegram cuando falten.
+      tool_discord_enabled:
+        name: Activar bootstrap de herramienta Discord
+        description: Instalar automáticamente dependencias Python de Discord cuando haya un token de bot configurado. Desactívalo para conservar un token guardado sin instalar/ejecutar el bot de Discord.
       tool_browser_enabled:
         name: Activar bootstrap de herramienta Browser
         description: Instalar automáticamente dependencias del navegador (p. ej. agent-browser) cuando falten.

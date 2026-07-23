@@ -11,7 +11,7 @@ Canonical setup and operations guide. This add-on is marked **Experimental** in 
 | nginx (Ingress) | 48099 | Landing page, **Connection tests** (`/test/`), `/status.json` |
 | ttyd (terminal) | 7681 (configurable) | Browser terminal |
 
-The `hermes gateway run` messaging process has **no HTTP listener** on `gateway.port` in Hermes 0.16+. Loopback dashboard binds `dashboard_port + 1` (default **9120** when `dashboard_port` is 9119); `dashboard_port` no longer opens a second external HTTPS port.
+The `hermes gateway run` messaging process has **no HTTP listener** on `gateway.port` in Hermes 0.16+. Loopback dashboard binds a fixed internal port **9120** (9119 + 1); this is not user-configurable and no external HTTPS port is opened for it.
 
 Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`, `.linuxbrew`, `.node_global`, etc.). System tools (`hermes`, `uv`, `mcp`) install to **`/usr/local`**; user npm skills from the dashboard go to **`/config/.node_global`**.
 
@@ -70,6 +70,8 @@ Set `access_mode` in add-on configuration:
 | `lan_reverse_proxy` | NPM, Caddy, Traefik (needs `X-Forwarded-User`) |
 | `tailnet_https` | Tailscale |
 | `custom` | Manual `gateway_bind_mode` / `gateway_auth_mode` |
+
+`gateway_bind_mode` and `gateway_auth_mode` only take effect when `access_mode` is `custom` — for the other presets, the add-on sets them automatically and any value entered there is ignored.
 
 Set `gateway_public_url` for the **Open Hermes Web UI** button (auto-filled from LAN IP in `lan_https` when empty).
 
@@ -259,8 +261,8 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | **MQTT Status Sensors** panel | autodetect | `broker_host` / `broker_port` / `broker_username` / `broker_password`; leave host empty for Mosquitto autodetect |
 | **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |
 | **Router SSH** panel | — | `host`, `user`, `key_path` (default `/config/keys/router_ssh`) |
-| **Tool Bootstrap** panel | browser ON | Telegram / browser / Skills Hub auto-install toggles |
-| **Hermes Web UI** panel | ON / auto-start / 9119 | `enable_web_interface`, `auto_start_with_integration`, `dashboard_port` (loopback offset only — external HTTPS is on `gateway_port`) |
+| **Tool Bootstrap** panel | browser ON | Telegram / Discord / browser / Skills Hub auto-install toggles |
+| **Hermes Web UI** panel | ON / auto-start | `enable_web_interface`, `auto_start_with_integration` (dashboard binds a fixed internal port; not user-configurable) |
 | **Advanced Settings** panel | — | `http_proxy`, `nginx_log_level`, `gateway_env_vars`, Hermes version |
 | `addon_log_level` | `info` | Add-on startup log verbosity |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
@@ -312,7 +314,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |
 | `no such gateway 'default'` in terminal | Use `hermes gateway run` (not `hermes-agent gateway run`); ensure `HOME=/config` and `HERMES_HOME=/config/.hermes` (ttyd sets this automatically) |
 | Gateway unreachable on LAN | Check `access_mode`; install CA cert for `lan_https` (landing page download) |
-| `502 Bad Gateway` on `https://<LAN-IP>:18789/` | In `lan_https`, nginx proxies to **`hermes dashboard`** on loopback (`dashboard_port + 1`, default **9120**). 502 means the dashboard is not listening — check `enable_web_interface`, `hermes-agent[web]`, and add-on logs. |
+| `502 Bad Gateway` on `https://<LAN-IP>:18789/` | In `lan_https`, nginx proxies to **`hermes dashboard`** on a fixed loopback port (**9120**). 502 means the dashboard is not listening — check `enable_web_interface`, `hermes-agent[web]`, and add-on logs. |
 | `/api/status` 404 on HTTPS `gateway_port` | Fixed in **0.0.27+** — Assist API no longer steals `/api/*`. Dashboard `/api/*` is served on `gateway_port`; Assist uses `/v1/` (HTTPS) or `http://LAN:8642/v1` (HA Core). |
 | `/api/sessions` 401 from curl | Expected without auth — pass `Authorization: Bearer <gateway token>`. Browser Chat uses dashboard session tokens from the Web UI, not the gateway token. |
 | Chat WebSocket `CONNECTION_REFUSED` / PTY **1006** | Fixed in **0.0.30+** — browser `Origin` (LAN IP or tunnel hostname) was forwarded to the loopback dashboard, which rejects non-loopback origins on WebSocket upgrades. Add-on nginx clears `Origin` on the upstream hop; REST was unaffected. Update add-on and restart. |

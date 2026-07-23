@@ -41,13 +41,6 @@ PROFILE_MANIFEST = {
     },
 }
 
-# Legacy curated presets (removed from add-on UI; still honored if present in saved options).
-LEGACY_MODEL_PRESETS = {
-    "gemini_flash": "google/gemini-2.5-flash",
-    "claude_sonnet": "anthropic/claude-sonnet-4-6",
-    "gpt_mini": "openai/gpt-4.1-mini",
-}
-
 # Add-on default_provider values -> Hermes config.yaml model.provider ids.
 ADDON_PROVIDER_TO_HERMES = {
     "nous": "nous",
@@ -427,12 +420,7 @@ def resolve_setup_profile(payload: dict):
 
 
 def resolve_default_model_text(default_model_preset: str, default_model: str) -> str:
-    preset = (default_model_preset or "custom").strip().lower()
-    if preset == "custom":
-        return (default_model or "").strip()
-    if preset == "auto":
-        return (default_model or "").strip()
-    return LEGACY_MODEL_PRESETS.get(preset, (default_model or "").strip())
+    return (default_model or "").strip()
 
 
 def resolve_hermes_provider_id(default_provider: str) -> str:
