@@ -94,7 +94,6 @@ jobs:
           tags: |
             ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
           cache-from: type=gha,scope=addon-${{ matrix.arch }}
-          cache-to: type=gha,scope=addon-${{ matrix.arch }},mode=max
 
   merge:
     needs: [prepare, build]

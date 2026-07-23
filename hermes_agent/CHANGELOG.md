@@ -2,6 +2,12 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.38] - 2026-07-23
+
+### Fixed
+- **armv7 CI build**: dropped the GitHub Actions cache export (`cache-to: type=gha`) from the add-on image build. It was failing with `ERROR: not_found` on the long-running armv7 leg (QEMU-emulated compile, ~1h), which canceled the whole buildx solve — including the already-successful image push — and skipped the multi-arch manifest merge. Cache reads (`cache-from`) are kept.
+- Status exporter add-on version fallback aligned to **0.0.38**.
+
 ## [0.0.37] - 2026-07-23
 
 ### Changed
