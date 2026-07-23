@@ -2,6 +2,16 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.37] - 2026-07-23
+
+### Changed
+- **Prebuilt images on GHCR**: installs/updates **pull** `ghcr.io/jackalski/hermes-agent-addon:<version>` instead of building the Dockerfile on HAOS (avoids long local builds and npm DNS failures during Supervisor `docker build`).
+- Status exporter add-on version fallback aligned to **0.0.37**.
+
+### Notes
+- First successful GitHub Actions run must publish the package; the GHCR package **`hermes-agent-addon`** must be set to **Public** (Package settings) for anonymous Supervisor pulls.
+- Dockerfile remains in-repo and is built by CI (`.github/workflows/build-addon.yml`).
+
 ## [0.0.36] - 2026-07-22
 
 ### Fixed

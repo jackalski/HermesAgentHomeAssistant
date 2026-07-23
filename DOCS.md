@@ -23,6 +23,8 @@ Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`,
 
 Architectures: `amd64`, `aarch64`, `armv7`.
 
+From **0.0.37**, the Supervisor **pulls** a prebuilt image (`ghcr.io/jackalski/hermes-agent-addon:<version>`) built by GitHub Actions. It does **not** run `docker build` on the HA host. If install fails with a pull/manifest error, confirm that GHCR package version exists and is **Public**.
+
 ## Quick start (recommended)
 
 **Settings → Add-ons → Hermes Agent Integration → Configuration:**
@@ -303,7 +305,8 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 
 | Symptom | Fix |
 |---------|-----|
-| Docker build fails with `getaddrinfo EAI_AGAIN` / `registry.npmjs.org` | Transient DNS during Supervisor build (not a config bug). Retry **Repair** / reinstall. Add-on **0.0.36+** retries npm installs automatically. Check HA host DNS / IPv6 if it keeps failing. |
+| Install/update fails pulling `ghcr.io/jackalski/hermes-agent-addon` | Confirm the version tag exists (GitHub Actions → **Build add-on images**) and the GHCR package is **Public**. Refresh the add-on repository and retry. |
+| Docker build fails with `getaddrinfo EAI_AGAIN` / `registry.npmjs.org` | Only applies when building the Dockerfile locally/CI. On HAOS **0.0.37+** the Supervisor pulls GHCR (no local build). For manual Dockerfile builds, retry and check DNS/IPv6; **0.0.36+** retries npm installs. |
 | `HTTP 400: No models provided` | Set provider API key in add-on config; restart; verify model in `/config/.hermes/config.yaml` |
 | OpenRouter HTTP 402 (insufficient credits) | Add credits at [openrouter.ai/settings/credits](https://openrouter.ai/settings/credits) or use a direct provider key (`google_api_key`, `anthropic_api_key`, …) |
 | Owl Alpha / Stealth HTTP 400 | Upstream flake on free model; switch to `google/gemini-2.5-flash` via `hermes model` or add-on model preset |

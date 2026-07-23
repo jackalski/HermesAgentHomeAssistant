@@ -4,6 +4,8 @@
 
 This repository contains the **Hermes Agent Integration** Home Assistant add-on, which runs **Hermes Agent** (upstream AI platform) inside **Home Assistant OS (HAOS)**. The add-on is currently marked **Experimental** in the HA add-on store.
 
+Releases ship as **prebuilt multi-arch Docker images** on GHCR (`ghcr.io/jackalski/hermes-agent-addon`) — HAOS pulls the image instead of compiling on the device.
+
 > Upstream rename history (FYI): clawdbot → moltbot → **hermes-agent**.
 
 ## Key Features

@@ -1,9 +1,11 @@
 name: Hermes Agent Integration
-version: "0.0.36"
+version: "0.0.37"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
 url: https://github.com/jackalski/HermesAgentHomeAssistant
+# Prebuilt multi-arch image (GitHub Actions → GHCR). Supervisor pulls this tag (= version).
+image: "ghcr.io/jackalski/hermes-agent-addon"
 services:
   - mqtt:want
 arch:
