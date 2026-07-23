@@ -27,10 +27,14 @@ RUN apt-get update \
     xz-utils \
     file \
     python3 \
+    python3-dev \
     python3-pip \
     python3-aiohttp \
     python3-yaml \
     python3-venv \
+    libffi-dev \
+    libjpeg62-turbo-dev \
+    zlib1g-dev \
     nginx \
     gnupg \
     build-essential \
