@@ -2,6 +2,13 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.41] - 2026-07-30
+
+### Changed
+- **Usage dashboard** now uses HACS **Mushroom**, **card-mod**, and **apexcharts-card** (health/provider chips, KPI tiles, dual-axis trends, breakdown bars, overhead donut). Install those cards before importing `/share/hermes/ha/dashboards/hermes_usage.yaml`.
+- **README**: My Home Assistant “add repository” badge, clearer post-install config path; removed Star History.
+- Status exporter add-on version fallback aligned to **0.0.41** (forces one-shot MQTT discovery republish).
+
 ## [0.0.40] - 2026-07-30
 
 ### Added

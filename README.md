@@ -1,12 +1,41 @@
 # Hermes Agent Integration – Home Assistant Add-on
 
-### Hermes Agent Home Assistant integration is available now!  https://github.com/jackalski/HermesAgentHomeAssistantIntegration
+Run **Hermes Agent** (upstream AI platform) inside **Home Assistant OS (HAOS)** via this add-on. Marked **Experimental** in the HA add-on store — expect breaking changes between releases.
 
-This repository contains the **Hermes Agent Integration** Home Assistant add-on, which runs **Hermes Agent** (upstream AI platform) inside **Home Assistant OS (HAOS)**. The add-on is currently marked **Experimental** in the HA add-on store.
+Companion custom integration (chat card / voice): [HermesAgentHomeAssistantIntegration](https://github.com/jackalski/HermesAgentHomeAssistantIntegration)
 
 Releases ship as **prebuilt multi-arch Docker images** on GHCR (`ghcr.io/jackalski/hermes-agent-addon`) — HAOS pulls the image instead of compiling on the device.
 
 > Upstream rename history (FYI): clawdbot → moltbot → **hermes-agent**.
+
+## Install
+
+Click the button to open the add add-on repository dialog on your Home Assistant instance:
+
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fjackalski%2FHermesAgentHomeAssistant)
+
+Or add the repository manually:
+
+1. Home Assistant → **Settings → Add-ons → Add-on store**
+2. **⋮ → Repositories**
+3. Add `https://github.com/jackalski/HermesAgentHomeAssistant`
+4. Install **Hermes Agent Integration** and start it
+
+### After install (minimum config)
+
+In **Settings → Add-ons → Hermes Agent Integration → Configuration**:
+
+- `setup_profile`: `home_assistant` (default)
+- A provider API key (e.g. OpenRouter)
+- `homeassistant_token`: long-lived HA token (for MCP)
+- Leave `hass_url` empty on HAOS (autodetected)
+
+Restart the add-on. Full walkthrough: [Quick start in DOCS.md](DOCS.md#quick-start-recommended). Read [SECURITY.md](SECURITY.md) before enabling remote access.
+
+### Optional next steps
+
+- **MQTT status sensors** + importable usage dashboard under `/share/hermes/ha/` (requires Mosquitto; dashboard needs HACS **Mushroom**, **card-mod**, and **apexcharts-card** — see [DOCS.md](DOCS.md#usage-dashboard-home-assistant))
+- **Assist / chat**: companion [Hermes Agent integration](https://github.com/jackalski/HermesAgentHomeAssistantIntegration) via HACS, or [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation)
 
 ## Key Features
 
@@ -39,15 +68,3 @@ Releases ship as **prebuilt multi-arch Docker images** on GHCR (`ghcr.io/jackals
 - Original repository: [https://github.com/techartdev/OpenClawHomeAssistant](https://github.com/techartdev/OpenClawHomeAssistant)
 - Original commit history: [https://github.com/techartdev/OpenClawHomeAssistant/commits/main](https://github.com/techartdev/OpenClawHomeAssistant/commits/main)
 - Full recognition and thanks to the original maintainers and contributors.
-
-## Install
-
-1. Home Assistant → **Settings → Add-ons → Add-on store**
-2. **⋮ → Repositories**
-3. Add this repo:
-   - `https://github.com/jackalski/HermesAgentHomeAssistant`
-4. Install **Hermes Agent Integration**
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=jackalski/HermesAgentHomeAssistant&type=date&legend=top-left)](https://www.star-history.com/#jackalski/HermesAgentHomeAssistant&type=date&legend=top-left)

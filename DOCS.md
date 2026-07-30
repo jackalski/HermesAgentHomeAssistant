@@ -17,6 +17,12 @@ Persistent data lives under `/config/` (`.hermes`, `hermesd`, `secrets`, `keys`,
 
 ## Install
 
+Click the button to open the add add-on repository dialog on your Home Assistant instance:
+
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fjackalski%2FHermesAgentHomeAssistant)
+
+Or add the repository manually:
+
 1. **Settings → Add-ons → Add-on store → Repositories**
 2. Add `https://github.com/jackalski/HermesAgentHomeAssistant`
 3. Install **Hermes Agent Integration** and start it.
@@ -207,6 +213,12 @@ On each add-on start, importable YAML is copied to **`/share/hermes/ha/`**:
 | `/share/hermes/ha/packages/hermes_usage.yaml` | Template sensors derived from `sensor.hermes_usage_summary` attributes |
 | `/share/hermes/ha/dashboards/hermes_usage.yaml` | Lovelace dashboard (Overview / Cost & tokens / Breakdown / Overhead) |
 
+**HACS frontend cards required** (install via HACS → Frontend before importing the dashboard):
+
+- [Mushroom](https://github.com/piitaya/lovelace-mushroom)
+- [card-mod](https://github.com/thomasloven/lovelace-card-mod)
+- [apexcharts-card](https://github.com/RomRider/apexcharts-card)
+
 Install steps:
 
 1. Enable MQTT status sensors + Mosquitto; wait for discovery entities (device **Hermes Agent Integration**).
@@ -217,7 +229,10 @@ Install steps:
    ```
 3. Copy the package file into HA config: `config/packages/hermes_usage.yaml` (from Share `hermes/ha/packages/`).
 4. Restart Home Assistant Core.
-5. Create a dashboard and paste `/share/hermes/ha/dashboards/hermes_usage.yaml` (or merge its `views:`). Built-in cards only — no HACS required.
+5. Install the three HACS cards above (Lovelace resources are added automatically).
+6. Create a dashboard and paste `/share/hermes/ha/dashboards/hermes_usage.yaml` (or merge its `views:`).
+
+If cards show as `Custom element doesn't exist` / unknown `custom:…` type, the HACS cards are missing or the browser cache needs a hard refresh.
 
 Repo copies also live under [`homeassistant/`](homeassistant/) for browsing without an installed add-on.
 
