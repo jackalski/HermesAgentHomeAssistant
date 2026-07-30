@@ -196,6 +196,7 @@ COPY example_scripts/ /opt/hermes-example-scripts/
 COPY hermes-proxy-shim.cjs /usr/local/lib/hermes-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
+COPY ha_dashboard/ /ha_dashboard/
 # Baked-in copy of the add-on manifest so runtime helpers can read the live
 # version (status exporter) without depending on the Supervisor API.
 COPY config.yaml /addon_config.yaml

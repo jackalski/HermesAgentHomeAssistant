@@ -1,0 +1,240 @@
+# Hermes Agent usage dashboard (importable Lovelace views)
+#
+# Install:
+#   1. Ensure MQTT status sensors are enabled and Mosquitto is running
+#   2. Install homeassistant/packages/hermes_usage.yaml (see package header)
+#   3. HA → Settings → Dashboards → Add dashboard → take control / raw editor
+#      OR: Settings → Dashboards → ⋮ → Resources not required (built-in cards only)
+#   4. Paste this YAML as a new dashboard (raw config), or merge the `views:` list
+#
+# Source after add-on start: /share/hermes/ha/dashboards/hermes_usage.yaml
+#
+# Built-in cards only (no HACS / ApexCharts).
+
+title: Hermes Agent
+views:
+  - title: Overview
+    path: overview
+    icon: mdi:robot
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Gateway & setup
+            heading_style: title
+          - type: entities
+            title: Health
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.hermes_gateway_running
+                name: Gateway running
+              - entity: binary_sensor.hermes_gateway_ready
+                name: Gateway ready
+              - entity: binary_sensor.hermes_setup_complete
+                name: Setup complete
+              - entity: binary_sensor.hermes_api_key_configured
+                name: API key configured
+              - entity: binary_sensor.hermes_model_configured
+                name: Model configured
+              - entity: binary_sensor.hermes_mcp_configured
+                name: MCP configured
+              - entity: binary_sensor.hermes_assist_api_enabled
+                name: Assist API
+          - type: entities
+            title: Model & versions
+            show_header_toggle: false
+            entities:
+              - entity: sensor.hermes_main_provider
+              - entity: sensor.hermes_main_model
+              - entity: sensor.hermes_addon_version
+              - entity: sensor.hermes_hermes_agent_version
+              - entity: sensor.hermes_disk_usage_percent
+              - entity: sensor.hermes_last_error
+          - type: gauge
+            entity: sensor.hermes_disk_usage_percent
+            name: Disk (/config)
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 70
+              red: 90
+
+  - title: Cost & tokens
+    path: cost
+    icon: mdi:currency-usd
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Spend & volume
+            heading_style: title
+          - type: entities
+            title: Lifetime
+            show_header_toggle: false
+            entities:
+              - entity: sensor.hermes_estimated_cost_usd
+                name: Estimated cost
+              - entity: sensor.hermes_actual_cost_usd
+                name: Actual cost
+              - entity: sensor.hermes_total_tokens
+                name: Total tokens
+              - entity: sensor.hermes_input_tokens_total
+                name: Input tokens
+              - entity: sensor.hermes_output_tokens_total
+                name: Output tokens
+              - entity: sensor.hermes_api_call_count_total
+                name: API calls
+              - entity: sensor.hermes_sessions_total
+                name: Sessions
+          - type: entities
+            title: Recent windows
+            show_header_toggle: false
+            entities:
+              - entity: sensor.hermes_cost_24h
+                name: Cost 24h (MQTT)
+              - entity: sensor.hermes_cost_24h_attr
+                name: Cost 24h (attr)
+              - entity: sensor.hermes_cost_7d_attr
+                name: Cost 7d
+              - entity: sensor.hermes_tokens_24h
+                name: Tokens 24h
+              - entity: sensor.hermes_tokens_7d_attr
+                name: Tokens 7d
+              - entity: sensor.hermes_sessions_24h
+                name: Sessions 24h
+          - type: gauge
+            entity: sensor.hermes_cache_hit_ratio_attr
+            name: Cache hit ratio
+            min: 0
+            max: 100
+            severity:
+              green: 40
+              yellow: 15
+              red: 0
+          - type: gauge
+            entity: sensor.hermes_overhead_ratio_attr
+            name: Overhead ratio
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 25
+              red: 50
+          - type: gauge
+            entity: sensor.hermes_reasoning_share_attr
+            name: Reasoning share
+            min: 0
+            max: 100
+          - type: history-graph
+            title: Cost (24h)
+            hours_to_show: 24
+            entities:
+              - entity: sensor.hermes_cost_24h
+                name: Cost 24h
+              - entity: sensor.hermes_estimated_cost_usd
+                name: Estimated total
+          - type: history-graph
+            title: Tokens (24h)
+            hours_to_show: 24
+            entities:
+              - entity: sensor.hermes_tokens_24h
+                name: Tokens 24h
+              - entity: sensor.hermes_total_tokens
+                name: Total tokens
+
+  - title: Breakdown
+    path: breakdown
+    icon: mdi:chart-bar
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: By provider / model / task
+            heading_style: title
+          - type: entities
+            title: Top spenders
+            show_header_toggle: false
+            entities:
+              - entity: sensor.hermes_top_provider
+                name: Top provider
+              - entity: sensor.hermes_top_model
+                name: Top model
+              - entity: sensor.hermes_usage_summary
+                name: Usage summary (tokens)
+          - type: markdown
+            title: Providers
+            content: >
+              {{ state_attr('sensor.hermes_breakdown_markdown', 'providers')
+                 or '_No provider breakdown yet — wait for the next status poll._' }}
+          - type: markdown
+            title: Models
+            content: >
+              {{ state_attr('sensor.hermes_breakdown_markdown', 'models')
+                 or '_No model breakdown yet._' }}
+          - type: markdown
+            title: Tasks
+            content: >
+              {{ state_attr('sensor.hermes_breakdown_markdown', 'tasks')
+                 or '_No task breakdown yet (requires session_model_usage in state.db)._' }}
+          - type: markdown
+            content: |
+              **Notes**
+              - Breakdowns come from `sensor.hermes_usage_summary` attributes (`by_provider`, `by_model`, `by_task`).
+              - Top 10 rows are kept; the rest roll into `other`.
+              - Auxiliary tasks (compression, title generation, …) appear under **Tasks**.
+
+  - title: Overhead
+    path: overhead
+    icon: mdi:alert-decagram-outline
+    type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Overhead proxies
+            heading_style: title
+          - type: entities
+            title: Overhead costs
+            show_header_toggle: false
+            entities:
+              - entity: sensor.hermes_overhead_cost_usd
+                name: Overhead cost (MQTT)
+              - entity: sensor.hermes_compression_cost_attr
+                name: Compression cost
+              - entity: sensor.hermes_auxiliary_cost_attr
+                name: Auxiliary (non-main) cost
+              - entity: sensor.hermes_failed_session_cost_attr
+                name: Failed-session cost
+              - entity: sensor.hermes_compression_splits_attr
+                name: Compression splits
+              - entity: sensor.hermes_cache_write_tokens_total
+                name: Cache write tokens
+              - entity: sensor.hermes_reasoning_tokens_total
+                name: Reasoning tokens
+          - type: gauge
+            entity: sensor.hermes_overhead_ratio_attr
+            name: Overhead ratio
+            min: 0
+            max: 100
+            severity:
+              green: 0
+              yellow: 25
+              red: 50
+          - type: markdown
+            title: How these are calculated
+            content: |
+              These are **proxies**, not absolute waste:
+
+              - **Aux cost / tokens** — `session_model_usage` rows where `task ≠ main` (compression, title, vision, …)
+              - **Compression cost** — task `compression` only
+              - **Compression splits** — sessions with a `parent_session_id` (legacy non-in-place compaction)
+              - **Overhead tokens** ≈ aux tokens + reasoning tokens + cache write tokens
+              - **Overhead cost** ≈ aux cost + session cost share attributed to reasoning + cache write
+              - **Overhead ratio** = overhead cost ÷ total cost
+              - **Cache hit ratio** = cache read ÷ (input + cache read)
+              - **Reasoning share** = reasoning ÷ (output + reasoning)
+              - **Failed-session cost** — sessions whose `end_reason` looks like error/timeout/crash/…

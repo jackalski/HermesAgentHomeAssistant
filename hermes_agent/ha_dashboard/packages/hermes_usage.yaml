@@ -1,0 +1,212 @@
+# Hermes Agent usage helpers (Home Assistant package)
+#
+# Install:
+#   1. Enable packages in configuration.yaml:
+#        homeassistant:
+#          packages: !include_dir_named packages
+#   2. Copy this file to config/packages/hermes_usage.yaml
+#      (source after add-on start: /share/hermes/ha/packages/hermes_usage.yaml)
+#   3. Restart Home Assistant Core
+#
+# Entity IDs assume default MQTT discovery names from the Hermes Agent Integration
+# add-on (unique_id hermes_agent_ha_addon_*). If you renamed entities, update the
+# references below.
+#
+# Primary attribute source: sensor.hermes_usage_summary (json_attributes_topic).
+
+template:
+  - sensor:
+      - name: "Hermes Cost 24h (attr)"
+        unique_id: hermes_usage_cost_24h_attr
+        unit_of_measurement: "USD"
+        device_class: monetary
+        state_class: measurement
+        state: >
+          {% set w = state_attr('sensor.hermes_usage_summary', 'windows') %}
+          {% if w and w.get('24h') %}
+            {{ w['24h'].get('cost_usd', 0) | float(0) | round(6) }}
+          {% else %}
+            {{ states('sensor.hermes_cost_24h') | float(0) | round(6) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Cost 7d (attr)"
+        unique_id: hermes_usage_cost_7d_attr
+        unit_of_measurement: "USD"
+        device_class: monetary
+        state_class: measurement
+        state: >
+          {% set w = state_attr('sensor.hermes_usage_summary', 'windows') %}
+          {% if w and w.get('7d') %}
+            {{ w['7d'].get('cost_usd', 0) | float(0) | round(6) }}
+          {% else %}
+            0
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Tokens 7d (attr)"
+        unique_id: hermes_usage_tokens_7d_attr
+        state_class: measurement
+        state: >
+          {% set w = state_attr('sensor.hermes_usage_summary', 'windows') %}
+          {% if w and w.get('7d') %}
+            {{ w['7d'].get('total_tokens', 0) | int(0) }}
+          {% else %}
+            0
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Overhead Ratio (attr)"
+        unique_id: hermes_usage_overhead_ratio_attr
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {% if o and o.get('overhead_ratio') is not none %}
+            {{ (o['overhead_ratio'] | float(0) * 100) | round(2) }}
+          {% else %}
+            {{ states('sensor.hermes_overhead_ratio') | float(0) | round(2) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Cache Hit Ratio (attr)"
+        unique_id: hermes_usage_cache_hit_ratio_attr
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {% if o and o.get('cache_hit_ratio') is not none %}
+            {{ (o['cache_hit_ratio'] | float(0) * 100) | round(2) }}
+          {% else %}
+            {{ states('sensor.hermes_cache_hit_ratio') | float(0) | round(2) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Reasoning Share (attr)"
+        unique_id: hermes_usage_reasoning_share_attr
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {% if o and o.get('reasoning_share') is not none %}
+            {{ (o['reasoning_share'] | float(0) * 100) | round(2) }}
+          {% else %}
+            {{ states('sensor.hermes_reasoning_share') | float(0) | round(2) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Compression Cost (attr)"
+        unique_id: hermes_usage_compression_cost_attr
+        unit_of_measurement: "USD"
+        device_class: monetary
+        state_class: measurement
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {% if o %}
+            {{ o.get('compression_cost_usd', 0) | float(0) | round(6) }}
+          {% else %}
+            {{ states('sensor.hermes_compression_cost_usd') | float(0) | round(6) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Auxiliary Cost (attr)"
+        unique_id: hermes_usage_aux_cost_attr
+        unit_of_measurement: "USD"
+        device_class: monetary
+        state_class: measurement
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {% if o %}
+            {{ o.get('aux_cost_usd', 0) | float(0) | round(6) }}
+          {% else %}
+            {{ states('sensor.hermes_auxiliary_cost_usd') | float(0) | round(6) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Failed Session Cost (attr)"
+        unique_id: hermes_usage_failed_session_cost_attr
+        unit_of_measurement: "USD"
+        device_class: monetary
+        state_class: measurement
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {{ o.get('failed_session_cost_usd', 0) | float(0) | round(6) if o else 0 }}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Compression Splits (attr)"
+        unique_id: hermes_usage_compression_splits_attr
+        state_class: total
+        state: >
+          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
+          {{ o.get('compression_splits', 0) | int(0) if o else 0 }}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Top Provider"
+        unique_id: hermes_usage_top_provider
+        state: >
+          {% set rows = state_attr('sensor.hermes_usage_summary', 'by_provider') %}
+          {% if rows and rows[0] %}
+            {{ rows[0].get('provider', 'unknown') }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          cost_usd: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_provider') %}
+            {{ rows[0].get('cost_usd', 0) if rows and rows[0] else 0 }}
+          total_tokens: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_provider') %}
+            {{ rows[0].get('total_tokens', 0) if rows and rows[0] else 0 }}
+          sessions: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_provider') %}
+            {{ rows[0].get('sessions', 0) if rows and rows[0] else 0 }}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Top Model"
+        unique_id: hermes_usage_top_model
+        state: >
+          {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') %}
+          {% if rows and rows[0] %}
+            {{ rows[0].get('model', 'unknown') }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          provider: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') %}
+            {{ rows[0].get('provider', 'unknown') if rows and rows[0] else 'unknown' }}
+          cost_usd: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') %}
+            {{ rows[0].get('cost_usd', 0) if rows and rows[0] else 0 }}
+          total_tokens: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') %}
+            {{ rows[0].get('total_tokens', 0) if rows and rows[0] else 0 }}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Breakdown Markdown"
+        unique_id: hermes_usage_breakdown_markdown
+        state: "ok"
+        attributes:
+          providers: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_provider') or [] %}
+            {% set ns = namespace(lines=['| Provider | Cost USD | Tokens | Sessions |', '|---|---:|---:|---:|']) %}
+            {% for r in rows[:8] %}
+              {% set ns.lines = ns.lines + ['| ' ~ (r.get('provider','?')) ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(4)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' | ' ~ (r.get('sessions',0)|int(0)) ~ ' |'] %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+          models: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') or [] %}
+            {% set ns = namespace(lines=['| Model | Provider | Cost USD | Tokens |', '|---|---|---:|---:|']) %}
+            {% for r in rows[:8] %}
+              {% set ns.lines = ns.lines + ['| ' ~ (r.get('model','?')) ~ ' | ' ~ (r.get('provider','?')) ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(4)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' |'] %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+          tasks: >
+            {% set rows = state_attr('sensor.hermes_usage_summary', 'by_task') or [] %}
+            {% set ns = namespace(lines=['| Task | Cost USD | Tokens | Sessions |', '|---|---:|---:|---:|']) %}
+            {% for r in rows[:8] %}
+              {% set label = r.get('label') or (r.get('task') if r.get('task') else 'main') %}
+              {% set ns.lines = ns.lines + ['| ' ~ label ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(4)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' | ' ~ (r.get('sessions',0)|int(0)) ~ ' |'] %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"

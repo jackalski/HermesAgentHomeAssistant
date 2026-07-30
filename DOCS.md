@@ -174,10 +174,54 @@ Prefer validating HMAC per [Hermes webhooks docs](https://hermes-agent.nousresea
 With `enable_ha_status_sensors` (default ON):
 
 - **MQTT** entities when Mosquitto is installed (device: Hermes Agent Integration).
-- **JSON API** at Ingress `/status.json` and `/share/hermes/status.json`.
+- **JSON API** at Ingress `/status.json` and `/share/hermes/status.json` (`schema_version: 2`).
 - Includes **`gateway_ready`** (gateway up + setup complete) and redacted **`last_error`** from Hermes logs.
+- **Usage / cost metrics** from Hermes `state.db` (`sessions` + `session_model_usage` when present):
+  - Lifetime + **24h / 7d** windows (tokens, estimated/actual cost, sessions, API calls)
+  - Token split: input, output, cache read/write, reasoning
+  - Scalars: `cost_24h`, `tokens_24h`, `cache_hit_ratio`, `reasoning_share`, `overhead_ratio`, `overhead_cost_usd`, `compression_cost_usd`, `aux_cost_usd`
+  - Rich attributes on **Hermes Usage Summary** (`by_provider`, `by_model`, `by_task`, `windows`, `overhead`)
 
 Options: `publish_mqtt_discovery` (one-shot per add-on version — marker `/config/.hermes/.mqtt_discovery_published`), `status_poll_interval_seconds` (30–300), `mqtt_state_prefix`.
+
+#### Overhead proxies (not absolute waste)
+
+| Field | Formula |
+|---|---|
+| Aux tokens / cost | `session_model_usage` where `task ≠ ''` (non-main: compression, title, vision, …) |
+| Compression cost | task `compression` |
+| Compression splits | sessions with `parent_session_id` set |
+| Overhead tokens | aux + reasoning + cache write |
+| Overhead cost | aux cost + session cost share of reasoning + cache write |
+| Overhead ratio | overhead cost ÷ total cost |
+| Cache hit ratio | cache read ÷ (input + cache read) |
+| Reasoning share | reasoning ÷ (output + reasoning) |
+| Failed-session cost | sessions whose `end_reason` matches error/timeout/crash/… |
+
+#### Usage dashboard (Home Assistant)
+
+On each add-on start, importable YAML is copied to **`/share/hermes/ha/`**:
+
+| Path | Purpose |
+|---|---|
+| `/share/hermes/ha/packages/hermes_usage.yaml` | Template sensors derived from `sensor.hermes_usage_summary` attributes |
+| `/share/hermes/ha/dashboards/hermes_usage.yaml` | Lovelace dashboard (Overview / Cost & tokens / Breakdown / Overhead) |
+
+Install steps:
+
+1. Enable MQTT status sensors + Mosquitto; wait for discovery entities (device **Hermes Agent Integration**).
+2. In HA `configuration.yaml`:
+   ```yaml
+   homeassistant:
+     packages: !include_dir_named packages
+   ```
+3. Copy the package file into HA config: `config/packages/hermes_usage.yaml` (from Share `hermes/ha/packages/`).
+4. Restart Home Assistant Core.
+5. Create a dashboard and paste `/share/hermes/ha/dashboards/hermes_usage.yaml` (or merge its `views:`). Built-in cards only — no HACS required.
+
+Repo copies also live under [`homeassistant/`](homeassistant/) for browsing without an installed add-on.
+
+Expected MQTT entity IDs use the default discovery names (`sensor.hermes_*`, `binary_sensor.hermes_*`). If you renamed entities, adjust the package and dashboard accordingly.
 
 ### ntfy (opt-in)
 
@@ -300,6 +344,7 @@ Results appear inline on the landing page. Configuration field descriptions refe
 | `/config/secrets/mqtt.password` | Persisted MQTT broker password (when set in add-on config) |
 | `/config/certs/` | TLS certs (`lan_https`) |
 | `/share/hermes/backups/` | `hermes-backup-share` archives |
+| `/share/hermes/ha/` | Importable HA usage package + Lovelace dashboard YAML |
 
 Hermes binary in the image is replaced on update; `/config/` data persists. When the add-on reconciles a different `hermes-agent` npm version, logs show **`Update progress [1/3]`…`[3/3]`** lines — open the add-on **Log** tab to follow long installs on HAOS.
 

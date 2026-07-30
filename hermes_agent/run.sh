@@ -65,6 +65,8 @@ if [ ! -f "$HELPER_PATH" ] && [ -f "$(dirname "$0")/hermes_config_helper.py" ]; 
 fi
 
 EXPORTER_PATH="/hermes_status_exporter.py"
+HA_DASHBOARD_SRC="/ha_dashboard"
+HA_DASHBOARD_SHARE="/share/hermes/ha"
 if [ ! -f "$EXPORTER_PATH" ] && [ -f "$(dirname "$0")/hermes_status_exporter.py" ]; then
   EXPORTER_PATH="$(dirname "$0")/hermes_status_exporter.py"
 fi
@@ -1997,6 +1999,32 @@ build_status_exporter_payload() {
     }'
 }
 
+sync_ha_dashboard_share() {
+  # Publish importable HA package + Lovelace YAML onto the HAOS share so users
+  # can copy them into config/ without cloning this repo.
+  local src="${HA_DASHBOARD_SRC:-/ha_dashboard}"
+  local dest="${HA_DASHBOARD_SHARE:-/share/hermes/ha}"
+  if [ ! -d "$src" ]; then
+    return 0
+  fi
+  mkdir -p "$dest/packages" "$dest/dashboards" 2>/dev/null || true
+  if ! cp -a "$src/packages/." "$dest/packages/" 2>/dev/null; then
+    log_warn "Could not sync HA package YAML to $dest/packages"
+    return 0
+  fi
+  if ! cp -a "$src/dashboards/." "$dest/dashboards/" 2>/dev/null; then
+    log_warn "Could not sync HA dashboard YAML to $dest/dashboards"
+    return 0
+  fi
+  local ver="unknown"
+  if [ -f /addon_config.yaml ]; then
+    ver="$(grep -E '^version:' /addon_config.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/[\"'\'']//g' | tr -d '[:space:]')"
+    [ -n "$ver" ] || ver="unknown"
+  fi
+  printf '%s\n' "$ver" >"$dest/.addon_version" 2>/dev/null || true
+  log_info "HA usage package/dashboard synced to $dest (addon=$ver)"
+}
+
 start_status_exporter() {
   if [ "$ENABLE_HA_STATUS_SENSORS" != "true" ] && [ "$ENABLE_HA_STATUS_SENSORS" != "1" ]; then
     log_info "HA status sensors disabled (enable_ha_status_sensors=false)"
@@ -2399,6 +2427,7 @@ else
 fi
 
 start_connection_test_server
+sync_ha_dashboard_share
 start_status_exporter
 
 # If the token was not available at startup (first boot / pre-onboard), schedule

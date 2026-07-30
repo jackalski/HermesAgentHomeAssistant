@@ -2,6 +2,15 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.40] - 2026-07-30
+
+### Added
+- **Usage / cost MQTT metrics** (`schema_version: 2`): lifetime + 24h/7d windows, cache/reasoning/actual cost scalars, and `usage_attributes` breakdowns (`by_provider`, `by_model`, `by_task`, `overhead` proxies) from `state.db` / `session_model_usage`.
+- **Home Assistant package + Lovelace dashboard**: synced on start to `/share/hermes/ha/` (also under repo `homeassistant/`) for template sensors and an Overview / Cost / Breakdown / Overhead dashboard (built-in cards only).
+
+### Changed
+- Status exporter add-on version fallback aligned to **0.0.40** (forces one-shot MQTT discovery republish).
+
 ## [0.0.39] - 2026-07-23
 
 ### Removed

@@ -263,7 +263,7 @@ configuration:
 
   mqtt_settings:
     name: MQTT Status Sensors
-    description: Broker connection and Home Assistant status sensor publishing (MQTT discovery + /status.json). Each broker field has a matching test on the add-on Web UI.
+    description: Broker connection and Home Assistant status sensor publishing (MQTT discovery + /status.json), including usage/cost breakdowns and overhead proxies. Importable dashboard YAML is synced to /share/hermes/ha/ on start. Each broker field has a matching test on the add-on Web UI.
     fields:
       broker_host:
         name: MQTT Broker Host
