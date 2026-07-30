@@ -236,7 +236,7 @@ If cards show as `Custom element doesn't exist` / unknown `custom:…` type, the
 
 Source YAML in the repo lives under [`hermes_agent/ha_dashboard/`](hermes_agent/ha_dashboard/) (baked into the add-on image). For browsing without an installed add-on, download the **`homeassistant-hermes-usage-*`** artifact from the [HA dashboard artifact](https://github.com/jackalski/HermesAgentHomeAssistant/actions/workflows/ha-dashboard.yml) workflow (layout: `homeassistant/packages/` + `homeassistant/dashboards/`).
 
-Expected MQTT entity IDs use the default discovery names (`sensor.hermes_*`, `binary_sensor.hermes_*`). If you renamed entities, adjust the package and dashboard accordingly.
+Expected MQTT entity IDs use discovery `object_id` slugs (`sensor.hermes_*`, `binary_sensor.hermes_*`) from add-on **0.0.42+**. If you renamed entities, or first discovered them on an older add-on where HA prefixed the device name (`sensor.hermes_agent_integration_hermes_*`), either rename entity IDs to match or delete the **Hermes Agent Integration** MQTT device and restart the add-on so discovery recreates them.
 
 ### ntfy (opt-in)
 
@@ -387,6 +387,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `http://<LAN-IP>:8642/v1` from HA Core (not HTTPS 18789) |
 | `Connection error` in Extended OpenAI Conversation | HA Core rejects self-signed HTTPS on 18789 — use Base URL `http://<LAN-IP>:8642/v1` (fixed in **0.0.13+**; API binds `0.0.0.0:8642`, bearer token required) |
 | MQTT status sensors missing / "MQTT broker not available" | Install and start **Mosquitto broker** add-on; use **Connection tests → Test Broker** / **Test Auth** on the Web UI after saving broker settings; fixed in **0.0.15+** (Supervisor API + retry) |
+| Usage dashboard shows unavailable / wrong entities (`hermes_agent_integration_hermes_*`) | Add-on **0.0.42+** pins MQTT `object_id` to `hermes_*`. Rename entity IDs, or delete the MQTT device **Hermes Agent Integration** and restart the add-on so discovery recreates short IDs. |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.19.0 > /config/.hermes/.addon-managed-hermes-version` |

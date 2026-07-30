@@ -4,6 +4,9 @@
 #   - Mushroom (https://github.com/piitaya/lovelace-mushroom)
 #   - card-mod (https://github.com/thomasloven/lovelace-card-mod)
 #   - apexcharts-card (https://github.com/RomRider/apexcharts-card)
+#     Supported chart_type values: line (default), scatter, pie, donut, radialBar.
+#     series.type: line | area | column. data_generator must return [timestamp_ms, value][].
+#     chart_type: bar is NOT supported by apexcharts-card.
 #   HACS adds Lovelace resources automatically after install.
 #
 # Install:
@@ -184,14 +187,14 @@ views:
               entity: sensor.hermes_cost_24h
           - type: custom:mushroom-template-card
             primary: >-
-              ${{ states('sensor.hermes_cost_7d_attr') | float(0) | round(4) }}
+              ${{ states('sensor.hermes_cost_7d') | float(0) | round(4) }}
             secondary: Cost 7d
             icon: mdi:calendar-week
             icon_color: green
             layout: vertical
             tap_action:
               action: more-info
-              entity: sensor.hermes_cost_7d_attr
+              entity: sensor.hermes_cost_7d
           - type: custom:mushroom-template-card
             primary: >-
               {{ states('sensor.hermes_tokens_24h') }}
@@ -204,14 +207,14 @@ views:
               entity: sensor.hermes_tokens_24h
           - type: custom:mushroom-template-card
             primary: >-
-              {{ states('sensor.hermes_tokens_7d_attr') }}
+              {{ states('sensor.hermes_tokens_7d') }}
             secondary: Tokens 7d
             icon: mdi:counter
             icon_color: blue
             layout: vertical
             tap_action:
               action: more-info
-              entity: sensor.hermes_tokens_7d_attr
+              entity: sensor.hermes_tokens_7d
           - type: custom:mushroom-template-card
             primary: >-
               {{ states('sensor.hermes_sessions_24h') }}
@@ -251,7 +254,7 @@ views:
               - entity: sensor.hermes_sessions_total
                 name: Sessions
           - type: gauge
-            entity: sensor.hermes_cache_hit_ratio_attr
+            entity: sensor.hermes_cache_hit_ratio
             name: Cache hit ratio
             min: 0
             max: 100
@@ -260,7 +263,7 @@ views:
               yellow: 15
               red: 0
           - type: gauge
-            entity: sensor.hermes_overhead_ratio_attr
+            entity: sensor.hermes_overhead_ratio
             name: Overhead ratio
             min: 0
             max: 100
@@ -269,7 +272,7 @@ views:
               yellow: 25
               red: 50
           - type: gauge
-            entity: sensor.hermes_reasoning_share_attr
+            entity: sensor.hermes_reasoning_share
             name: Reasoning share
             min: 0
             max: 100
@@ -370,12 +373,12 @@ views:
                 opposite: true
                 decimals: 0
             series:
-              - entity: sensor.hermes_cost_7d_attr
+              - entity: sensor.hermes_cost_7d
                 name: Cost 7d
                 yaxis_id: cost
                 type: area
                 opacity: 0.2
-              - entity: sensor.hermes_tokens_7d_attr
+              - entity: sensor.hermes_tokens_7d
                 name: Tokens 7d
                 yaxis_id: tokens
                 type: line
@@ -459,83 +462,123 @@ views:
           - type: custom:apexcharts-card
             header:
               show: true
-              title: Cost by provider
-            chart_type: bar
+              title: Cost by provider (rank left to right)
+              show_states: false
+            graph_span: 8h
+            span:
+              end: hour
             update_interval: 5m
             apex_config:
               chart:
                 height: 280
+                toolbar:
+                  show: false
               plotOptions:
                 bar:
-                  horizontal: true
+                  columnWidth: "70%"
                   borderRadius: 4
               dataLabels:
                 enabled: true
               xaxis:
-                type: category
+                labels:
+                  show: false
+              legend:
+                show: false
             series:
               - entity: sensor.hermes_usage_summary
+                type: column
                 name: Cost USD
+                float_precision: 4
+                unit: USD
+                show:
+                  datalabels: true
+                  in_header: false
+                  legend_value: false
                 data_generator: |
-                  const rows = entity.attributes.by_provider || [];
-                  return rows.slice(0, 8).map((r) => {
-                    const label = r.provider || r.name || r.label || 'other';
-                    return [label, Number(r.cost_usd) || 0];
-                  });
+                  const rows = (entity.attributes.by_provider || []).slice(0, 8);
+                  const step = 3600 * 1000;
+                  const t0 = end.getTime() - Math.max(rows.length, 1) * step;
+                  return rows.map((r, i) => [t0 + i * step, Number(r.cost_usd) || 0]);
           - type: custom:apexcharts-card
             header:
               show: true
-              title: Cost by model
-            chart_type: bar
+              title: Cost by model (rank left to right)
+              show_states: false
+            graph_span: 8h
+            span:
+              end: hour
             update_interval: 5m
             apex_config:
               chart:
                 height: 280
+                toolbar:
+                  show: false
               plotOptions:
                 bar:
-                  horizontal: true
+                  columnWidth: "70%"
                   borderRadius: 4
               dataLabels:
                 enabled: true
               xaxis:
-                type: category
+                labels:
+                  show: false
+              legend:
+                show: false
             series:
               - entity: sensor.hermes_usage_summary
+                type: column
                 name: Cost USD
+                float_precision: 4
+                unit: USD
+                show:
+                  datalabels: true
+                  in_header: false
+                  legend_value: false
                 data_generator: |
-                  const rows = entity.attributes.by_model || [];
-                  return rows.slice(0, 8).map((r) => {
-                    const label = r.model
-                      ? ((r.provider ? r.provider + '/' : '') + r.model)
-                      : (r.name || r.label || 'other');
-                    return [label, Number(r.cost_usd) || 0];
-                  });
+                  const rows = (entity.attributes.by_model || []).slice(0, 8);
+                  const step = 3600 * 1000;
+                  const t0 = end.getTime() - Math.max(rows.length, 1) * step;
+                  return rows.map((r, i) => [t0 + i * step, Number(r.cost_usd) || 0]);
           - type: custom:apexcharts-card
             header:
               show: true
-              title: Cost by task
-            chart_type: bar
+              title: Cost by task (rank left to right)
+              show_states: false
+            graph_span: 8h
+            span:
+              end: hour
             update_interval: 5m
             apex_config:
               chart:
                 height: 280
+                toolbar:
+                  show: false
               plotOptions:
                 bar:
-                  horizontal: true
+                  columnWidth: "70%"
                   borderRadius: 4
               dataLabels:
                 enabled: true
               xaxis:
-                type: category
+                labels:
+                  show: false
+              legend:
+                show: false
             series:
               - entity: sensor.hermes_usage_summary
+                type: column
                 name: Cost USD
+                float_precision: 4
+                unit: USD
+                show:
+                  datalabels: true
+                  in_header: false
+                  legend_value: false
                 data_generator: |
-                  const rows = entity.attributes.by_task || [];
-                  return rows.slice(0, 8).map((r) => {
-                    const label = r.label || r.task || r.name || 'other';
-                    return [label === '' ? 'main' : label, Number(r.cost_usd) || 0];
-                  });
+                  const rows = (entity.attributes.by_task || []).slice(0, 8);
+                  const step = 3600 * 1000;
+                  const t0 = end.getTime() - Math.max(rows.length, 1) * step;
+                  return rows.map((r, i) => [t0 + i * step, Number(r.cost_usd) || 0]);
           - type: markdown
             title: Providers (table)
             content: >
@@ -578,6 +621,7 @@ views:
             content: |
               **Notes**
               - Breakdowns come from `sensor.hermes_usage_summary` attributes (`by_provider`, `by_model`, `by_task`).
+              - Column charts rank top entries left→right by cost; names are in the tables below.
               - Top 10 rows are kept; the rest roll into `other`.
               - Auxiliary tasks (compression, title generation, …) appear under **Tasks**.
 
@@ -603,44 +647,44 @@ views:
               entity: sensor.hermes_overhead_cost_usd
           - type: custom:mushroom-template-card
             primary: >-
-              ${{ states('sensor.hermes_compression_cost_attr') | float(0) | round(4) }}
+              ${{ states('sensor.hermes_compression_cost_usd') | float(0) | round(4) }}
             secondary: Compression
             icon: mdi:arrow-collapse-vertical
             icon_color: amber
             layout: vertical
             tap_action:
               action: more-info
-              entity: sensor.hermes_compression_cost_attr
+              entity: sensor.hermes_compression_cost_usd
           - type: custom:mushroom-template-card
             primary: >-
-              ${{ states('sensor.hermes_auxiliary_cost_attr') | float(0) | round(4) }}
+              ${{ states('sensor.hermes_aux_cost_usd') | float(0) | round(4) }}
             secondary: Auxiliary
             icon: mdi:cog-transfer-outline
             icon_color: blue
             layout: vertical
             tap_action:
               action: more-info
-              entity: sensor.hermes_auxiliary_cost_attr
+              entity: sensor.hermes_aux_cost_usd
           - type: custom:mushroom-template-card
             primary: >-
-              ${{ states('sensor.hermes_failed_session_cost_attr') | float(0) | round(4) }}
+              ${{ states('sensor.hermes_failed_session_cost') | float(0) | round(4) }}
             secondary: Failed sessions
             icon: mdi:close-octagon-outline
             icon_color: red
             layout: vertical
             tap_action:
               action: more-info
-              entity: sensor.hermes_failed_session_cost_attr
+              entity: sensor.hermes_failed_session_cost
           - type: custom:mushroom-template-card
             primary: >-
-              {{ states('sensor.hermes_compression_splits_attr') }}
+              {{ states('sensor.hermes_compression_splits') }}
             secondary: Compression splits
             icon: mdi:call-split
             icon_color: grey
             layout: vertical
             tap_action:
               action: more-info
-              entity: sensor.hermes_compression_splits_attr
+              entity: sensor.hermes_compression_splits
           - type: custom:mushroom-entity-card
             entity: sensor.hermes_cache_write_tokens_total
             name: Cache write tokens
@@ -652,7 +696,7 @@ views:
             icon: mdi:head-cog-outline
             layout: horizontal
           - type: gauge
-            entity: sensor.hermes_overhead_ratio_attr
+            entity: sensor.hermes_overhead_ratio
             name: Overhead ratio
             min: 0
             max: 100
@@ -673,21 +717,19 @@ views:
                 height: 300
               legend:
                 position: bottom
-              plotOptions:
-                pie:
-                  donut:
-                    labels:
-                      show: true
-                      total:
-                        show: true
-                        label: Total $
             series:
-              - entity: sensor.hermes_compression_cost_attr
+              - entity: sensor.hermes_compression_cost_usd
                 name: Compression
-              - entity: sensor.hermes_auxiliary_cost_attr
+                float_precision: 4
+                unit: USD
+              - entity: sensor.hermes_aux_cost_usd
                 name: Auxiliary
-              - entity: sensor.hermes_failed_session_cost_attr
+                float_precision: 4
+                unit: USD
+              - entity: sensor.hermes_failed_session_cost
                 name: Failed sessions
+                float_precision: 4
+                unit: USD
           - type: markdown
             title: How these are calculated
             content: |

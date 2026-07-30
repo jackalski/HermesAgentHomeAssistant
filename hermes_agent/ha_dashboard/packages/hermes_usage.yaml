@@ -8,30 +8,18 @@
 #      (source after add-on start: /share/hermes/ha/packages/hermes_usage.yaml)
 #   3. Restart Home Assistant Core
 #
-# Entity IDs assume default MQTT discovery names from the Hermes Agent Integration
-# add-on (unique_id hermes_agent_ha_addon_*). If you renamed entities, update the
-# references below.
+# Entity IDs assume MQTT discovery object_id slugs from the Hermes Agent Integration
+# add-on (sensor.hermes_*, binary_sensor.hermes_*; unique_id hermes_agent_ha_addon_*).
+# If you renamed entities, update the references below.
 #
-# Primary attribute source: sensor.hermes_usage_summary (json_attributes_topic).
+# Prefer MQTT sensors when they exist. This package only adds helpers that MQTT
+# does not publish as scalars (7d windows, failed-session cost, compression splits,
+# top spender / breakdown tables) from sensor.hermes_usage_summary attributes.
 
 template:
   - sensor:
-      - name: "Hermes Cost 24h (attr)"
-        unique_id: hermes_usage_cost_24h_attr
-        unit_of_measurement: "USD"
-        device_class: monetary
-        state_class: measurement
-        state: >
-          {% set w = state_attr('sensor.hermes_usage_summary', 'windows') %}
-          {% if w and w.get('24h') %}
-            {{ w['24h'].get('cost_usd', 0) | float(0) | round(6) }}
-          {% else %}
-            {{ states('sensor.hermes_cost_24h') | float(0) | round(6) }}
-          {% endif %}
-        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
-
-      - name: "Hermes Cost 7d (attr)"
-        unique_id: hermes_usage_cost_7d_attr
+      - name: "Hermes Cost 7d"
+        unique_id: hermes_usage_cost_7d
         unit_of_measurement: "USD"
         device_class: monetary
         state_class: measurement
@@ -44,8 +32,8 @@ template:
           {% endif %}
         availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
 
-      - name: "Hermes Tokens 7d (attr)"
-        unique_id: hermes_usage_tokens_7d_attr
+      - name: "Hermes Tokens 7d"
+        unique_id: hermes_usage_tokens_7d
         state_class: measurement
         state: >
           {% set w = state_attr('sensor.hermes_usage_summary', 'windows') %}
@@ -56,75 +44,8 @@ template:
           {% endif %}
         availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
 
-      - name: "Hermes Overhead Ratio (attr)"
-        unique_id: hermes_usage_overhead_ratio_attr
-        unit_of_measurement: "%"
-        state_class: measurement
-        state: >
-          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
-          {% if o and o.get('overhead_ratio') is not none %}
-            {{ (o['overhead_ratio'] | float(0) * 100) | round(2) }}
-          {% else %}
-            {{ states('sensor.hermes_overhead_ratio') | float(0) | round(2) }}
-          {% endif %}
-        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
-
-      - name: "Hermes Cache Hit Ratio (attr)"
-        unique_id: hermes_usage_cache_hit_ratio_attr
-        unit_of_measurement: "%"
-        state_class: measurement
-        state: >
-          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
-          {% if o and o.get('cache_hit_ratio') is not none %}
-            {{ (o['cache_hit_ratio'] | float(0) * 100) | round(2) }}
-          {% else %}
-            {{ states('sensor.hermes_cache_hit_ratio') | float(0) | round(2) }}
-          {% endif %}
-        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
-
-      - name: "Hermes Reasoning Share (attr)"
-        unique_id: hermes_usage_reasoning_share_attr
-        unit_of_measurement: "%"
-        state_class: measurement
-        state: >
-          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
-          {% if o and o.get('reasoning_share') is not none %}
-            {{ (o['reasoning_share'] | float(0) * 100) | round(2) }}
-          {% else %}
-            {{ states('sensor.hermes_reasoning_share') | float(0) | round(2) }}
-          {% endif %}
-        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
-
-      - name: "Hermes Compression Cost (attr)"
-        unique_id: hermes_usage_compression_cost_attr
-        unit_of_measurement: "USD"
-        device_class: monetary
-        state_class: measurement
-        state: >
-          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
-          {% if o %}
-            {{ o.get('compression_cost_usd', 0) | float(0) | round(6) }}
-          {% else %}
-            {{ states('sensor.hermes_compression_cost_usd') | float(0) | round(6) }}
-          {% endif %}
-        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
-
-      - name: "Hermes Auxiliary Cost (attr)"
-        unique_id: hermes_usage_aux_cost_attr
-        unit_of_measurement: "USD"
-        device_class: monetary
-        state_class: measurement
-        state: >
-          {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}
-          {% if o %}
-            {{ o.get('aux_cost_usd', 0) | float(0) | round(6) }}
-          {% else %}
-            {{ states('sensor.hermes_auxiliary_cost_usd') | float(0) | round(6) }}
-          {% endif %}
-        availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
-
-      - name: "Hermes Failed Session Cost (attr)"
-        unique_id: hermes_usage_failed_session_cost_attr
+      - name: "Hermes Failed Session Cost"
+        unique_id: hermes_usage_failed_session_cost
         unit_of_measurement: "USD"
         device_class: monetary
         state_class: measurement
@@ -133,8 +54,8 @@ template:
           {{ o.get('failed_session_cost_usd', 0) | float(0) | round(6) if o else 0 }}
         availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
 
-      - name: "Hermes Compression Splits (attr)"
-        unique_id: hermes_usage_compression_splits_attr
+      - name: "Hermes Compression Splits"
+        unique_id: hermes_usage_compression_splits
         state_class: total
         state: >
           {% set o = state_attr('sensor.hermes_usage_summary', 'overhead') %}

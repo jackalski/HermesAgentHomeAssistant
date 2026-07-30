@@ -2,10 +2,17 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
-## Unreleased
+## [0.0.42] - 2026-07-30
+
+### Fixed
+- **MQTT discovery entity IDs**: publish an explicit `object_id` (`hermes_*`) so Home Assistant does not create device-prefixed IDs like `sensor.hermes_agent_integration_hermes_last_error`. Matches the usage dashboard/package (`sensor.hermes_*`, `binary_sensor.hermes_*`).
+  - Already-discovered entities keep their old entity IDs until you rename them or delete the **Hermes Agent Integration** MQTT device and let discovery recreate it after updating.
 
 ### Changed
 - Removed the duplicate repo tree `homeassistant/`. Source of truth remains `hermes_agent/ha_dashboard/`; CI builds the `homeassistant/{packages,dashboards}` layout and uploads it as the **HA dashboard artifact** workflow artifact.
+- **Usage package/dashboard**: dropped redundant `*_attr` template sensors that duplicated MQTT scalars; dashboard uses MQTT entities directly. Package keeps only helpers MQTT does not publish (`cost_7d`, `tokens_7d`, `failed_session_cost`, `compression_splits`, top spender / breakdown markdown).
+- **ApexCharts breakdown cards**: replaced unsupported `chart_type: bar` + categorical `[label, value]` `data_generator` (RomRider card only allows `line`/`scatter`/`pie`/`donut`/`radialBar`, and generators must return `[timestamp_ms, value]`) with `series.type: column` charts. Labels remain in the markdown tables.
+- Status exporter add-on version fallback aligned to **0.0.42** (forces one-shot MQTT discovery republish).
 
 ## [0.0.41] - 2026-07-30
 

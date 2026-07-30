@@ -53,7 +53,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.41"
+    fallback = "0.0.42"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -993,6 +993,16 @@ def _device_block(sw_version: str) -> dict[str, Any]:
     }
 
 
+def _discovery_object_id(slug: str) -> dict[str, str]:
+    """Pin entity_id slug so HA does not prefix the device name.
+
+    Without object_id, newer Home Assistant often creates IDs like
+    sensor.hermes_agent_integration_hermes_last_error. The usage dashboard and
+    package expect sensor.hermes_* / binary_sensor.hermes_*.
+    """
+    return {"object_id": slug}
+
+
 def resolve_mqtt_config(payload: dict) -> dict[str, Any]:
     try:
         from hermes_mqtt_resolver import resolve_mqtt_broker
@@ -1158,6 +1168,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{name}",
+            **_discovery_object_id(f"hermes_{name}"),
             "state_topic": f"{base}/status/{name}",
             "payload_on": "true",
             "payload_off": "false",
@@ -1175,6 +1186,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         cfg = {
             "name": f"Hermes Provider {prov_name.title()}",
             "unique_id": f"hermes_agent_ha_addon_provider_{prov_name}",
+            **_discovery_object_id(f"hermes_provider_{prov_name}"),
             "state_topic": f"{base}/status/provider_{prov_name}",
             "payload_on": "true",
             "payload_off": "false",
@@ -1201,6 +1213,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{key}",
+            **_discovery_object_id(f"hermes_{key}"),
             "state_topic": f"{base}/status/{key}",
             "availability_topic": avail_topic,
             "payload_available": "online",
@@ -1238,6 +1251,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{key}",
+            **_discovery_object_id(f"hermes_{key}"),
             "state_topic": f"{base}/status/{key}",
             "availability_topic": avail_topic,
             "payload_available": "online",
@@ -1255,6 +1269,7 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
     usage_summary_cfg = {
         "name": "Hermes Usage Summary",
         "unique_id": "hermes_agent_ha_addon_usage_summary",
+        **_discovery_object_id("hermes_usage_summary"),
         "state_topic": f"{base}/status/usage_summary_state",
         "json_attributes_topic": f"{base}/status/usage_attributes",
         "availability_topic": avail_topic,
