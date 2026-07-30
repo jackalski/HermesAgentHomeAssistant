@@ -22,6 +22,9 @@ The add-on packages upstream Hermes Agent + nginx + ttyd and manages startup/con
   - `hermes_agent/translations/*.yaml` (all locale UI strings)
   - `hermes_agent/Dockerfile`
   - `hermes_agent/CHANGELOG.md`
+  - `hermes_agent/ha_dashboard/` (usage package + Lovelace YAML; synced to `/share/hermes/ha/` at runtime)
+
+CI materializes a `homeassistant/{packages,dashboards}` tree from `hermes_agent/ha_dashboard/` and uploads it as a workflow artifact (do not commit a duplicate `homeassistant/` mirror).
 
 ## Core Rules
 

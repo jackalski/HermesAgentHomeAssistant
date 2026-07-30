@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## Unreleased
+
+### Changed
+- Removed the duplicate repo tree `homeassistant/`. Source of truth remains `hermes_agent/ha_dashboard/`; CI builds the `homeassistant/{packages,dashboards}` layout and uploads it as the **HA dashboard artifact** workflow artifact.
+
 ## [0.0.41] - 2026-07-30
 
 ### Changed

@@ -1,0 +1,56 @@
+# Materialize homeassistant/{packages,dashboards} from hermes_agent/ha_dashboard
+# and upload as a CI artifact (no duplicate tree in the repo).
+name: HA dashboard artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hermes_agent/ha_dashboard/**"
+      - ".github/workflows/ha-dashboard.yml"
+  pull_request:
+    paths:
+      - "hermes_agent/ha_dashboard/**"
+      - ".github/workflows/ha-dashboard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build homeassistant/ layout from ha_dashboard
+        id: build
+        run: |
+          set -euo pipefail
+          src="hermes_agent/ha_dashboard"
+          dest="homeassistant"
+          version="$(grep -E '^version:' hermes_agent/config.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/[\"'\'']//g' | tr -d '[:space:]')"
+
+          test -d "$src/packages"
+          test -d "$src/dashboards"
+          test -f "$src/packages/hermes_usage.yaml"
+          test -f "$src/dashboards/hermes_usage.yaml"
+
+          rm -rf "$dest"
+          mkdir -p "$dest/packages" "$dest/dashboards"
+          cp -a "$src/packages/." "$dest/packages/"
+          cp -a "$src/dashboards/." "$dest/dashboards/"
+          printf '%s\n' "$version" >"$dest/.addon_version"
+
+          echo "Created $dest from $src (addon=$version)"
+          find "$dest" -type f | sort
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload homeassistant artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: homeassistant-hermes-usage-${{ steps.build.outputs.version }}
+          path: homeassistant/
+          if-no-files-found: error
+          retention-days: 90

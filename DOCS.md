@@ -234,7 +234,7 @@ Install steps:
 
 If cards show as `Custom element doesn't exist` / unknown `custom:…` type, the HACS cards are missing or the browser cache needs a hard refresh.
 
-Repo copies also live under [`homeassistant/`](homeassistant/) for browsing without an installed add-on.
+Source YAML in the repo lives under [`hermes_agent/ha_dashboard/`](hermes_agent/ha_dashboard/) (baked into the add-on image). For browsing without an installed add-on, download the **`homeassistant-hermes-usage-*`** artifact from the [HA dashboard artifact](https://github.com/jackalski/HermesAgentHomeAssistant/actions/workflows/ha-dashboard.yml) workflow (layout: `homeassistant/packages/` + `homeassistant/dashboards/`).
 
 Expected MQTT entity IDs use the default discovery names (`sensor.hermes_*`, `binary_sensor.hermes_*`). If you renamed entities, adjust the package and dashboard accordingly.
 
