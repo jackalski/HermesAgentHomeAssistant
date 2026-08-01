@@ -56,18 +56,28 @@ RUN curl -LsSf https://astral.sh/uv/install.sh \
     | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh \
     && uv --version
 
-# Node.js 24 LTS "Krypton" from NodeSource (Debian Bookworm ships Node 18; Hermes requires 20+).
-RUN mkdir -p /etc/apt/keyrings \
+# Node.js from NodeSource (Debian Bookworm ships Node 18; Hermes requires 20+).
+# amd64/aarch64 → Node 24 LTS "Krypton". armv7 → Node 22 LTS "Jod": NodeSource
+# 24.x publishes only nsolid for armhf, not nodejs, so apt would fall back to
+# Debian Node 18 and fail the version guard.
+ARG BUILD_ARCH
+RUN ARCH_FOR_NODE="${BUILD_ARCH:-}" \
+    && if [ -z "$ARCH_FOR_NODE" ]; then ARCH_FOR_NODE="$(dpkg --print-architecture)"; fi \
+    && case "$ARCH_FOR_NODE" in \
+         armv7|armhf|arm/v7) NODE_MAJOR=22 ;; \
+         *) NODE_MAJOR=24 ;; \
+       esac \
+    && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
     && chmod 644 /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
     > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
     && NODE_VERSION="$(node -v)" \
-    && echo "$NODE_VERSION" \
-    && echo "$NODE_VERSION" | grep -E '^v24\.' \
+    && echo "BUILD_ARCH=${ARCH_FOR_NODE} NODE_MAJOR=${NODE_MAJOR} NODE_VERSION=${NODE_VERSION}" \
+    && echo "$NODE_VERSION" | grep -E "^v${NODE_MAJOR}\\." \
     && rm -f /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

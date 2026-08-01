@@ -2,6 +2,12 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.44] - 2026-08-01
+
+### Fixed
+- **armv7 Node install**: NodeSource `node_24.x` has no `nodejs` package for armhf (only `nsolid`), so the 0.0.43 image build fell back to Debian Node 18 and failed the version guard. armv7 now installs **Node 22 LTS**; amd64/aarch64 stay on **Node 24 LTS**.
+- Status exporter add-on version fallback aligned to **0.0.44**.
+
 ## [0.0.43] - 2026-08-01
 
 ### Fixed
@@ -13,7 +19,7 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 - **MQTT discovery marker**: only written after the broker acknowledges the full discovery batch, so a failed publish is retried on the next poll instead of being marked done.
 
 ### Changed
-- **Node.js 24 LTS "Krypton"** replaces Node 22 "Jod" in the add-on image. Node 22 entered maintenance; 24 is the active LTS line.
+- **Node.js 24 LTS "Krypton"** replaces Node 22 "Jod" on amd64/aarch64. armv7 remains on Node 22 (see 0.0.44).
 - **Status publishing is batched**: the ~50 state topics of a poll cycle are handed to the broker together and awaited in one shared timeout window instead of blocking on a QoS 1 round-trip per topic. Cuts a typical cycle from seconds to tens of milliseconds on slower or remote brokers.
 - **Hermes version lookup cached**: `hermes --version` runs once per process rather than spawning a subprocess (15 s timeout) on every poll.
 - **Poll interval no longer drifts**: the sleep subtracts the cycle duration, so `status_poll_interval_seconds` is the actual period.
