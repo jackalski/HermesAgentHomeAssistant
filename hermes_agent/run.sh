@@ -802,6 +802,30 @@ install_python_package_if_missing() {
   fi
 }
 
+# Hermes 0.19 HTTP MCP needs streamablehttp_client (mcp 1.x). mcp 2.x removed that
+# symbol; a bare `import mcp` still succeeds, so we probe the transport symbol.
+ensure_mcp_http_transport() {
+  local package_spec="mcp>=1.26.0,<2"
+  if python3 -c "from mcp.client.streamable_http import streamablehttp_client" >/dev/null 2>&1; then
+    log_info "MCP SDK HTTP transport available (${package_spec})."
+    return 0
+  fi
+  log_info "Installing/repairing MCP SDK for HTTP transport (${package_spec})..."
+  if command -v uv >/dev/null 2>&1 \
+    && uv pip install --system --break-system-packages --no-cache "${package_spec}" >/dev/null 2>&1; then
+    log_info "Installed Python dependency '${package_spec}' via uv (system)."
+  elif python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
+    log_info "Installed Python dependency '${package_spec}' via pip (system)."
+  else
+    log_warn "Could not install '${package_spec}'. HTTP MCP servers (HA, etc.) will fail."
+    return 1
+  fi
+  if ! python3 -c "from mcp.client.streamable_http import streamablehttp_client" >/dev/null 2>&1; then
+    log_warn "MCP SDK installed but streamablehttp_client still missing — HTTP MCP will fail."
+    return 1
+  fi
+}
+
 install_npm_package_if_missing() {
   local command_name="$1"
   local package_name="$2"
@@ -843,7 +867,7 @@ initialize_skills_hub_if_enabled() {
 }
 
 bootstrap_selected_tools() {
-  install_python_package_if_missing "mcp" "mcp"
+  ensure_mcp_http_transport
   install_python_package_if_missing "edge_tts" "edge-tts"
   install_python_package_if_missing "ddgs" "ddgs"
   install_python_package_if_missing "aiohttp" "aiohttp"

@@ -380,6 +380,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | Chat WebSocket `CONNECTION_REFUSED` / PTY **1006** | Fixed in **0.0.30+** — browser `Origin` (LAN IP or tunnel hostname) was forwarded to the loopback dashboard, which rejects non-loopback origins on WebSocket upgrades. Add-on nginx clears `Origin` on the upstream hop; REST was unaffected. Update add-on and restart. |
 | Chat PTY WebSocket 403 | Fixed in **0.0.27+** when caused by `/api/pty` routed to Assist API; fixed in **0.0.30+** when caused by Origin mismatch behind nginx. Open **Hermes Web UI** via the landing button; use Chat from the UI. |
 | MCP tools missing | Set token, enable MCP, restart, run `/reload-mcp` |
+| `mcp.client.streamable_http is not available` / HTTP MCP (HA, …) fails | Add-on **0.0.45+** pins MCP SDK `>=1.26,<2` (Hermes 0.19). Update the add-on and restart; startup repairs a wrongly-installed mcp 2.x. |
 | `HA (http) — failed` in MCP Servers | Add HA **Model Context Protocol Server** integration; verify token; leave `hass_url` empty on HAOS; run probe below |
 | `trusted_proxy_user_missing` | Use token auth (`lan_https`) or configure proxy `X-Forwarded-User` |
 | HA URL / MCP failures | Set explicit `hass_url`; check add-on log for autodetection line |
@@ -387,6 +388,7 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | `Method Not Allowed` on `/v1/chat/completions` | Fixed in **0.0.12+** — enable `enable_openai_api` and restart; use `http://<LAN-IP>:8642/v1` from HA Core (not HTTPS 18789) |
 | `Connection error` in Extended OpenAI Conversation | HA Core rejects self-signed HTTPS on 18789 — use Base URL `http://<LAN-IP>:8642/v1` (fixed in **0.0.13+**; API binds `0.0.0.0:8642`, bearer token required) |
 | MQTT status sensors missing / "MQTT broker not available" | Install and start **Mosquitto broker** add-on; use **Connection tests → Test Broker** / **Test Auth** on the Web UI after saving broker settings; fixed in **0.0.15+** (Supervisor API + retry) |
+| `MQTT publish timed out` for many topics (broker resolved) | TCP connect worked but QoS1 PUBACK never arrived — check Mosquitto ACL allows write to `homeassistant/#` and your state prefix (`hermes/#` by default), and that broker username/password can publish. Use **Connection tests → Test Auth**. |
 | Hermes entities show **Unavailable** while the add-on is stopped | Expected from **0.0.43+** — the MQTT client registers a Last Will so entities stop reporting stale values on crash/shutdown. They return to normal within one poll interval after the add-on starts. |
 | MQTT auth fails although Mosquitto autodetection succeeds | Update to **0.0.43+** — autodetection now prefers the Supervisor API, which also supplies broker credentials (bashio reports host/port only). |
 | Usage dashboard shows unavailable / wrong entities (`hermes_agent_integration_hermes_*`) | Add-on **0.0.42+** pins MQTT `object_id` to `hermes_*`. Rename entity IDs, or delete the MQTT device **Hermes Agent Integration** and restart the add-on so discovery recreates short IDs. |

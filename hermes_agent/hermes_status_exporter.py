@@ -54,7 +54,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.44"
+    fallback = "0.0.45"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -1175,6 +1175,16 @@ class MqttPublisher:
             print(f"WARN: MQTT publish failed for {topic}: {e}", file=sys.stderr)
             self.disconnect()
             return False
+        # rc != 0 means the client never queued the message (not connected /
+        # queue full). wait_for_publish would only hang until timeout.
+        rc = getattr(info, "rc", 0)
+        if rc not in (0, None):
+            print(
+                f"WARN: MQTT publish rejected locally for {topic} (rc={rc})",
+                file=sys.stderr,
+            )
+            self.disconnect()
+            return False
         self._pending.append((topic, info))
         return True
 
@@ -1185,19 +1195,33 @@ class MqttPublisher:
             return True
         deadline = time.monotonic() + self.PUBLISH_TIMEOUT
         ok = True
+        timed_out = 0
+        first_timeout_topic: str | None = None
         for topic, info in pending:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                print(f"WARN: MQTT publish timed out for {topic}", file=sys.stderr)
+                timed_out += 1
+                if first_timeout_topic is None:
+                    first_timeout_topic = topic
                 ok = False
                 continue
             try:
                 if not info.wait_for_publish(timeout=remaining):
-                    print(f"WARN: MQTT publish timed out for {topic}", file=sys.stderr)
+                    timed_out += 1
+                    if first_timeout_topic is None:
+                        first_timeout_topic = topic
                     ok = False
             except Exception as e:
                 print(f"WARN: MQTT publish failed for {topic}: {e}", file=sys.stderr)
                 ok = False
+        if timed_out:
+            print(
+                f"WARN: MQTT publish timed out for {timed_out}/{len(pending)} topics "
+                f"(first: {first_timeout_topic}). Broker accepted the TCP session but "
+                f"did not PUBACK — check ACL write access to homeassistant/# and your "
+                f"state prefix, credentials, and that Mosquitto is reachable.",
+                file=sys.stderr,
+            )
         return ok
 
 

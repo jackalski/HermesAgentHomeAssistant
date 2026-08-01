@@ -2,6 +2,15 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.45] - 2026-08-01
+
+### Fixed
+- **HTTP MCP servers broken after mcp 2.0**: the image installed unpinned `mcp`, which resolved to 2.x and dropped `streamablehttp_client`. Hermes 0.19 then logged `mcp.client.streamable_http is not available` for every HTTP MCP server (Home Assistant, custom URLs). The add-on now pins `mcp>=1.26.0,<2` (Hermes' declared line) and repairs the SDK at startup if the HTTP transport symbol is missing.
+- **MQTT timeout log spam**: when the broker never PUBACKs (ACL / credentials / unreachable), status export now emits one summary warning instead of one line per topic (~50). Local publish rejects (`rc != 0`) are reported immediately.
+
+### Changed
+- Status exporter add-on version fallback aligned to **0.0.45**.
+
 ## [0.0.44] - 2026-08-01
 
 ### Fixed

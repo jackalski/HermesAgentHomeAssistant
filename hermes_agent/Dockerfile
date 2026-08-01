@@ -161,9 +161,12 @@ COPY repair_hermes_wheel.py /repair_hermes_wheel.py
 RUN python3 /repair_hermes_wheel.py
 
 # System-wide Python deps: MCP SDK + gateway/dashboard/tooling (uv preferred, pip fallback).
+# Pin mcp to the 1.x line Hermes 0.19 declares (mcp==1.26.0 extra). Unpinned `mcp`
+# resolves to 2.x, which dropped streamablehttp_client; Hermes then reports
+# "mcp.client.streamable_http is not available" for every HTTP MCP server (HA, etc.).
 RUN uv pip install --system --break-system-packages --no-cache \
         paho-mqtt \
-        mcp \
+        "mcp>=1.26.0,<2" \
         websockets \
         "python-telegram-bot[webhooks]>=22.7" \
         edge-tts \
