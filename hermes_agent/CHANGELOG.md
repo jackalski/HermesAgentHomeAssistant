@@ -2,6 +2,24 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.43] - 2026-08-01
+
+### Fixed
+- **MQTT broker probing**: status exporter no longer re-resolves the broker (and TCP-probes it) on every poll while the MQTT session is already connected. Resolve once, reuse the live connection; retry discovery only after disconnect or missing host.
+- **Host-network TCP fallback**: reachability probes (`core-mosquitto` → `127.0.0.1`) run only for auto-detected Supervisor/bashio endpoints, not for explicit `mqtt_settings` / env hosts.
+- **MQTT broker credentials**: the Supervisor API is now queried before bashio when autodetecting Mosquitto. bashio only reports host/port, so on brokers that require authentication the add-on could resolve an endpoint without username/password and fail to connect.
+- **Entity availability after a crash**: the MQTT client registers a Last Will (`<prefix>/status/availability` → `offline`, retained) and publishes `offline` on shutdown. Previously all Hermes entities stayed "available" with frozen values if the add-on stopped unexpectedly.
+- **Invalid broker port**: a non-numeric `port` no longer raises on every poll cycle; the exporter warns once per cycle and falls back to `1883`.
+- **MQTT discovery marker**: only written after the broker acknowledges the full discovery batch, so a failed publish is retried on the next poll instead of being marked done.
+
+### Changed
+- **Node.js 24 LTS "Krypton"** replaces Node 22 "Jod" in the add-on image. Node 22 entered maintenance; 24 is the active LTS line.
+- **Status publishing is batched**: the ~50 state topics of a poll cycle are handed to the broker together and awaited in one shared timeout window instead of blocking on a QoS 1 round-trip per topic. Cuts a typical cycle from seconds to tens of milliseconds on slower or remote brokers.
+- **Hermes version lookup cached**: `hermes --version` runs once per process rather than spawning a subprocess (15 s timeout) on every poll.
+- **Poll interval no longer drifts**: the sleep subtracts the cycle duration, so `status_poll_interval_seconds` is the actual period.
+- Connection tests resolve the broker once per run; `mqtt_broker` and `mqtt_auth` no longer repeat autodetection (bashio subprocess, Supervisor requests, TCP probes).
+- Status exporter add-on version fallback aligned to **0.0.43**.
+
 ## [0.0.42] - 2026-07-30
 
 ### Fixed

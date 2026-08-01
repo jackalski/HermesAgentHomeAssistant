@@ -102,6 +102,7 @@ def _from_supervisor() -> dict[str, Any]:
 
 
 def _from_bashio() -> dict[str, Any]:
+    """Last-resort probe: reports host/port only, never broker credentials."""
     bashio = "/etc/bashio.sh"
     if not os.path.isfile(bashio):
         return {}
@@ -131,6 +132,11 @@ def _from_bashio() -> dict[str, Any]:
     }
 
 
+def _needs_host_network_fallback(source: str) -> bool:
+    """TCP reachability probes only for auto-detected broker endpoints."""
+    return source == "bashio" or source.startswith("supervisor:")
+
+
 def _host_network_fallback(supervisor_cfg: dict[str, Any]) -> dict[str, Any]:
     """On host-network add-ons, Mosquitto is often reachable on loopback."""
     host = str(supervisor_cfg.get("host") or "").strip()
@@ -157,10 +163,15 @@ def resolve_mqtt_broker(payload: dict[str, Any] | None = None) -> dict[str, Any]
         lambda: _from_mqtt_settings(payload),
         lambda: _from_options_payload(payload),
         _from_env,
-        _from_bashio,
+        # Supervisor precedes bashio: it also yields username/password, and it
+        # costs one local HTTP call instead of spawning a bash subprocess.
         _from_supervisor,
+        _from_bashio,
     ):
         resolved = resolver()
         if resolved.get("host"):
-            return _host_network_fallback(resolved)
+            source = str(resolved.get("source") or "")
+            if _needs_host_network_fallback(source):
+                return _host_network_fallback(resolved)
+            return resolved
     return {}

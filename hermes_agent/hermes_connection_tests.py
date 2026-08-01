@@ -235,10 +235,23 @@ def _build_mqtt_payload(options: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def check_mqtt_broker(options: dict[str, Any]) -> dict[str, Any]:
-    from hermes_mqtt_resolver import resolve_mqtt_broker
+_MQTT_RESOLVED: dict[str, Any] | None = None
 
-    resolved = resolve_mqtt_broker(_build_mqtt_payload(options))
+
+def _resolve_mqtt(options: dict[str, Any]) -> dict[str, Any]:
+    """Resolve once per process so the 'all' run does not repeat the bashio
+    subprocess, Supervisor requests and TCP probes for each MQTT check.
+    """
+    global _MQTT_RESOLVED
+    if _MQTT_RESOLVED is None:
+        from hermes_mqtt_resolver import resolve_mqtt_broker
+
+        _MQTT_RESOLVED = resolve_mqtt_broker(_build_mqtt_payload(options))
+    return _MQTT_RESOLVED
+
+
+def check_mqtt_broker(options: dict[str, Any]) -> dict[str, Any]:
+    resolved = _resolve_mqtt(options)
     if not resolved.get("host"):
         return {
             "ok": False,
@@ -261,9 +274,7 @@ def check_mqtt_broker(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def check_mqtt_auth(options: dict[str, Any]) -> dict[str, Any]:
-    from hermes_mqtt_resolver import resolve_mqtt_broker
-
-    resolved = resolve_mqtt_broker(_build_mqtt_payload(options))
+    resolved = _resolve_mqtt(options)
     username = str(resolved.get("username") or "").strip()
     if not username:
         return _skipped(

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -53,7 +54,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.42"
+    fallback = "0.0.43"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -150,22 +151,32 @@ def _probe_gateway_process() -> tuple[bool, str | None]:
     return False, None
 
 
+_HERMES_VERSION_CACHE: str | None = None
+
+
 def _hermes_agent_version() -> str:
-    for cmd in (["hermes", "--version"],):
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=False,
-            )
-            out = (proc.stdout or proc.stderr or "").strip()
-            if out:
-                return out.splitlines()[0].strip()
-        except (OSError, subprocess.TimeoutExpired):
-            continue
-    return "unknown"
+    """The installed binary cannot change without a container restart, so the
+    subprocess runs once per process. Failures stay uncached so a late-starting
+    install is still picked up on a later poll.
+    """
+    global _HERMES_VERSION_CACHE
+    if _HERMES_VERSION_CACHE is not None:
+        return _HERMES_VERSION_CACHE
+    try:
+        proc = subprocess.run(
+            ["hermes", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    out = (proc.stdout or proc.stderr or "").strip()
+    if not out:
+        return "unknown"
+    _HERMES_VERSION_CACHE = out.splitlines()[0].strip()
+    return _HERMES_VERSION_CACHE
 
 
 def _disk_usage_percent() -> int | None:
@@ -190,8 +201,6 @@ def _disk_usage_percent() -> int | None:
 
 
 def _redact_secrets(text: str) -> str:
-    import re
-
     out = text
     # Bearer / token-like fragments
     out = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._\-]{8,}", r"\1***", out)
@@ -321,11 +330,9 @@ def _table_exists(cur: sqlite3.Cursor, table: str) -> bool:
         return False
 
 
-def _safe_sum_expr(columns: set[str], name: str, cast: str = "INTEGER") -> str:
+def _safe_sum_expr(columns: set[str], name: str) -> str:
     if name not in columns:
         return f"0 AS {name}"
-    if cast == "REAL":
-        return f"COALESCE(SUM({name}), 0) AS {name}"
     return f"COALESCE(SUM({name}), 0) AS {name}"
 
 
@@ -374,7 +381,7 @@ def _ratio(numerator: float, denominator: float) -> float:
     return round(numerator / denominator, 6)
 
 
-def _window_from_row(row: sqlite3.Row | None, cols: set[str]) -> dict[str, Any]:
+def _window_from_row(row: sqlite3.Row | None) -> dict[str, Any]:
     input_t = _row_int(row, "input_tokens")
     output_t = _row_int(row, "output_tokens")
     cache_read = _row_int(row, "cache_read_tokens")
@@ -417,15 +424,15 @@ def _aggregate_sessions_window(
         "COUNT(*) AS sessions",
         f"COALESCE(SUM({cost_sql}), 0) AS cost_usd",
     ]
-    for name, cast in (
-        ("cache_read_tokens", "INTEGER"),
-        ("cache_write_tokens", "INTEGER"),
-        ("reasoning_tokens", "INTEGER"),
-        ("estimated_cost_usd", "REAL"),
-        ("actual_cost_usd", "REAL"),
-        ("api_call_count", "INTEGER"),
+    for name in (
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
+        "estimated_cost_usd",
+        "actual_cost_usd",
+        "api_call_count",
     ):
-        select_parts.append(_safe_sum_expr(cols, name, cast))
+        select_parts.append(_safe_sum_expr(cols, name))
 
     sql = f"SELECT {', '.join(select_parts)} FROM sessions"
     params: tuple[Any, ...] = ()
@@ -433,7 +440,7 @@ def _aggregate_sessions_window(
         sql += " WHERE started_at >= ?"
         params = (since,)
     cur.execute(sql, params)
-    return _window_from_row(cur.fetchone(), cols)
+    return _window_from_row(cur.fetchone())
 
 
 def _top_n_with_other(
@@ -648,8 +655,6 @@ def _sum_task_metrics(by_task: list[dict[str, Any]], *, aux_only: bool = False, 
             continue
         if task_name is not None and task != task_name:
             continue
-        if task_name is None and not aux_only:
-            pass
         tokens += int(row.get("total_tokens") or 0) + int(row.get("reasoning_tokens") or 0)
         cost += float(row.get("cost_usd") or 0)
     return tokens, cost
@@ -1039,23 +1044,21 @@ def mark_discovery_published(prefix: str) -> None:
 
 
 class MqttPublisher:
-    """Persistent MQTT client — one broker connection per poll cycle."""
+    """Persistent MQTT client — one broker connection reused across poll cycles."""
 
     CLIENT_ID = "hermes-agent-integration"
     KEEPALIVE = 60
     CONNECT_TIMEOUT = 15
     PUBLISH_TIMEOUT = 10
+    # One poll cycle emits ~50 topics; keep them all in flight at once.
+    MAX_INFLIGHT = 64
 
     def __init__(self) -> None:
         self._client: Any = None
         self._cfg_key: str | None = None
         self._loop_running = False
-
-    def _cfg_key_from(self, mqtt_cfg: dict) -> str:
-        host = str(mqtt_cfg.get("host", "") or "").strip()
-        port = str(mqtt_cfg.get("port", "1883") or "1883")
-        user = str(mqtt_cfg.get("username", "") or "")
-        return f"{host}:{port}:{user}"
+        self._availability_topic: str | None = None
+        self._pending: list[tuple[str, Any]] = []
 
     def is_ready(self) -> bool:
         if self._client is None:
@@ -1068,6 +1071,11 @@ class MqttPublisher:
     def disconnect(self) -> None:
         if self._client is not None:
             try:
+                if self._availability_topic and self.is_ready():
+                    info = self._client.publish(
+                        self._availability_topic, "offline", qos=1, retain=True
+                    )
+                    info.wait_for_publish(timeout=2)
                 if self._loop_running:
                     self._client.loop_stop()
                     self._loop_running = False
@@ -1076,10 +1084,12 @@ class MqttPublisher:
                 pass
         self._client = None
         self._cfg_key = None
+        self._pending = []
 
     def _make_client(self) -> Any:
         import paho.mqtt.client as mqtt
 
+        client = None
         for callback_api in (
             getattr(mqtt.CallbackAPIVersion, "VERSION2", None),
             getattr(mqtt.CallbackAPIVersion, "VERSION1", None),
@@ -1087,30 +1097,50 @@ class MqttPublisher:
             if callback_api is None:
                 continue
             try:
-                return mqtt.Client(
+                client = mqtt.Client(
                     callback_api,
                     client_id=self.CLIENT_ID,
                     protocol=mqtt.MQTTv311,
                 )
+                break
             except (AttributeError, TypeError):
                 continue
-        return mqtt.Client(client_id=self.CLIENT_ID, protocol=mqtt.MQTTv311)
+        if client is None:
+            client = mqtt.Client(client_id=self.CLIENT_ID, protocol=mqtt.MQTTv311)
 
-    def ensure_connected(self, mqtt_cfg: dict) -> bool:
+        client.max_inflight_messages_set(self.MAX_INFLIGHT)
+        if self._availability_topic:
+            # Without a will, an add-on crash leaves every entity "available"
+            # with frozen values until the next successful publish.
+            client.will_set(self._availability_topic, "offline", qos=1, retain=True)
+        return client
+
+    def ensure_connected(self, mqtt_cfg: dict, availability_topic: str | None = None) -> bool:
         host = str(mqtt_cfg.get("host", "") or "").strip()
         if not host:
             self.disconnect()
             return False
 
-        port = int(str(mqtt_cfg.get("port", "1883") or "1883"))
+        port_raw = str(mqtt_cfg.get("port", "1883") or "1883").strip()
+        try:
+            port = int(port_raw)
+        except ValueError:
+            print(f"WARN: Invalid MQTT port '{port_raw}'; using 1883", file=sys.stderr)
+            port = 1883
         user = str(mqtt_cfg.get("username", "") or "")
         password = str(mqtt_cfg.get("password", "") or "")
-        cfg_key = self._cfg_key_from(mqtt_cfg)
+        cfg_key = f"{host}:{port}:{user}"
 
-        if self._client is not None and self._cfg_key == cfg_key and self.is_ready():
+        if (
+            self._client is not None
+            and self._cfg_key == cfg_key
+            and self._availability_topic == availability_topic
+            and self.is_ready()
+        ):
             return True
 
         self.disconnect()
+        self._availability_topic = availability_topic
         try:
             client = self._make_client()
             if user:
@@ -1133,18 +1163,42 @@ class MqttPublisher:
             return False
 
     def publish(self, topic: str, payload: str, retain: bool = False) -> bool:
+        """Hand the message to paho and return; call flush() to await PUBACKs.
+
+        Waiting per message would serialise ~50 broker round-trips per cycle.
+        """
         if not self.is_ready():
             return False
         try:
             info = self._client.publish(topic, payload, qos=1, retain=retain)
-            if not info.wait_for_publish(timeout=self.PUBLISH_TIMEOUT):
-                print(f"WARN: MQTT publish timed out for {topic}", file=sys.stderr)
-                return False
-            return True
         except Exception as e:
             print(f"WARN: MQTT publish failed for {topic}: {e}", file=sys.stderr)
             self.disconnect()
             return False
+        self._pending.append((topic, info))
+        return True
+
+    def flush(self) -> bool:
+        """Await every queued publish within one shared timeout window."""
+        pending, self._pending = self._pending, []
+        if not pending:
+            return True
+        deadline = time.monotonic() + self.PUBLISH_TIMEOUT
+        ok = True
+        for topic, info in pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                print(f"WARN: MQTT publish timed out for {topic}", file=sys.stderr)
+                ok = False
+                continue
+            try:
+                if not info.wait_for_publish(timeout=remaining):
+                    print(f"WARN: MQTT publish timed out for {topic}", file=sys.stderr)
+                    ok = False
+            except Exception as e:
+                print(f"WARN: MQTT publish failed for {topic}: {e}", file=sys.stderr)
+                ok = False
+        return ok
 
 
 def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, prefix: str) -> bool:
@@ -1409,30 +1463,39 @@ def publish_mqtt_updates(
     snapshot: dict[str, Any],
     payload: dict,
     publisher: MqttPublisher,
+    mqtt_cfg: dict[str, Any] | None = None,
 ) -> bool:
-    mqtt_cfg = resolve_mqtt_config(payload)
+    if mqtt_cfg is None:
+        mqtt_cfg = resolve_mqtt_config(payload)
     if not mqtt_cfg.get("host"):
         publisher.disconnect()
         return False
-    if not publisher.ensure_connected(mqtt_cfg):
-        return False
 
     prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
+    if not publisher.ensure_connected(mqtt_cfg, f"{prefix.rstrip('/')}/status/availability"):
+        return False
+
     if _publish_mqtt_discovery_enabled(payload) and discovery_needs_publish(prefix):
-        if publish_mqtt_discovery(snapshot, publisher, prefix):
+        # Only stamp the marker once the broker has acknowledged the whole batch.
+        if publish_mqtt_discovery(snapshot, publisher, prefix) and publisher.flush():
             mark_discovery_published(prefix)
             print(
                 f"INFO: MQTT discovery published once (prefix={prefix}, addon={ADDON_VERSION})",
                 file=sys.stderr,
             )
-    return publish_mqtt_state(snapshot, publisher, prefix)
+    published = publish_mqtt_state(snapshot, publisher, prefix)
+    return publisher.flush() and published
 
 
-def run_once(payload: dict, publisher: MqttPublisher | None = None) -> bool:
+def run_once(
+    payload: dict,
+    publisher: MqttPublisher | None = None,
+    mqtt_cfg: dict[str, Any] | None = None,
+) -> bool:
     snapshot = collect_status_snapshot(payload)
     ok = write_status_file(STATUS_FILE, snapshot)
     if publisher is not None:
-        publish_mqtt_updates(snapshot, payload, publisher)
+        publish_mqtt_updates(snapshot, payload, publisher, mqtt_cfg)
     return ok
 
 
@@ -1442,36 +1505,42 @@ def run_loop(payload: dict) -> int:
     mqtt_unavailable_logged = False
     mqtt_available_logged = False
     publisher = MqttPublisher()
+    mqtt_cfg: dict[str, Any] = {}
 
     try:
         while True:
-            mqtt_cfg = resolve_mqtt_config(payload)
-            if mqtt_cfg.get("host"):
-                if not mqtt_available_logged:
-                    source = mqtt_cfg.get("source", "resolved")
+            # Resolve broker only when we have no usable endpoint or the session dropped.
+            # Avoids duplicate resolve + TCP probes on every poll while MQTT is live.
+            if not (mqtt_cfg.get("host") and publisher.is_ready()):
+                mqtt_cfg = resolve_mqtt_config(payload)
+                if mqtt_cfg.get("host"):
+                    if not mqtt_available_logged:
+                        source = mqtt_cfg.get("source", "resolved")
+                        print(
+                            f"INFO: MQTT broker resolved ({source}): "
+                            f"{mqtt_cfg['host']}:{mqtt_cfg.get('port', '1883')}",
+                            file=sys.stderr,
+                        )
+                        mqtt_available_logged = True
+                        mqtt_unavailable_logged = False
+                elif not mqtt_unavailable_logged:
                     print(
-                        f"INFO: MQTT broker resolved ({source}): "
-                        f"{mqtt_cfg['host']}:{mqtt_cfg.get('port', '1883')}",
+                        "INFO: MQTT broker not available yet; status sensors will retry each poll "
+                        "(ensure Mosquitto add-on is running)",
                         file=sys.stderr,
                     )
-                    mqtt_available_logged = True
-                    mqtt_unavailable_logged = False
-            elif not mqtt_unavailable_logged:
-                print(
-                    "INFO: MQTT broker not available yet; status sensors will retry each poll "
-                    "(ensure Mosquitto add-on is running)",
-                    file=sys.stderr,
-                )
-                publisher.disconnect()
-                mqtt_unavailable_logged = True
-                mqtt_available_logged = False
+                    publisher.disconnect()
+                    mqtt_unavailable_logged = True
+                    mqtt_available_logged = False
 
+            cycle_started = time.monotonic()
             try:
-                run_once(payload, publisher)
+                run_once(payload, publisher, mqtt_cfg)
             except Exception as e:
                 print(f"WARN: Status exporter cycle failed: {e}", file=sys.stderr)
 
-            time.sleep(interval)
+            # Keep the poll period stable instead of interval + cycle duration.
+            time.sleep(max(1.0, interval - (time.monotonic() - cycle_started)))
     finally:
         publisher.disconnect()
     return 0

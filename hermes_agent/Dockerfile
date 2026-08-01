@@ -56,18 +56,18 @@ RUN curl -LsSf https://astral.sh/uv/install.sh \
     | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh \
     && uv --version
 
-# Node.js 22 LTS from NodeSource (Debian Bookworm ships Node 18; Hermes requires 20+).
+# Node.js 24 LTS "Krypton" from NodeSource (Debian Bookworm ships Node 18; Hermes requires 20+).
 RUN mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
     && chmod 644 /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" \
     > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
     && NODE_VERSION="$(node -v)" \
     && echo "$NODE_VERSION" \
-    && echo "$NODE_VERSION" | grep -E '^v22\.' \
+    && echo "$NODE_VERSION" | grep -E '^v24\.' \
     && rm -f /etc/apt/sources.list.d/nodesource.list /etc/apt/keyrings/nodesource.gpg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -196,7 +196,6 @@ COPY example_scripts/ /opt/hermes-example-scripts/
 COPY hermes-proxy-shim.cjs /usr/local/lib/hermes-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
-COPY ha_dashboard/ /ha_dashboard/
 # Baked-in copy of the add-on manifest so runtime helpers can read the live
 # version (status exporter) without depending on the Supervisor API.
 COPY config.yaml /addon_config.yaml
