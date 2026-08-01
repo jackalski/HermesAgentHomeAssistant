@@ -14,7 +14,28 @@
 #
 # Prefer MQTT sensors when they exist. This package only adds helpers that MQTT
 # does not publish as scalars (7d windows, failed-session cost, compression splits,
-# top spender / breakdown tables) from sensor.hermes_usage_summary attributes.
+# top spender / breakdown tables, monthly budget) from sensor.hermes_usage_summary
+# attributes and sensor.hermes_estimated_cost_usd.
+
+input_number:
+  hermes_monthly_budget_usd:
+    name: Hermes Monthly Budget
+    min: 0
+    max: 1000
+    step: 1
+    unit_of_measurement: USD
+    mode: box
+    icon: mdi:cash-lock
+
+utility_meter:
+  hermes_cost_monthly:
+    source: sensor.hermes_estimated_cost_usd
+    name: Hermes Cost Monthly
+    cycle: monthly
+  hermes_cost_today:
+    source: sensor.hermes_estimated_cost_usd
+    name: Hermes Cost Today
+    cycle: daily
 
 template:
   - sensor:
@@ -103,6 +124,40 @@ template:
             {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') %}
             {{ rows[0].get('total_tokens', 0) if rows and rows[0] else 0 }}
         availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+      - name: "Hermes Budget Used Percent"
+        unique_id: hermes_usage_budget_used_percent
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:gauge
+        state: >
+          {% set budget = states('input_number.hermes_monthly_budget_usd') | float(0) %}
+          {% set spent = states('sensor.hermes_cost_monthly') | float(0) %}
+          {% if budget <= 0 %}
+            0
+          {% else %}
+            {{ ([100.0, (spent / budget * 100.0)] | min) | round(1) }}
+          {% endif %}
+        availability: >
+          {{ states('sensor.hermes_cost_monthly') not in ['unknown', 'unavailable']
+             and states('input_number.hermes_monthly_budget_usd') not in ['unknown', 'unavailable'] }}
+
+      - name: "Hermes Projected Month End Cost"
+        unique_id: hermes_usage_projected_month_end_cost
+        unit_of_measurement: "USD"
+        device_class: monetary
+        state_class: measurement
+        icon: mdi:chart-timeline-variant
+        state: >
+          {% set spent = states('sensor.hermes_cost_monthly') | float(0) %}
+          {% set day = now().day %}
+          {% set days_in_month = ((now().replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).day %}
+          {% if day < 1 %}
+            {{ spent | round(4) }}
+          {% else %}
+            {{ (spent / day * days_in_month) | round(4) }}
+          {% endif %}
+        availability: "{{ states('sensor.hermes_cost_monthly') not in ['unknown', 'unavailable'] }}"
 
       - name: "Hermes Breakdown Markdown"
         unique_id: hermes_usage_breakdown_markdown

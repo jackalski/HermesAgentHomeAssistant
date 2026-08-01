@@ -194,6 +194,7 @@ if [ -z "$MQTT_BROKER_PASSWORD" ] && [ -f /config/secrets/mqtt.password ]; then
 fi
 ENABLE_HA_STATUS_SENSORS="$(read_nested_option mqtt_settings enable_ha_status_sensors)"
 PUBLISH_MQTT_DISCOVERY="$(read_nested_option mqtt_settings publish_mqtt_discovery)"
+ENABLE_CONTROL_ENTITIES="$(read_nested_option mqtt_settings enable_control_entities)"
 STATUS_POLL_INTERVAL_RAW="$(read_nested_option mqtt_settings status_poll_interval_seconds)"
 MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 
@@ -223,6 +224,7 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 [ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.19.0"
 [ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
 [ -z "$PUBLISH_MQTT_DISCOVERY" ] && PUBLISH_MQTT_DISCOVERY="true"
+[ -z "$ENABLE_CONTROL_ENTITIES" ] && ENABLE_CONTROL_ENTITIES="false"
 [ -z "$STATUS_POLL_INTERVAL_RAW" ] && STATUS_POLL_INTERVAL_RAW="60"
 [ -z "$MQTT_STATE_PREFIX" ] && MQTT_STATE_PREFIX="hermes"
 [ -z "$MQTT_BROKER_PORT" ] && MQTT_BROKER_PORT="1883"
@@ -1359,6 +1361,7 @@ TTYD_PID=""
 STATUS_EXPORTER_PID=""
 TEST_SERVER_PID=""
 CDP_CHROMIUM_PID=""
+CONTROL_WATCHER_PID=""
 SHUTTING_DOWN="false"
 
 shutdown() {
@@ -1410,6 +1413,11 @@ shutdown() {
   if [ -n "${STATUS_EXPORTER_PID}" ] && kill -0 "${STATUS_EXPORTER_PID}" >/dev/null 2>&1; then
     kill -TERM "${STATUS_EXPORTER_PID}" >/dev/null 2>&1 || true
     wait "${STATUS_EXPORTER_PID}" || true
+  fi
+
+  if [ -n "${CONTROL_WATCHER_PID}" ] && kill -0 "${CONTROL_WATCHER_PID}" >/dev/null 2>&1; then
+    kill -TERM "${CONTROL_WATCHER_PID}" >/dev/null 2>&1 || true
+    wait "${CONTROL_WATCHER_PID}" 2>/dev/null || true
   fi
 
   if [ -n "${TEST_SERVER_PID}" ] && kill -0 "${TEST_SERVER_PID}" >/dev/null 2>&1; then
@@ -1990,6 +1998,7 @@ build_status_exporter_payload() {
     --arg enable_openai_api "$ENABLE_OPENAI_API" \
     --arg homeassistant_token "$HA_TOKEN" \
     --arg publish_mqtt_discovery "$PUBLISH_MQTT_DISCOVERY" \
+    --arg enable_control_entities "$ENABLE_CONTROL_ENTITIES" \
     --arg mqtt_state_prefix "$MQTT_STATE_PREFIX_SAFE" \
     --argjson status_poll_interval_seconds "$STATUS_POLL_INTERVAL_SECONDS" \
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
@@ -2009,6 +2018,7 @@ build_status_exporter_payload() {
       enable_openai_api: $enable_openai_api,
       homeassistant_token: $homeassistant_token,
       publish_mqtt_discovery: $publish_mqtt_discovery,
+      enable_control_entities: $enable_control_entities,
       mqtt_state_prefix: $mqtt_state_prefix,
       status_poll_interval_seconds: $status_poll_interval_seconds,
       api_keys: {
@@ -2031,7 +2041,7 @@ sync_ha_dashboard_share() {
   if [ ! -d "$src" ]; then
     return 0
   fi
-  mkdir -p "$dest/packages" "$dest/dashboards" 2>/dev/null || true
+  mkdir -p "$dest/packages" "$dest/dashboards" "$dest/blueprints" 2>/dev/null || true
   if ! cp -a "$src/packages/." "$dest/packages/" 2>/dev/null; then
     log_warn "Could not sync HA package YAML to $dest/packages"
     return 0
@@ -2039,6 +2049,11 @@ sync_ha_dashboard_share() {
   if ! cp -a "$src/dashboards/." "$dest/dashboards/" 2>/dev/null; then
     log_warn "Could not sync HA dashboard YAML to $dest/dashboards"
     return 0
+  fi
+  if [ -d "$src/blueprints" ]; then
+    if ! cp -a "$src/blueprints/." "$dest/blueprints/" 2>/dev/null; then
+      log_warn "Could not sync HA blueprints to $dest/blueprints"
+    fi
   fi
   local ver="unknown"
   if [ -f /addon_config.yaml ]; then
@@ -2065,9 +2080,51 @@ start_status_exporter() {
   payload="$(build_status_exporter_payload)"
 
   log_resolved_mqtt_broker
-  log_info "Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE})"
+  log_info "Starting HA status exporter (interval=${STATUS_POLL_INTERVAL_SECONDS}s, mqtt_prefix=${MQTT_STATE_PREFIX_SAFE}, control=${ENABLE_CONTROL_ENTITIES})"
   python3 "$EXPORTER_PATH" run-loop "$payload" &
   STATUS_EXPORTER_PID=$!
+}
+
+# Control watcher: poll /var/run/hermes-control for gateway restart requests
+# from the MQTT status exporter, and respawn the exporter if it exits.
+# Runs in a background subshell so set -e failures cannot take down PID 1.
+start_control_watcher() {
+  mkdir -p /var/run/hermes-control 2>/dev/null || true
+  # Drop any stale requests from a previous container instance.
+  rm -f /var/run/hermes-control/*.request /var/run/hermes-control/.*.tmp 2>/dev/null || true
+
+  (
+    # Isolate from PID 1's set -euo pipefail so a failed kill cannot abort the add-on.
+    set +e
+    set +u
+    while true; do
+      # Respawn status exporter if it died (control entities depend on it).
+      if [ "${ENABLE_HA_STATUS_SENSORS:-false}" = "true" ] || [ "${ENABLE_HA_STATUS_SENSORS:-false}" = "1" ]; then
+        if ! pgrep -f '[h]ermes_status_exporter.py' >/dev/null 2>&1; then
+          log_warn "HA status exporter exited; restarting..."
+          start_status_exporter
+        fi
+      fi
+
+      if [ -f /var/run/hermes-control/restart_gateway.request ]; then
+        rm -f /var/run/hermes-control/restart_gateway.request 2>/dev/null || true
+        log_info "Control request: restart gateway"
+        live_pid="$(find_gateway_daemon_pid 2>/dev/null || true)"
+        if [ -n "$live_pid" ] && kill -0 "$live_pid" 2>/dev/null; then
+          # Prefer upstream drain when available; supervisor loop will restart.
+          if command -v hermes >/dev/null 2>&1; then
+            hermes gateway stop --drain 2>/dev/null || hermes gateway drain 2>/dev/null || true
+          fi
+          kill -TERM "$live_pid" 2>/dev/null || true
+        else
+          log_warn "Control request: no live gateway PID to restart"
+        fi
+      fi
+      sleep 2
+    done
+  ) &
+  CONTROL_WATCHER_PID=$!
+  log_info "Control watcher started (PID ${CONTROL_WATCHER_PID})"
 }
 
 start_connection_test_server() {
@@ -2453,6 +2510,7 @@ fi
 start_connection_test_server
 sync_ha_dashboard_share
 start_status_exporter
+start_control_watcher
 
 # If the token was not available at startup (first boot / pre-onboard), schedule
 # a background re-render so the "Open Gateway Web UI" button gets the real token

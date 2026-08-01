@@ -2,6 +2,26 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.46] - 2026-08-01
+
+### Added
+- **MQTT control entities** (opt-in, default **OFF**): `mqtt_settings.enable_control_entities` publishes buttons (refresh status, backup, cleanup, restart gateway) and selects (approval mode, reasoning effort). Scripts run from the status exporter; gateway restart goes through `/var/run/hermes-control/` watched by `run.sh`.
+- **Budget helpers** in the HA package: `input_number.hermes_monthly_budget_usd`, daily/monthly `utility_meter` over `sensor.hermes_estimated_cost_usd`, plus budget-% and projected month-end template sensors.
+- **Automation blueprints** under `/share/hermes/ha/blueprints/automation/` (budget, gateway offline, disk) using `persistent_notification`.
+- **Timestamp sensors**: `sensor.hermes_updated_at`, `hermes_last_session_at`, `hermes_gateway_health_probe_at`.
+- Ingress serves `/share/hermes/ha/` at `./ha/` with a **Copy dashboard YAML** button on the landing page.
+- Dockerfile now copies `ha_dashboard/` into the image so share sync works at runtime.
+
+### Changed
+- **Usage dashboard** redesigned as two multi-column views (**Operations** / **Analysis**) with Hermes accent styling (re-import the dashboard YAML).
+- **`binary_sensor.hermes_assist_api_enabled`** reflects a live probe on port 8642 (not only the `enable_openai_api` option).
+- Monetary MQTT sensors advertise `suggested_display_precision: 4`.
+- Status exporter add-on version fallback aligned to **0.0.46** (forces MQTT discovery republish).
+
+### Fixed
+- **`sensor.hermes_last_error`**: state truncated for HA’s 255-character limit; full redacted line published as a JSON attribute.
+- Status exporter crash recovery via the control watcher (respawn if the process exits).
+
 ## [0.0.45] - 2026-08-01
 
 ### Fixed

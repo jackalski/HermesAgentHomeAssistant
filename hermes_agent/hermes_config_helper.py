@@ -786,6 +786,78 @@ _REASONING_EFFORTS = frozenset(
 )
 
 
+def get_approval_mode() -> str:
+    """Read current approvals.mode from Hermes config.yaml (default smart)."""
+    cfg = read_yaml_config()
+    if not isinstance(cfg, dict):
+        return "smart"
+    approvals = cfg.get("approvals")
+    if not isinstance(approvals, dict):
+        return "smart"
+    mode = str(approvals.get("mode") or "smart").strip().lower() or "smart"
+    return mode if mode in _APPROVAL_MODES else "smart"
+
+
+def get_reasoning_effort() -> str:
+    """Read current agent.reasoning_effort from Hermes config.yaml (default medium)."""
+    cfg = read_yaml_config()
+    if not isinstance(cfg, dict):
+        return "medium"
+    agent = cfg.get("agent")
+    if not isinstance(agent, dict):
+        return "medium"
+    effort = str(agent.get("reasoning_effort") or "medium").strip().lower() or "medium"
+    return effort if effort in _REASONING_EFFORTS else "medium"
+
+
+def set_approval_mode(approval_mode: str) -> bool:
+    """Force-set approvals.mode (MQTT select / runtime control). Requires gateway restart."""
+    mode = (approval_mode or "smart").strip().lower() or "smart"
+    if mode not in _APPROVAL_MODES:
+        print(f"ERROR: Invalid approval_mode: {approval_mode!r}", file=sys.stderr)
+        return False
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    approvals = cfg.get("approvals")
+    if not isinstance(approvals, dict):
+        approvals = {}
+    if approvals.get("mode") == mode:
+        return True
+    approvals["mode"] = mode
+    if "cron_mode" not in approvals:
+        approvals["cron_mode"] = "deny"
+    cfg["approvals"] = approvals
+    if write_yaml_config(cfg):
+        print(f"INFO: Set approvals.mode={mode} in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+def set_reasoning_effort(reasoning_effort: str) -> bool:
+    """Force-set agent.reasoning_effort (MQTT select / runtime control). Requires gateway restart."""
+    effort = (reasoning_effort or "medium").strip().lower() or "medium"
+    if effort not in _REASONING_EFFORTS:
+        print(f"ERROR: Invalid reasoning_effort: {reasoning_effort!r}", file=sys.stderr)
+        return False
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    agent = cfg.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
+    if agent.get("reasoning_effort") == effort:
+        return True
+    agent["reasoning_effort"] = effort
+    cfg["agent"] = agent
+    if write_yaml_config(cfg):
+        print(f"INFO: Set agent.reasoning_effort={effort} in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
 def bootstrap_approvals_if_missing(approval_mode: str):
     """Set approvals.mode only when the key is absent (do not clobber user edits)."""
     mode = (approval_mode or "smart").strip().lower() or "smart"
@@ -1319,6 +1391,25 @@ def main():
         additional_origins_csv = sys.argv[3] if len(sys.argv) >= 4 else ""
         disable_device_auth = True if len(sys.argv) < 5 else sys.argv[4].strip().lower() == "true"
         sys.exit(0 if set_control_ui_origins(origins_csv, additional_origins_csv, disable_device_auth) else 1)
+    elif cmd == "set-approval-mode":
+        if len(sys.argv) < 3:
+            print("Usage: hermes_config_helper.py set-approval-mode <smart|manual|off>", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0 if set_approval_mode(sys.argv[2]) else 1)
+    elif cmd == "set-reasoning-effort":
+        if len(sys.argv) < 3:
+            print(
+                "Usage: hermes_config_helper.py set-reasoning-effort <none|minimal|low|medium|high|xhigh|max|ultra>",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        sys.exit(0 if set_reasoning_effort(sys.argv[2]) else 1)
+    elif cmd == "get-approval-mode":
+        print(get_approval_mode())
+        sys.exit(0)
+    elif cmd == "get-reasoning-effort":
+        print(get_reasoning_effort())
+        sys.exit(0)
     elif cmd == "repair-known-invalid-settings":
         sys.exit(0 if repair_known_invalid_settings() else 1)
     elif cmd == "configure-ha-mcp":

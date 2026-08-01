@@ -155,7 +155,10 @@
         <div>API key synced: <b id="setupApiKey">__SETUP_API_KEY__</b></div>
         <div>Model configured: <b id="setupModel">__SETUP_MODEL__</b></div>
         <div>Home Assistant MCP: <b id="setupMcp">__SETUP_MCP__</b></div>
-        <div>Assist API enabled: <b id="setupAssist">__SETUP_ASSIST__</b> <span class="muted">(optional — set <code>enable_openai_api</code> for voice/Assist)</span></div>
+        <div>Assist API enabled: <b id="setupAssist">__SETUP_ASSIST__</b>
+          <span class="muted">(optional — set <code>enable_openai_api</code>, then point Extended OpenAI Conversation at
+          <code>http://&lt;LAN-IP&gt;:8642/v1</code> — see DOCS.md → Chat, voice, Assist)</span>
+        </div>
         <div id="setupGatewayHint" class="muted" style="margin-top:6px"></div>
       </div>
     </details>
@@ -178,6 +181,25 @@
           Example MQTT entities: <code>binary_sensor.hermes_gateway_running</code>,
           <code>sensor.hermes_main_model</code>, <code>sensor.hermes_total_tokens</code>,
           <code>sensor.hermes_estimated_cost_usd</code>
+        </div>
+
+        <div class="muted" style="font-size:12px;margin-top:14px;font-weight:600;color:#d1d5db">Usage dashboard</div>
+        <div style="margin-top:4px;font-size:13px;line-height:1.7">
+          After installing the package from <code>/share/hermes/ha/packages/</code>, paste the Lovelace YAML
+          into a new dashboard (raw editor). HACS cards required:
+          <b>Mushroom</b>, <b>card-mod</b>, <b>apexcharts-card</b>.
+        </div>
+        <div id="hacsCardStatus" class="muted" style="margin-top:6px;font-size:12px"></div>
+        <div class="row" style="margin-top:10px">
+          <button type="button" class="btn" id="copyDashBtn">Copy dashboard YAML</button>
+          <a class="btn secondary" id="downloadDashLink" href="./ha/dashboards/hermes_usage.yaml" download="hermes_usage.yaml">Download YAML</a>
+          <a class="btn secondary" href="./ha/packages/hermes_usage.yaml" download="hermes_usage.yaml">Download package</a>
+        </div>
+        <div id="copyDashMsg" class="muted" style="margin-top:6px;font-size:12px"></div>
+        <div class="muted" style="margin-top:8px;font-size:12px">
+          Blueprints (budget / gateway offline / disk): copy from
+          <code>/share/hermes/ha/blueprints/automation/</code> into
+          <code>config/blueprints/automation/hermes/</code>.
         </div>
       </div>
     </details>
@@ -537,6 +559,56 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
           <li><b>tailnet_https</b> — if you use Tailscale</li>
         </ul>`;
     }
+
+    // ---------- Usage dashboard copy + HACS card hints ----------
+    (function initDashboardHelpers() {
+      const msg = $('copyDashMsg');
+      const hacsEl = $('hacsCardStatus');
+      const copyBtn = $('copyDashBtn');
+      if (hacsEl) {
+        // customElements.get only works when this page loads the cards; on Ingress it
+        // usually will not. Still give install guidance and link the YAML.
+        hacsEl.innerHTML =
+          'Required HACS frontend cards: <code>mushroom</code>, <code>card-mod</code>, <code>apexcharts-card</code>. ' +
+          'Install via HACS → Frontend, then hard-refresh Home Assistant before importing the dashboard.';
+      }
+      if (!copyBtn) return;
+      copyBtn.addEventListener('click', async function () {
+        if (msg) msg.textContent = 'Fetching dashboard YAML…';
+        try {
+          const r = await fetch('./ha/dashboards/hermes_usage.yaml', { cache: 'no-store' });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const text = await r.text();
+          const secure = window.isSecureContext || location.protocol === 'https:' ||
+            location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+          if (secure && navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            if (msg) msg.textContent = 'Copied dashboard YAML to clipboard. Paste into HA → Dashboards → raw editor.';
+          } else {
+            // Fallback: select in a temporary textarea
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+              document.execCommand('copy');
+              if (msg) msg.textContent = 'Copied dashboard YAML to clipboard.';
+            } catch (e) {
+              if (msg) msg.textContent = 'Clipboard unavailable — use the Download YAML button instead.';
+            }
+            document.body.removeChild(ta);
+          }
+        } catch (e) {
+          if (msg) {
+            msg.textContent =
+              'Could not fetch ./ha/dashboards/hermes_usage.yaml (' + e + '). ' +
+              'Copy from /share/hermes/ha/dashboards/ on the HA host instead.';
+          }
+        }
+      });
+    })();
 
   })();
   </script>

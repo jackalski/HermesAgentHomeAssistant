@@ -14,6 +14,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -29,10 +30,16 @@ try:
         HERMES_ENV_PATH,
         HERMES_STATE_DIR,
         YAML_CONFIG_PATH,
+        _APPROVAL_MODES,
+        _REASONING_EFFORTS,
         _has_api_key,
+        get_approval_mode,
+        get_reasoning_effort,
         has_main_model_api_key,
         model_needs_bootstrap,
         read_yaml_config,
+        set_approval_mode,
+        set_reasoning_effort,
     )
 except ImportError:
     # Docker copies to /hermes_status_exporter.py alongside /hermes_config_helper.py
@@ -42,10 +49,16 @@ except ImportError:
         HERMES_ENV_PATH,
         HERMES_STATE_DIR,
         YAML_CONFIG_PATH,
+        _APPROVAL_MODES,
+        _REASONING_EFFORTS,
         _has_api_key,
+        get_approval_mode,
+        get_reasoning_effort,
         has_main_model_api_key,
         model_needs_bootstrap,
         read_yaml_config,
+        set_approval_mode,
+        set_reasoning_effort,
     )
 
 def _read_addon_version() -> str:
@@ -54,7 +67,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.45"
+    fallback = "0.0.46"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -77,6 +90,10 @@ STATUS_FILE = Path("/share/hermes/status.json")
 DISCOVERY_MARKER = HERMES_STATE_DIR / ".mqtt_discovery_published"
 STATUS_HASH_FILE = Path("/share/hermes/.status.json.sha256")
 STATE_DB_PATH = HERMES_STATE_DIR / "state.db"
+CONTROL_SPOOL_DIR = Path("/var/run/hermes-control")
+API_SERVER_DEFAULT_PORT = 8642
+# HA entity state max is 255; keep summary shorter so UTF-8 multi-byte is safe.
+LAST_ERROR_STATE_MAX = 200
 ERROR_LOG_CANDIDATES = (
     HERMES_STATE_DIR / "logs" / "errors.log",
     HERMES_STATE_DIR / "logs" / "gateway.log",
@@ -91,6 +108,13 @@ PROVIDER_SENSOR_NAMES = (
     ("ollama", "OLLAMA_API_KEY"),
     ("minimax", "MINIMAX_API_KEY"),
     ("xai", "XAI_API_KEY"),
+)
+
+CONTROL_BUTTONS = (
+    ("restart_gateway", "Restart Gateway", "mdi:restart"),
+    ("run_backup", "Run Backup", "mdi:cloud-upload-outline"),
+    ("run_cleanup", "Run Cleanup", "mdi:broom"),
+    ("refresh_status", "Refresh Status", "mdi:refresh"),
 )
 
 DEVICE_IDENTIFIERS = ["hermes_agent_ha_addon"]
@@ -210,11 +234,22 @@ def _redact_secrets(text: str) -> str:
         out,
     )
     out = re.sub(r"sk-[A-Za-z0-9]{10,}", "sk-***", out)
-    return out[:240]
+    return out
 
 
-def _read_last_error() -> str:
-    """Best-effort last error line from Hermes logs (never includes secrets)."""
+def _truncate_state(text: str, max_len: int = LAST_ERROR_STATE_MAX) -> str:
+    """Truncate for HA entity state (255-byte limit); keep UTF-8 safe."""
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
+
+
+def _read_last_error() -> tuple[str, str]:
+    """Best-effort last error from Hermes logs.
+
+    Returns (state_summary, full_redacted). State is truncated for HA's 255
+    character limit; full text is published as a JSON attribute.
+    """
     for path in ERROR_LOG_CANDIDATES:
         if not path.is_file():
             continue
@@ -228,8 +263,68 @@ def _read_last_error() -> str:
                 continue
             cleaned = _redact_secrets(line.strip())
             if cleaned:
-                return cleaned
-    return ""
+                return _truncate_state(cleaned), cleaned[:4000]
+    return "", ""
+
+
+def _probe_assist_api(port: int = API_SERVER_DEFAULT_PORT) -> bool:
+    """True when the OpenAI-compatible Assist API is accepting connections on port."""
+    try:
+        import socket
+
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=2.0):
+            return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _control_enabled(payload: dict) -> bool:
+    return str(payload.get("enable_control_entities", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _write_control_request(name: str, body: str = "") -> bool:
+    """Drop a request file for run.sh's control watcher (gateway restart)."""
+    try:
+        CONTROL_SPOOL_DIR.mkdir(parents=True, exist_ok=True)
+        path = CONTROL_SPOOL_DIR / f"{name}.request"
+        # Atomic-ish: write temp then rename
+        tmp = CONTROL_SPOOL_DIR / f".{name}.request.tmp"
+        tmp.write_text(body or _utc_now_iso(), encoding="utf-8")
+        tmp.replace(path)
+        return True
+    except OSError as e:
+        print(f"WARN: Failed to write control request {name}: {e}", file=sys.stderr)
+        return False
+
+
+def _run_script(cmd: list[str], label: str) -> bool:
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout or "").strip()[:200]
+            print(f"WARN: {label} exited {proc.returncode}: {err}", file=sys.stderr)
+            return False
+        print(f"INFO: {label} completed successfully", file=sys.stderr)
+        return True
+    except FileNotFoundError:
+        print(f"WARN: {label} command not found: {cmd[0]}", file=sys.stderr)
+        return False
+    except subprocess.TimeoutExpired:
+        print(f"WARN: {label} timed out", file=sys.stderr)
+        return False
+    except OSError as e:
+        print(f"WARN: {label} failed: {e}", file=sys.stderr)
+        return False
 
 
 USAGE_BREAKDOWN_TOP_N = 10
@@ -895,10 +990,18 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
 
     model_ok = bool(cfg) and not model_needs_bootstrap(cfg)
     mcp_ok = Path(HERMES_STATE_DIR / ".mcp_ha_configured").exists()
-    assist_ok = str(payload.get("enable_openai_api", "false")).lower() in ("1", "true", "yes")
+    # Prefer a live probe so the sensor means "Assist API is answering", not
+    # merely "enable_openai_api is ticked". Fall back to the option when the
+    # option is off (probe would always fail) or when probing is unavailable.
+    assist_option = str(payload.get("enable_openai_api", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    assist_ok = _probe_assist_api() if assist_option else False
     ha_token_set = bool(str(payload.get("homeassistant_token", "")).strip())
     setup_complete = any_api_key and model_ok and (mcp_ok if ha_token_set else True)
-    last_error = _read_last_error()
+    last_error_summary, last_error_full = _read_last_error()
     gateway_ready = bool(gateway_running) and bool(setup_complete)
 
     hermes_version = _hermes_agent_version()
@@ -914,12 +1017,15 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         "gateway_running": gateway_running,
         "gateway_ready": gateway_ready,
         "gateway_health_probe_at": gateway_probe_at,
-        "last_error": last_error or "none",
+        "last_error": last_error_summary or "none",
+        "last_error_full": last_error_full or "none",
         "api_key_configured": any_api_key,
         "model_configured": model_ok,
         "mcp_configured": mcp_ok,
         "assist_api_enabled": assist_ok,
         "setup_complete": setup_complete,
+        "approval_mode": get_approval_mode(),
+        "reasoning_effort": get_reasoning_effort(),
         "main_provider": main_provider or "unknown",
         "main_model": main_model or "unknown",
         "auxiliary_title_model": aux_model or "unknown",
@@ -1023,22 +1129,25 @@ def resolve_mqtt_config(payload: dict) -> dict[str, Any]:
     return mqtt_cfg if isinstance(mqtt_cfg, dict) else {}
 
 
-def _discovery_marker_key(prefix: str) -> str:
-    return f"{ADDON_VERSION}:{prefix.rstrip('/')}"
+def _discovery_marker_key(prefix: str, control_enabled: bool = False) -> str:
+    ctrl = "ctrl1" if control_enabled else "ctrl0"
+    return f"{ADDON_VERSION}:{prefix.rstrip('/')}:{ctrl}"
 
 
-def discovery_needs_publish(prefix: str) -> bool:
-    expected = _discovery_marker_key(prefix)
+def discovery_needs_publish(prefix: str, control_enabled: bool = False) -> bool:
+    expected = _discovery_marker_key(prefix, control_enabled)
     try:
         return DISCOVERY_MARKER.read_text(encoding="utf-8").strip() != expected
     except OSError:
         return True
 
 
-def mark_discovery_published(prefix: str) -> None:
+def mark_discovery_published(prefix: str, control_enabled: bool = False) -> None:
     try:
         DISCOVERY_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        DISCOVERY_MARKER.write_text(_discovery_marker_key(prefix) + "\n", encoding="utf-8")
+        DISCOVERY_MARKER.write_text(
+            _discovery_marker_key(prefix, control_enabled) + "\n", encoding="utf-8"
+        )
     except OSError as e:
         print(f"WARN: Failed to write MQTT discovery marker: {e}", file=sys.stderr)
 
@@ -1059,6 +1168,26 @@ class MqttPublisher:
         self._loop_running = False
         self._availability_topic: str | None = None
         self._pending: list[tuple[str, Any]] = []
+        self._wake = threading.Event()
+        self._command_handler: Any = None
+        self._command_topic: str | None = None
+        self._subscribed_command = False
+
+    def set_command_handler(self, topic: str | None, handler: Any) -> None:
+        """Register (or clear) the MQTT command subscription callback."""
+        self._command_topic = topic
+        self._command_handler = handler
+        self._subscribed_command = False
+        if self._client is not None and self.is_ready():
+            self._apply_command_subscription()
+
+    def request_wake(self) -> None:
+        self._wake.set()
+
+    def wait_interval(self, seconds: float) -> None:
+        """Sleep up to `seconds`, but return early if request_wake() is called."""
+        self._wake.clear()
+        self._wake.wait(timeout=max(1.0, seconds))
 
     def is_ready(self) -> bool:
         if self._client is None:
@@ -1085,6 +1214,41 @@ class MqttPublisher:
         self._client = None
         self._cfg_key = None
         self._pending = []
+        self._subscribed_command = False
+
+    def _on_message(self, _client: Any, _userdata: Any, msg: Any) -> None:
+        if self._command_handler is None:
+            return
+        try:
+            topic = getattr(msg, "topic", "") or ""
+            payload = msg.payload
+            if isinstance(payload, bytes):
+                text = payload.decode("utf-8", errors="replace")
+            else:
+                text = str(payload or "")
+            self._command_handler(topic, text)
+        except Exception as e:
+            print(f"WARN: MQTT command handler failed: {e}", file=sys.stderr)
+
+    def _apply_command_subscription(self) -> None:
+        if self._client is None or not self.is_ready():
+            return
+        try:
+            if self._command_topic and self._command_handler is not None:
+                self._client.on_message = self._on_message
+                self._client.subscribe(self._command_topic, qos=1)
+                self._subscribed_command = True
+                print(f"INFO: Subscribed to MQTT commands: {self._command_topic}", file=sys.stderr)
+            else:
+                # Best-effort unsubscribe when control is disabled.
+                if self._subscribed_command and self._command_topic:
+                    try:
+                        self._client.unsubscribe(self._command_topic)
+                    except Exception:
+                        pass
+                self._subscribed_command = False
+        except Exception as e:
+            print(f"WARN: MQTT command subscribe failed: {e}", file=sys.stderr)
 
     def _make_client(self) -> Any:
         import paho.mqtt.client as mqtt
@@ -1137,6 +1301,8 @@ class MqttPublisher:
             and self._availability_topic == availability_topic
             and self.is_ready()
         ):
+            if self._command_topic and self._command_handler and not self._subscribed_command:
+                self._apply_command_subscription()
             return True
 
         self.disconnect()
@@ -1156,6 +1322,7 @@ class MqttPublisher:
             self._client = client
             self._cfg_key = cfg_key
             self._loop_running = True
+            self._apply_command_subscription()
             return True
         except Exception as e:
             print(f"WARN: MQTT connect failed ({host}:{port}): {e}", file=sys.stderr)
@@ -1225,7 +1392,12 @@ class MqttPublisher:
         return ok
 
 
-def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, prefix: str) -> bool:
+def publish_mqtt_discovery(
+    snapshot: dict[str, Any],
+    publisher: MqttPublisher,
+    prefix: str,
+    control_enabled: bool = False,
+) -> bool:
     if not publisher.is_ready():
         return False
 
@@ -1285,7 +1457,6 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         ("setup_profile", "Setup Profile"),
         ("access_mode", "Access Mode"),
         ("gateway_mode", "Gateway Mode"),
-        ("last_error", "Last Error"),
     ]
     for key, label in text_sensors:
         cfg = {
@@ -1293,6 +1464,44 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
             "unique_id": f"hermes_agent_ha_addon_{key}",
             **_discovery_object_id(f"hermes_{key}"),
             "state_topic": f"{base}/status/{key}",
+            "availability_topic": avail_topic,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "device": device,
+        }
+        topic = f"homeassistant/sensor/hermes_agent/{key}/config"
+        publisher.publish(topic, json.dumps(cfg), retain=True)
+
+    # last_error: short state + full text in attributes (HA state ≤ 255 chars)
+    last_error_cfg = {
+        "name": "Hermes Last Error",
+        "unique_id": "hermes_agent_ha_addon_last_error",
+        **_discovery_object_id("hermes_last_error"),
+        "state_topic": f"{base}/status/last_error",
+        "json_attributes_topic": f"{base}/status/last_error_attributes",
+        "availability_topic": avail_topic,
+        "payload_available": "online",
+        "payload_not_available": "offline",
+        "device": device,
+    }
+    publisher.publish(
+        "homeassistant/sensor/hermes_agent/last_error/config",
+        json.dumps(last_error_cfg),
+        retain=True,
+    )
+
+    timestamp_sensors = [
+        ("updated_at", "Status Updated At"),
+        ("last_session_at", "Last Session At"),
+        ("gateway_health_probe_at", "Gateway Health Probe At"),
+    ]
+    for key, label in timestamp_sensors:
+        cfg = {
+            "name": f"Hermes {label}",
+            "unique_id": f"hermes_agent_ha_addon_{key}",
+            **_discovery_object_id(f"hermes_{key}"),
+            "state_topic": f"{base}/status/{key}",
+            "device_class": "timestamp",
             "availability_topic": avail_topic,
             "payload_available": "online",
             "payload_not_available": "offline",
@@ -1341,6 +1550,8 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
             cfg["device_class"] = device_class
         if unit:
             cfg["unit_of_measurement"] = unit
+        if device_class == "monetary":
+            cfg["suggested_display_precision"] = 4
         topic = f"homeassistant/sensor/hermes_agent/{key}/config"
         publisher.publish(topic, json.dumps(cfg), retain=True)
 
@@ -1360,7 +1571,75 @@ def publish_mqtt_discovery(snapshot: dict[str, Any], publisher: MqttPublisher, p
         json.dumps(usage_summary_cfg),
         retain=True,
     )
+
+    if control_enabled:
+        publish_control_discovery(publisher, prefix, device, avail_topic)
+    else:
+        clear_control_discovery(publisher)
+
     return True
+
+
+def publish_control_discovery(
+    publisher: MqttPublisher,
+    prefix: str,
+    device: dict[str, Any],
+    avail_topic: str,
+) -> None:
+    base = prefix.rstrip("/")
+    for slug, label, icon in CONTROL_BUTTONS:
+        cfg = {
+            "name": f"Hermes {label}",
+            "unique_id": f"hermes_agent_ha_addon_{slug}",
+            **_discovery_object_id(f"hermes_{slug}"),
+            "command_topic": f"{base}/command/{slug}",
+            "availability_topic": avail_topic,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "icon": icon,
+            "device": device,
+        }
+        topic = f"homeassistant/button/hermes_agent/{slug}/config"
+        publisher.publish(topic, json.dumps(cfg), retain=True)
+
+    select_defs = (
+        (
+            "approval_mode",
+            "Approval Mode",
+            sorted(_APPROVAL_MODES),
+            "mdi:shield-check-outline",
+        ),
+        (
+            "reasoning_effort",
+            "Reasoning Effort",
+            sorted(_REASONING_EFFORTS),
+            "mdi:brain",
+        ),
+    )
+    for slug, label, options, icon in select_defs:
+        cfg = {
+            "name": f"Hermes {label}",
+            "unique_id": f"hermes_agent_ha_addon_{slug}",
+            **_discovery_object_id(f"hermes_{slug}"),
+            "command_topic": f"{base}/command/{slug}",
+            "state_topic": f"{base}/status/{slug}",
+            "options": options,
+            "availability_topic": avail_topic,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "icon": icon,
+            "device": device,
+        }
+        topic = f"homeassistant/select/hermes_agent/{slug}/config"
+        publisher.publish(topic, json.dumps(cfg), retain=True)
+
+
+def clear_control_discovery(publisher: MqttPublisher) -> None:
+    """Remove retained control discovery so stale entities disappear when disabled."""
+    for slug, _, _ in CONTROL_BUTTONS:
+        publisher.publish(f"homeassistant/button/hermes_agent/{slug}/config", "", retain=True)
+    for slug in ("approval_mode", "reasoning_effort"):
+        publisher.publish(f"homeassistant/select/hermes_agent/{slug}/config", "", retain=True)
 
 
 def _ratio_as_percent(value: Any) -> str:
@@ -1405,12 +1684,32 @@ def publish_mqtt_state(snapshot: dict[str, Any], publisher: MqttPublisher, prefi
         "access_mode",
         "gateway_mode",
         "last_error",
+        "approval_mode",
+        "reasoning_effort",
     ):
         publisher.publish(f"{base}/status/{key}", str(snapshot.get(key, "unknown")))
+
+    # Full last-error text as attributes (state is truncated).
+    publisher.publish(
+        f"{base}/status/last_error_attributes",
+        json.dumps(
+            {
+                "full": snapshot.get("last_error_full") or snapshot.get("last_error") or "none",
+            }
+        ),
+    )
 
     usage = snapshot.get("usage", {})
     if not isinstance(usage, dict):
         usage = {}
+
+    # Timestamp sensors (ISO-8601 or "unknown")
+    for key, src in (
+        ("updated_at", snapshot.get("updated_at")),
+        ("gateway_health_probe_at", snapshot.get("gateway_health_probe_at")),
+        ("last_session_at", usage.get("last_session_at")),
+    ):
+        publisher.publish(f"{base}/status/{key}", str(src) if src else "unknown")
 
     def pub_num(key: str, src_key: str | None = None):
         src = src_key or key
@@ -1496,19 +1795,75 @@ def publish_mqtt_updates(
         return False
 
     prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
+    control_enabled = _control_enabled(payload)
     if not publisher.ensure_connected(mqtt_cfg, f"{prefix.rstrip('/')}/status/availability"):
         return False
 
-    if _publish_mqtt_discovery_enabled(payload) and discovery_needs_publish(prefix):
+    if _publish_mqtt_discovery_enabled(payload) and discovery_needs_publish(
+        prefix, control_enabled
+    ):
         # Only stamp the marker once the broker has acknowledged the whole batch.
-        if publish_mqtt_discovery(snapshot, publisher, prefix) and publisher.flush():
-            mark_discovery_published(prefix)
+        if (
+            publish_mqtt_discovery(snapshot, publisher, prefix, control_enabled)
+            and publisher.flush()
+        ):
+            mark_discovery_published(prefix, control_enabled)
             print(
-                f"INFO: MQTT discovery published once (prefix={prefix}, addon={ADDON_VERSION})",
+                f"INFO: MQTT discovery published once (prefix={prefix}, addon={ADDON_VERSION}, "
+                f"control={control_enabled})",
                 file=sys.stderr,
             )
     published = publish_mqtt_state(snapshot, publisher, prefix)
     return publisher.flush() and published
+
+
+def handle_mqtt_command(topic: str, body: str, publisher: MqttPublisher, prefix: str) -> None:
+    """Dispatch MQTT command topics under <prefix>/command/#."""
+    base = prefix.rstrip("/")
+    cmd_prefix = f"{base}/command/"
+    if not topic.startswith(cmd_prefix):
+        return
+    name = topic[len(cmd_prefix) :].strip("/")
+    if not name or "/" in name:
+        return
+    text = (body or "").strip()
+    print(f"INFO: MQTT command received: {name}", file=sys.stderr)
+
+    if name == "refresh_status":
+        publisher.request_wake()
+        return
+    if name == "run_cleanup":
+        _run_script(["hermes-cleanup"], "hermes-cleanup")
+        publisher.request_wake()
+        return
+    if name == "run_backup":
+        _run_script(["hermes-backup-share", "--quick"], "hermes-backup-share")
+        publisher.request_wake()
+        return
+    if name == "restart_gateway":
+        if _write_control_request("restart_gateway"):
+            print("INFO: Queued gateway restart request for run.sh watcher", file=sys.stderr)
+        return
+    if name == "approval_mode":
+        if text not in _APPROVAL_MODES:
+            print(f"WARN: Ignoring invalid approval_mode={text!r}", file=sys.stderr)
+            return
+        if set_approval_mode(text):
+            publisher.publish(f"{base}/status/approval_mode", text)
+            # Config is read at gateway start — chain a restart so it applies.
+            _write_control_request("restart_gateway", f"approval_mode={text}")
+            publisher.request_wake()
+        return
+    if name == "reasoning_effort":
+        if text not in _REASONING_EFFORTS:
+            print(f"WARN: Ignoring invalid reasoning_effort={text!r}", file=sys.stderr)
+            return
+        if set_reasoning_effort(text):
+            publisher.publish(f"{base}/status/reasoning_effort", text)
+            _write_control_request("restart_gateway", f"reasoning_effort={text}")
+            publisher.request_wake()
+        return
+    print(f"WARN: Unknown MQTT command: {name}", file=sys.stderr)
 
 
 def run_once(
@@ -1530,6 +1885,19 @@ def run_loop(payload: dict) -> int:
     mqtt_available_logged = False
     publisher = MqttPublisher()
     mqtt_cfg: dict[str, Any] = {}
+    prefix = str(payload.get("mqtt_state_prefix", "hermes") or "hermes")
+
+    def _on_command(topic: str, body: str) -> None:
+        handle_mqtt_command(topic, body, publisher, prefix)
+
+    if _control_enabled(payload):
+        publisher.set_command_handler(f"{prefix.rstrip('/')}/command/#", _on_command)
+        print(
+            f"INFO: MQTT control entities enabled (commands on {prefix}/command/#)",
+            file=sys.stderr,
+        )
+    else:
+        publisher.set_command_handler(None, None)
 
     try:
         while True:
@@ -1563,8 +1931,8 @@ def run_loop(payload: dict) -> int:
             except Exception as e:
                 print(f"WARN: Status exporter cycle failed: {e}", file=sys.stderr)
 
-            # Keep the poll period stable instead of interval + cycle duration.
-            time.sleep(max(1.0, interval - (time.monotonic() - cycle_started)))
+            # Keep the poll period stable; wake early on MQTT refresh/commands.
+            publisher.wait_interval(max(1.0, interval - (time.monotonic() - cycle_started)))
     finally:
         publisher.disconnect()
     return 0

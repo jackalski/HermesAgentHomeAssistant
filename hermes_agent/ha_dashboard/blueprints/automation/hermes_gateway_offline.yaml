@@ -1,0 +1,32 @@
+blueprint:
+  name: Hermes gateway offline alert
+  description: >
+    Notify when binary_sensor.hermes_gateway_running stays off longer than the
+    configured duration.
+  domain: automation
+  source_url: https://github.com/jackalski/HermesAgentHomeAssistant
+  input:
+    offline_duration:
+      name: Offline for
+      description: How long the gateway must stay offline before alerting.
+      default:
+        minutes: 5
+      selector:
+        duration: {}
+
+trigger:
+  - platform: state
+    entity_id: binary_sensor.hermes_gateway_running
+    to: "off"
+    for: !input offline_duration
+
+action:
+  - service: persistent_notification.create
+    data:
+      title: Hermes gateway offline
+      message: >
+        Hermes gateway has been offline for the configured duration.
+        Check the add-on logs and Open Hermes Web UI from the Ingress page.
+      notification_id: hermes_gateway_offline
+
+mode: single

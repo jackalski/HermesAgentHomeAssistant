@@ -63,6 +63,14 @@ http {
       add_header Cache-Control "no-store";
     }
 
+    # Importable HA package / dashboard / blueprints (read-only)
+    location ^~ /ha/ {
+      alias /share/hermes/ha/;
+      default_type text/plain;
+      add_header Cache-Control "no-store";
+      autoindex off;
+    }
+
     # Connection tests (Ingress UI buttons → hermes_connection_tests.py)
     location ^~ /test/ {
       proxy_pass http://127.0.0.1:48100;

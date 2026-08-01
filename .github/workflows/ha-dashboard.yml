@@ -38,9 +38,12 @@ jobs:
           test -f "$src/dashboards/hermes_usage.yaml"
 
           rm -rf "$dest"
-          mkdir -p "$dest/packages" "$dest/dashboards"
+          mkdir -p "$dest/packages" "$dest/dashboards" "$dest/blueprints/automation"
           cp -a "$src/packages/." "$dest/packages/"
           cp -a "$src/dashboards/." "$dest/dashboards/"
+          if [ -d "$src/blueprints" ]; then
+            cp -a "$src/blueprints/." "$dest/blueprints/"
+          fi
           printf '%s\n' "$version" >"$dest/.addon_version"
 
           echo "Created $dest from $src (addon=$version)"

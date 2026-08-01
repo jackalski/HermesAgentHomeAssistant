@@ -188,7 +188,24 @@ With `enable_ha_status_sensors` (default ON):
   - Scalars: `cost_24h`, `tokens_24h`, `cache_hit_ratio`, `reasoning_share`, `overhead_ratio`, `overhead_cost_usd`, `compression_cost_usd`, `aux_cost_usd`
   - Rich attributes on **Hermes Usage Summary** (`by_provider`, `by_model`, `by_task`, `windows`, `overhead`)
 
-Options: `publish_mqtt_discovery` (one-shot per add-on version — marker `/config/.hermes/.mqtt_discovery_published`), `status_poll_interval_seconds` (30–300), `mqtt_state_prefix`.
+Options: `publish_mqtt_discovery` (one-shot per add-on version — marker `/config/.hermes/.mqtt_discovery_published`), `status_poll_interval_seconds` (30–300), `mqtt_state_prefix`, `enable_control_entities` (default **OFF** — MQTT buttons/selects; only enable on a trusted broker).
+
+`binary_sensor.hermes_assist_api_enabled` is **true only when the Assist API is accepting connections on port 8642**, not merely when `enable_openai_api` is ticked.
+
+#### MQTT control entities (optional)
+
+When `mqtt_settings.enable_control_entities` is **ON**, the status exporter publishes:
+
+| Entity | Action |
+|---|---|
+| `button.hermes_refresh_status` | Immediate status poll |
+| `button.hermes_run_backup` | `hermes-backup-share --quick` |
+| `button.hermes_run_cleanup` | `hermes-cleanup` |
+| `button.hermes_restart_gateway` | TERM gateway (supervisor restarts with drain) |
+| `select.hermes_approval_mode` | Writes Hermes `approvals.mode`, then queues gateway restart |
+| `select.hermes_reasoning_effort` | Writes Hermes `agent.reasoning_effort`, then queues gateway restart |
+
+Anyone with **broker write access** can trigger these — keep Mosquitto locked down. Disabling the option removes retained control discovery topics.
 
 #### Overhead proxies (not absolute waste)
 
@@ -206,12 +223,13 @@ Options: `publish_mqtt_discovery` (one-shot per add-on version — marker `/conf
 
 #### Usage dashboard (Home Assistant)
 
-On each add-on start, importable YAML is copied to **`/share/hermes/ha/`**:
+On each add-on start, importable YAML is copied to **`/share/hermes/ha/`** (also served read-only on Ingress under `./ha/`):
 
 | Path | Purpose |
 |---|---|
-| `/share/hermes/ha/packages/hermes_usage.yaml` | Template sensors derived from `sensor.hermes_usage_summary` attributes |
-| `/share/hermes/ha/dashboards/hermes_usage.yaml` | Lovelace dashboard (Overview / Cost & tokens / Breakdown / Overhead) |
+| `/share/hermes/ha/packages/hermes_usage.yaml` | Template sensors, monthly/daily utility meters, budget helpers |
+| `/share/hermes/ha/dashboards/hermes_usage.yaml` | Lovelace dashboard (**Operations** / **Analysis**) |
+| `/share/hermes/ha/blueprints/automation/` | Budget, gateway-offline, and disk alert blueprints |
 
 **HACS frontend cards required** (install via HACS → Frontend before importing the dashboard):
 
@@ -231,6 +249,9 @@ Install steps:
 4. Restart Home Assistant Core.
 5. Install the three HACS cards above (Lovelace resources are added automatically).
 6. Create a dashboard and paste `/share/hermes/ha/dashboards/hermes_usage.yaml` (or merge its `views:`).
+   Tip: open the add-on **Ingress** page → Home Assistant → **Copy dashboard YAML**.
+7. Optional: copy blueprints from `/share/hermes/ha/blueprints/automation/` into `config/blueprints/automation/hermes/` and create automations from them.
+8. Set `input_number.hermes_monthly_budget_usd` on the Operations view (or Developer Tools) for the budget gauge.
 
 If cards show as `Custom element doesn't exist` / unknown `custom:…` type, the HACS cards are missing or the browser cache needs a hard refresh.
 
@@ -314,6 +335,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `show_reasoning` | `true` | Bootstraps `display.show_reasoning` if missing |
 | `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` and `/health` on **18789** |
 | `enable_ha_status_sensors` | `true` | MQTT + status.json |
+| `enable_control_entities` | `false` | MQTT buttons/selects for backup, cleanup, restart, approval/reasoning (trusted broker only) |
 | **Home Assistant** panel | — | URL, token, prefer supervisor, MCP, native platform |
 | **Agent Behavior** panel | smart / medium / ON | Approvals + reasoning bootstrap |
 | **Gateway Access** panel | `lan_https` | `access_mode`, `gateway_port`, trusted proxies, Assist API, etc. |

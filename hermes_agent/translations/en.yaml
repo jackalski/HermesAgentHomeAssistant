@@ -283,6 +283,9 @@ configuration:
       publish_mqtt_discovery:
         name: Publish MQTT Discovery
         description: Auto-create HA entities once per add-on version (marker /config/.hermes/.mqtt_discovery_published). Disable to use /status.json only.
+      enable_control_entities:
+        name: Enable MQTT Control Entities
+        description: "OFF by default. When ON, publishes buttons (restart gateway, backup, cleanup, refresh) and selects (approval mode, reasoning effort) via MQTT. Anyone with broker write access can trigger them — only enable on a trusted Mosquitto."
       status_poll_interval_seconds:
         name: Status Poll Interval (seconds)
         description: Refresh interval for sensors and /share/hermes/status.json (30-300).

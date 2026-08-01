@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.45"
+version: "0.0.46"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -121,6 +121,7 @@ options:
     broker_password: ""
     enable_ha_status_sensors: true
     publish_mqtt_discovery: true
+    enable_control_entities: false
     status_poll_interval_seconds: 60
     state_prefix: "hermes"
 
@@ -224,6 +225,7 @@ schema:
     broker_password: password?
     enable_ha_status_sensors: bool?
     publish_mqtt_discovery: bool?
+    enable_control_entities: bool?
     status_poll_interval_seconds: int(30,300)?
     state_prefix: str?
   router_ssh:
