@@ -257,7 +257,7 @@ If cards show as `Custom element doesn't exist` / unknown `custom:…` type, the
 
 Source YAML in the repo lives under [`hermes_agent/ha_dashboard/`](hermes_agent/ha_dashboard/) (baked into the add-on image). For browsing without an installed add-on, download the **`homeassistant-hermes-usage-*`** artifact from the [HA dashboard artifact](https://github.com/jackalski/HermesAgentHomeAssistant/actions/workflows/ha-dashboard.yml) workflow (layout: `homeassistant/packages/` + `homeassistant/dashboards/`).
 
-Expected MQTT entity IDs use discovery `object_id` slugs (`sensor.hermes_*`, `binary_sensor.hermes_*`) from add-on **0.0.42+**. If you renamed entities, or first discovered them on an older add-on where HA prefixed the device name (`sensor.hermes_agent_integration_hermes_*`), either rename entity IDs to match or delete the **Hermes Agent Integration** MQTT device and restart the add-on so discovery recreates them.
+Expected MQTT entity IDs use discovery slugs (`sensor.hermes_*`, `binary_sensor.hermes_*`, `button.hermes_*`) from add-on **0.0.42+** (`object_id`) and **0.0.47+** (`default_entity_id`, required on Home Assistant **2026.4+** where `object_id` is ignored). If you renamed entities, or first discovered them where HA prefixed the device name (`sensor.hermes_agent_integration_hermes_*`), either rename entity IDs to match or delete the **Hermes Agent Integration** MQTT device and restart the add-on so discovery recreates them.
 
 ### ntfy (opt-in)
 
@@ -413,7 +413,9 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | `MQTT publish timed out` for many topics (broker resolved) | TCP connect worked but QoS1 PUBACK never arrived — check Mosquitto ACL allows write to `homeassistant/#` and your state prefix (`hermes/#` by default), and that broker username/password can publish. Use **Connection tests → Test Auth**. |
 | Hermes entities show **Unavailable** while the add-on is stopped | Expected from **0.0.43+** — the MQTT client registers a Last Will so entities stop reporting stale values on crash/shutdown. They return to normal within one poll interval after the add-on starts. |
 | MQTT auth fails although Mosquitto autodetection succeeds | Update to **0.0.43+** — autodetection now prefers the Supervisor API, which also supplies broker credentials (bashio reports host/port only). |
-| Usage dashboard shows unavailable / wrong entities (`hermes_agent_integration_hermes_*`) | Add-on **0.0.42+** pins MQTT `object_id` to `hermes_*`. Rename entity IDs, or delete the MQTT device **Hermes Agent Integration** and restart the add-on so discovery recreates short IDs. |
+| Usage dashboard shows unavailable / wrong entities (`hermes_agent_integration_hermes_*`) | Add-on **0.0.47+** publishes `default_entity_id` (HA 2026.4+ ignores `object_id`). Rename entity IDs, or delete the MQTT device **Hermes Agent Integration** and restart the add-on so discovery recreates short IDs. |
+| Usage dashboard “Configuration error” on conditional cards | Re-import `/share/hermes/ha/dashboards/hermes_usage.yaml` from **0.0.47+** (uses state conditions, not `condition: template`). |
+| Budget gauge / `sensor.hermes_cost_today` missing | Install package `hermes_usage.yaml` under `packages:` and restart Home Assistant Core. |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.19.0 > /config/.hermes/.addon-managed-hermes-version` |

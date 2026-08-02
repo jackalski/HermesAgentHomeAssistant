@@ -2,6 +2,19 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.0.47] - 2026-08-02
+
+### Fixed
+- **MQTT discovery on HA 2026.4+**: publish `default_entity_id` (and keep deprecated `object_id`) so new sensors/buttons/selects get short `hermes_*` IDs instead of `hermes_agent_integration_hermes_*`. Already-wrong entities keep their IDs until renamed or the MQTT device is deleted and rediscovered.
+- **Usage dashboard**: replace invalid Lovelace `condition: template` (Configuration error on HA 2026.7) with `condition: state` / `state_not`.
+- **Usage dashboard layout**: denser sections grid (`grid_options`, tighter gaps, side-by-side charts) to remove large blank space between panels. Re-import the dashboard YAML.
+
+### Changed
+- **Monetary UI display**: cost values render to **2 decimal places** (dashboard templates, package breakdown tables, MQTT `suggested_display_precision`).
+- **Percent metrics**: cache hit / reasoning / overhead / disk / budget publish and display as whole numbers (e.g. `87`), with MQTT `suggested_display_precision: 0`.
+- **Usage dashboard**: denser modern tiles (compact `%` KPIs instead of gauges, abbreviated token counts). Avoids `grid_options.rows` so charts/cards do not overflow and overlap in sections view. Re-import the dashboard YAML.
+- Status exporter add-on version fallback aligned to **0.0.47** (forces MQTT discovery republish).
+
 ## [0.0.46] - 2026-08-01
 
 ### Added

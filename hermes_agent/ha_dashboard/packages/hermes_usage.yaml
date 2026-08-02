@@ -136,7 +136,7 @@ template:
           {% if budget <= 0 %}
             0
           {% else %}
-            {{ ([100.0, (spent / budget * 100.0)] | min) | round(1) }}
+            {{ ([100.0, (spent / budget * 100.0)] | min) | round(0) }}
           {% endif %}
         availability: >
           {{ states('sensor.hermes_cost_monthly') not in ['unknown', 'unavailable']
@@ -153,9 +153,9 @@ template:
           {% set day = now().day %}
           {% set days_in_month = ((now().replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).day %}
           {% if day < 1 %}
-            {{ spent | round(4) }}
+            {{ spent | round(2) }}
           {% else %}
-            {{ (spent / day * days_in_month) | round(4) }}
+            {{ (spent / day * days_in_month) | round(2) }}
           {% endif %}
         availability: "{{ states('sensor.hermes_cost_monthly') not in ['unknown', 'unavailable'] }}"
 
@@ -167,14 +167,14 @@ template:
             {% set rows = state_attr('sensor.hermes_usage_summary', 'by_provider') or [] %}
             {% set ns = namespace(lines=['| Provider | Cost USD | Tokens | Sessions |', '|---|---:|---:|---:|']) %}
             {% for r in rows[:8] %}
-              {% set ns.lines = ns.lines + ['| ' ~ (r.get('provider','?')) ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(4)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' | ' ~ (r.get('sessions',0)|int(0)) ~ ' |'] %}
+              {% set ns.lines = ns.lines + ['| ' ~ (r.get('provider','?')) ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(2)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' | ' ~ (r.get('sessions',0)|int(0)) ~ ' |'] %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
           models: >
             {% set rows = state_attr('sensor.hermes_usage_summary', 'by_model') or [] %}
             {% set ns = namespace(lines=['| Model | Provider | Cost USD | Tokens |', '|---|---|---:|---:|']) %}
             {% for r in rows[:8] %}
-              {% set ns.lines = ns.lines + ['| ' ~ (r.get('model','?')) ~ ' | ' ~ (r.get('provider','?')) ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(4)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' |'] %}
+              {% set ns.lines = ns.lines + ['| ' ~ (r.get('model','?')) ~ ' | ' ~ (r.get('provider','?')) ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(2)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' |'] %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
           tasks: >
@@ -182,7 +182,7 @@ template:
             {% set ns = namespace(lines=['| Task | Cost USD | Tokens | Sessions |', '|---|---:|---:|---:|']) %}
             {% for r in rows[:8] %}
               {% set label = r.get('label') or (r.get('task') if r.get('task') else 'main') %}
-              {% set ns.lines = ns.lines + ['| ' ~ label ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(4)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' | ' ~ (r.get('sessions',0)|int(0)) ~ ' |'] %}
+              {% set ns.lines = ns.lines + ['| ' ~ label ~ ' | ' ~ (r.get('cost_usd',0)|float(0)|round(2)) ~ ' | ' ~ (r.get('total_tokens',0)|int(0)) ~ ' | ' ~ (r.get('sessions',0)|int(0)) ~ ' |'] %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
         availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"

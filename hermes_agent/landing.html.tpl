@@ -600,10 +600,10 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
             }
             document.body.removeChild(ta);
           }
-        } catch (e) {
+        } catch (err) {
           if (msg) {
             msg.textContent =
-              'Could not fetch ./ha/dashboards/hermes_usage.yaml (' + e + '). ' +
+              'Could not fetch ./ha/dashboards/hermes_usage.yaml (' + err + '). ' +
               'Copy from /share/hermes/ha/dashboards/ on the HA host instead.';
           }
         }

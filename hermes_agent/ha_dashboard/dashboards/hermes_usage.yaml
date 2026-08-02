@@ -1,8 +1,6 @@
 # Hermes Agent usage dashboard (importable Lovelace views)
 #
-# Two multi-column narrative views:
-#   - Operations: health, today's spend / budget, controls, configuration
-#   - Analysis: where money went, efficiency, waste, reference tables
+# Two views: Operations / Analysis
 #
 # Prerequisites (HACS frontend cards):
 #   - Mushroom (https://github.com/piitaya/lovelace-mushroom)
@@ -34,736 +32,1055 @@ views:
     path: operations
     icon: mdi:heart-pulse
     type: sections
-    max_columns: 3
+    max_columns: 4
+    dense_section_placement: true
     sections:
       - type: grid
-        column_span: 2
+        column_span: 4
         cards:
           - type: heading
-            heading: Is Hermes healthy?
+            heading: Health
             heading_style: title
-          - type: custom:mushroom-template-card
-            primary: >-
-              {% if is_state('binary_sensor.hermes_gateway_running', 'on')
-                   and is_state('binary_sensor.hermes_gateway_ready', 'on')
-                   and is_state('binary_sensor.hermes_setup_complete', 'on') %}
-                All systems ready
-              {% elif is_state('binary_sensor.hermes_gateway_running', 'off') %}
-                Gateway down
-              {% elif is_state('binary_sensor.hermes_setup_complete', 'off') %}
-                Setup incomplete
-              {% else %}
-                Degraded
-              {% endif %}
-            secondary: >-
-              Updated {{ relative_time(states('sensor.hermes_updated_at')) if states('sensor.hermes_updated_at') not in ['unknown', 'unavailable', ''] else '—' }}
-              · Assist {{ 'up' if is_state('binary_sensor.hermes_assist_api_enabled', 'on') else 'off' }}
-            icon: >-
-              {% if is_state('binary_sensor.hermes_gateway_running', 'on')
-                   and is_state('binary_sensor.hermes_gateway_ready', 'on')
-                   and is_state('binary_sensor.hermes_setup_complete', 'on') %}
-                mdi:check-decagram
-              {% elif is_state('binary_sensor.hermes_gateway_running', 'off') %}
-                mdi:alert-octagon
-              {% else %}
-                mdi:alert
-              {% endif %}
-            icon_color: >-
-              {% if is_state('binary_sensor.hermes_gateway_running', 'on')
-                   and is_state('binary_sensor.hermes_gateway_ready', 'on')
-                   and is_state('binary_sensor.hermes_setup_complete', 'on') %}
-                green
-              {% elif is_state('binary_sensor.hermes_gateway_running', 'off') %}
-                red
-              {% else %}
-                amber
-              {% endif %}
-            layout: horizontal
-            fill_container: true
-            card_mod:
-              style: |
-                ha-card {
-                  border-radius: 12px;
-                  border: 1px solid var(--divider-color);
-                  border-left: 3px solid
-                    {% if is_state('binary_sensor.hermes_gateway_running', 'on')
-                         and is_state('binary_sensor.hermes_gateway_ready', 'on')
-                         and is_state('binary_sensor.hermes_setup_complete', 'on') %}
-                      #059669
-                    {% elif is_state('binary_sensor.hermes_gateway_running', 'off') %}
-                      #dc2626
-                    {% else %}
-                      #d97706
-                    {% endif %};
-                }
-          - type: custom:mushroom-chips-card
-            alignment: center
-            card_mod:
-              style: |
-                ha-card {
-                  --chip-height: 42px;
-                  padding: 4px 0;
-                  border-radius: 12px;
-                  border: 1px solid var(--divider-color);
-                }
-            chips:
-              - type: entity
-                entity: binary_sensor.hermes_gateway_running
-                name: Gateway
-                content_info: name
-                icon_color: green
-              - type: entity
-                entity: binary_sensor.hermes_gateway_ready
-                name: Ready
-                content_info: name
-                icon_color: green
-              - type: entity
-                entity: binary_sensor.hermes_setup_complete
-                name: Setup
-                content_info: name
-                icon_color: green
-              - type: entity
-                entity: binary_sensor.hermes_api_key_configured
-                name: API key
-                content_info: name
-                icon_color: blue
-              - type: entity
-                entity: binary_sensor.hermes_model_configured
-                name: Model
-                content_info: name
-                icon_color: blue
-              - type: entity
-                entity: binary_sensor.hermes_mcp_configured
-                name: MCP
-                content_info: name
-                icon_color: teal
-              - type: entity
-                entity: binary_sensor.hermes_assist_api_enabled
-                name: Assist
-                content_info: name
-                icon_color: purple
+          - type: vertical-stack
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 3
+                    primary: >-
+                      {% if is_state('binary_sensor.hermes_gateway_running',
+                      'on')
+                           and is_state('binary_sensor.hermes_gateway_ready', 'on')
+                           and is_state('binary_sensor.hermes_setup_complete', 'on') %}
+                        All systems ready
+                      {% elif is_state('binary_sensor.hermes_gateway_running',
+                      'off') %}
+                        Gateway down
+                      {% elif is_state('binary_sensor.hermes_setup_complete',
+                      'off') %}
+                        Setup incomplete
+                      {% else %}
+                        Degraded
+                      {% endif %}
+                    secondary: >-
+                      {% set u = states('sensor.hermes_updated_at') %} {% if u
+                      in ['unknown', 'unavailable', ''] %}
+                        {% set u = state_attr('sensor.hermes_usage_summary', 'updated_at') %}
+                      {% endif %} Updated {{ relative_time(as_datetime(u)) if u
+                      not in [none, 'unknown', 'unavailable', ''] else '—' }} ·
+                      Assist {{ 'up' if
+                      is_state('binary_sensor.hermes_assist_api_enabled', 'on')
+                      else 'off' }}
+                    icon: >-
+                      {% if is_state('binary_sensor.hermes_gateway_running',
+                      'on')
+                           and is_state('binary_sensor.hermes_gateway_ready', 'on')
+                           and is_state('binary_sensor.hermes_setup_complete', 'on') %}
+                        mdi:check-decagram
+                      {% elif is_state('binary_sensor.hermes_gateway_running',
+                      'off') %}
+                        mdi:alert-octagon
+                      {% else %}
+                        mdi:alert
+                      {% endif %}
+                    color: >-
+                      {% if is_state('binary_sensor.hermes_gateway_running',
+                      'on')
+                           and is_state('binary_sensor.hermes_gateway_ready', 'on')
+                           and is_state('binary_sensor.hermes_setup_complete', 'on') %}
+                        green
+                      {% elif is_state('binary_sensor.hermes_gateway_running',
+                      'off') %}
+                        red
+                      {% else %}
+                        amber
+                      {% endif %}
+                    features_position: bottom
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border-top: 1px solid rgba(148, 163, 184, 0.12);
+                          border-right: 1px solid rgba(148, 163, 184, 0.12);
+                          border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(135deg, rgba(5, 150, 105, 0.11), rgba(255,255,255,0.015)), var(--ha-card-background, #151821);
+                          box-shadow: 0 12px 32px rgba(0,0,0,0.20);
+                          border-left: 3px solid
+                            {% if is_state('binary_sensor.hermes_gateway_running', 'on')
+                                 and is_state('binary_sensor.hermes_gateway_ready', 'on')
+                                 and is_state('binary_sensor.hermes_setup_complete', 'on') %}
+                              #059669
+                            {% elif is_state('binary_sensor.hermes_gateway_running', 'off') %}
+                              #dc2626
+                            {% else %}
+                              #d97706
+                            {% endif %};
+                        }
+                  - type: custom:mushroom-chips-card
+                    grid_options:
+                      columns: 1
+                    alignment: center
+                    chips:
+                      - type: entity
+                        entity: binary_sensor.hermes_gateway_running
+                        name: Gateway
+                        content_info: name
+                        icon_color: green
+                      - type: entity
+                        entity: binary_sensor.hermes_gateway_ready
+                        name: Ready
+                        content_info: name
+                        icon_color: green
+                      - type: entity
+                        entity: binary_sensor.hermes_setup_complete
+                        name: Setup
+                        content_info: name
+                        icon_color: green
+                      - type: entity
+                        entity: binary_sensor.hermes_api_key_configured
+                        name: API key
+                        content_info: name
+                        icon_color: blue
+                      - type: entity
+                        entity: binary_sensor.hermes_model_configured
+                        name: Model
+                        content_info: name
+                        icon_color: blue
+                      - type: entity
+                        entity: binary_sensor.hermes_mcp_configured
+                        name: MCP
+                        content_info: name
+                        icon_color: teal
+                      - type: entity
+                        entity: binary_sensor.hermes_assist_api_enabled
+                        name: Assist
+                        content_info: name
+                        icon_color: purple
+              - type: conditional
+                grid_options:
+                  columns: 48
+                conditions:
+                  - condition: state
+                    entity: sensor.hermes_last_error
+                    state_not:
+                      - unknown
+                      - unavailable
+                      - none
+                      - None
+                      - ""
+                card:
+                  type: custom:mushroom-template-card
+                  entity: sensor.hermes_last_error
+                  primary: Last error
+                  secondary: >-
+                    {{ states('sensor.hermes_last_error')[:120] }}{% if
+                    states('sensor.hermes_last_error')|length > 120 %}…{% endif
+                    %}
+                  icon: mdi:alert-circle-outline
+                  tap_action:
+                    action: more-info
+                  color: red
+                  features_position: bottom
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        border-top: 1px solid rgba(239, 68, 68, 0.18);
+                        border-right: 1px solid rgba(239, 68, 68, 0.18);
+                        border-bottom: 1px solid rgba(239, 68, 68, 0.18);
+                        background: linear-gradient(135deg, rgba(220, 38, 38, 0.13), rgba(255,255,255,0.01)), var(--ha-card-background, #151821);
+                        box-shadow: 0 12px 32px rgba(0,0,0,0.20);
+                        border-left: 3px solid #dc2626;
+                      }
+            grid_options:
+              columns: full
+      - type: grid
+        column_span: 4
+        cards:
+          - type: heading
+            heading: Runtime
+            heading_style: title
+          - type: vertical-stack
+            cards:
+              - square: false
+                type: grid
+                cards:
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_main_provider
+                    name: Provider
+                    icon: mdi:cloud-outline
+                    layout: horizontal
+                    fill_container: false
+                    primary_info: name
+                    secondary_info: state
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_main_model
+                    name: Model
+                    icon: mdi:brain
+                    layout: horizontal
+                    fill_container: false
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_access_mode
+                    name: Access
+                    icon: mdi:lan
+                    layout: horizontal
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_gateway_mode
+                    name: Gateway
+                    icon: mdi:transit-connection-variant
+                    layout: horizontal
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_setup_profile
+                    name: Profile
+                    icon: mdi:account-cog-outline
+                    layout: horizontal
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_addon_version
+                    name: Add-on
+                    icon: mdi:package-variant
+                    layout: horizontal
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_hermes_agent_version
+                    name: Hermes
+                    icon: mdi:robot-outline
+                    layout: horizontal
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_auxiliary_title_model
+                    name: Aux model
+                    icon: mdi:text-box-outline
+                    layout: horizontal
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                columns: 3
+              - type: custom:mushroom-chips-card
+                alignment: center
+                chips:
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_openrouter
+                    name: OpenRouter
+                    content_info: name
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_anthropic
+                    name: Anthropic
+                    content_info: name
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_openai
+                    name: OpenAI
+                    content_info: name
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_google
+                    name: Google
+                    content_info: name
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_ollama
+                    name: Ollama
+                    content_info: name
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_minimax
+                    name: MiniMax
+                    content_info: name
+                  - type: entity
+                    entity: binary_sensor.hermes_provider_xai
+                    name: xAI
+                    content_info: name
+              - type: markdown
+                content: >
+                  **Assist / voice** — set `enable_openai_api: true`, then point
+                  [Extended OpenAI
+                  Conversation](https://github.com/jekalmin/extended_openai_conversation)
+                  at `http://<LAN-IP>:8642/v1` with the gateway token.
+                card_mod:
+                  style: |
+                    ha-card {
+                      border-radius: 18px;
+                      border: 1px solid rgba(148, 163, 184, 0.12);
+                      background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                      overflow: hidden;
+                      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                    }
+                    ha-card:hover {
+                      transform: translateY(-2px);
+                      border-color: rgba(59, 130, 246, 0.30);
+                      box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                    }
+            grid_options:
+              columns: full
+              rows: auto
+      - type: grid
+        column_span: 3
+        cards:
+          - type: heading
+            heading: Spending
+            heading_style: title
+          - type: horizontal-stack
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: vertical-stack
+                    cards:
+                      - type: custom:mushroom-template-card
+                        primary: >-
+                          ${{ states('sensor.hermes_cost_24h') | float(0) |
+                          round(2) }}
+                        secondary: Cost 24h
+                        icon: mdi:cash-clock
+                        icon_color: green
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: sensor.hermes_cost_24h
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                      - type: custom:mushroom-template-card
+                        primary: >-
+                          {% set s = states('sensor.hermes_sessions_24h') |
+                          float(0) %} {% set c =
+                          states('sensor.hermes_cost_24h') | float(0) %} ${{ (c
+                          / s) | round(2) if s > 0 else 0 }}
+                        secondary: Cost / session
+                        icon: mdi:cash-multiple
+                        icon_color: green
+                        layout: vertical
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                      - type: custom:mushroom-template-card
+                        primary: >-
+                          {% set p =
+                          states('sensor.hermes_projected_month_end_cost') %} {%
+                          if p in ['unknown', 'unavailable'] %}— {% else %}${{ p
+                          | float(0) | round(2) }}{% endif %}
+                        secondary: >-
+                          Projected EOM (${{
+                          states('input_number.hermes_monthly_budget_usd') |
+                          float(0) | round(0) | int }})
+                        icon: mdi:chart-timeline-variant
+                        icon_color: blue
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: input_number.hermes_monthly_budget_usd
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                  - type: vertical-stack
+                    cards:
+                      - type: custom:mushroom-template-card
+                        primary: >-
+                          {% set n = states('sensor.hermes_tokens_24h') |
+                          float(0) %} {% if n >= 1000000 %}{{ (n / 1000000) |
+                          round(1) }}M {% elif n >= 1000 %}{{ (n / 1000) |
+                          round(1) }}k {% else %}{{ n | int }}{% endif %}
+                        secondary: Tokens 24h
+                        icon: mdi:counter
+                        icon_color: blue
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: sensor.hermes_tokens_24h
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                      - type: custom:mushroom-template-card
+                        grid_options:
+                          columns: 9
+                        primary: >-
+                          {% set t = states('sensor.hermes_cost_today') %} {% if
+                          t in ['unknown', 'unavailable'] %}— {% else %}${{ t |
+                          float(0) | round(2) }}{% endif %}
+                        secondary: Spent today
+                        icon: mdi:calendar-today
+                        icon_color: green
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: sensor.hermes_cost_today
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                      - type: custom:mushroom-template-card
+                        primary: >-
+                          {% set d = states('sensor.hermes_disk_usage_percent')
+                          %} {% if d in ['unknown', 'unavailable'] %}—% {% else
+                          %}{{ d | float(0) | round(0) | int }}%{% endif %}
+                        secondary: Disk /config
+                        icon: mdi:harddisk
+                        icon_color: >-
+                          {% set d = states('sensor.hermes_disk_usage_percent')
+                          | float(0) %} {{ 'red' if d >= 90 else 'amber' if d >=
+                          70 else 'teal' }}
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: sensor.hermes_disk_usage_percent
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                  - type: vertical-stack
+                    cards:
+                      - type: custom:mushroom-template-card
+                        primary: "{{ states('sensor.hermes_sessions_24h') | int(0) }}"
+                        secondary: Sessions 24h
+                        icon: mdi:forum-outline
+                        icon_color: teal
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: sensor.hermes_sessions_24h
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+                      - type: custom:mushroom-template-card
+                        grid_options:
+                          columns: 9
+                        primary: >-
+                          {% set b = states('sensor.hermes_budget_used_percent')
+                          %} {% if b in ['unknown', 'unavailable'] %}—% {% else
+                          %}{{ b | float(0) | round(0) | int }}%{% endif %}
+                        secondary: Budget used
+                        icon: mdi:piggy-bank-outline
+                        icon_color: >-
+                          {% set b = states('sensor.hermes_budget_used_percent')
+                          | float(0) %} {{ 'red' if b >= 90 else 'amber' if b >=
+                          70 else 'green' }}
+                        layout: vertical
+                        tap_action:
+                          action: more-info
+                          entity: sensor.hermes_budget_used_percent
+                        card_mod:
+                          style: |
+                            ha-card {
+                              border-radius: 18px;
+                              border: 1px solid rgba(148, 163, 184, 0.12);
+                              background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                              box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                              overflow: hidden;
+                              transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                            }
+                            ha-card:hover {
+                              transform: translateY(-2px);
+                              border-color: rgba(59, 130, 246, 0.30);
+                              box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                            }
+              - type: custom:apexcharts-card
+                header:
+                  show: true
+                  title: Cost trend (24h)
+                  show_states: true
+                  colorize_states: true
+                graph_span: 24h
+                update_interval: 5m
+                color_list:
+                  - "#059669"
+                  - "#2563eb"
+                apex_config:
+                  chart:
+                    height: 200
+                  stroke:
+                    curve: smooth
+                    width: 2
+                  legend:
+                    show: false
+                yaxis:
+                  - id: rolling
+                    decimals: 2
+                  - id: cumulative
+                    opposite: true
+                    decimals: 2
+                series:
+                  - entity: sensor.hermes_cost_24h
+                    name: Cost 24h
+                    yaxis_id: rolling
+                    type: area
+                    opacity: 0.25
+                    stroke_width: 2
+                    float_precision: 2
+                  - entity: sensor.hermes_estimated_cost_usd
+                    name: Lifetime
+                    yaxis_id: cumulative
+                    type: line
+                    stroke_width: 2
+                    float_precision: 2
+                card_mod:
+                  style: |
+                    ha-card {
+                      border-radius: 18px;
+                      border: 1px solid rgba(148, 163, 184, 0.12);
+                      background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                      overflow: hidden;
+                      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                    }
+                    ha-card:hover {
+                      transform: translateY(-2px);
+                      border-color: rgba(59, 130, 246, 0.30);
+                      box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                    }
+            grid_options:
+              rows: auto
+              columns: 36
+      - type: grid
+        column_span: 4
+        cards:
+          - type: heading
+            heading: Controls
+            heading_style: title
           - type: conditional
             conditions:
-              - condition: template
-                value_template: >-
-                  {% set e = states('sensor.hermes_last_error') %}
-                  {{ e not in ['unknown', 'unavailable', 'none', 'None', ''] }}
-            card:
-              type: custom:mushroom-template-card
-              entity: sensor.hermes_last_error
-              primary: Last error
-              secondary: "{{ states('sensor.hermes_last_error') }}"
-              icon: mdi:alert-circle-outline
-              icon_color: red
-              layout: horizontal
-              fill_container: true
-              card_mod:
-                style: |
-                  ha-card {
-                    border-radius: 12px;
-                    border: 1px solid var(--divider-color);
-                    border-left: 3px solid #dc2626;
-                  }
-
-      - type: grid
-        cards:
-          - type: heading
-            heading: What did it cost today?
-            heading_style: title
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_cost_24h') | float(0) | round(4) }}
-            secondary: Cost 24h
-            icon: mdi:cash-clock
-            icon_color: green
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_cost_24h
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: "{{ states('sensor.hermes_tokens_24h') }}"
-            secondary: Tokens 24h
-            icon: mdi:counter
-            icon_color: blue
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_tokens_24h
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: "{{ states('sensor.hermes_sessions_24h') }}"
-            secondary: Sessions 24h
-            icon: mdi:forum-outline
-            icon_color: teal
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_sessions_24h
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              {% set s = states('sensor.hermes_sessions_24h') | float(0) %}
-              {% set c = states('sensor.hermes_cost_24h') | float(0) %}
-              ${{ (c / s) | round(4) if s > 0 else '0' }}
-            secondary: Cost / session
-            icon: mdi:cash-multiple
-            icon_color: green
-            layout: vertical
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              {% set c24 = states('sensor.hermes_cost_24h') | float(0) %}
-              {% set c7 = states('sensor.hermes_cost_7d') | float(0) %}
-              {% set pace = c7 / 7 if c7 > 0 else 0 %}
-              {% if pace <= 0 %}n/a
-              {% elif c24 <= pace * 1.15 %}On pace
-              {% else %}Above normal
-              {% endif %}
-            secondary: >-
-              {% set c24 = states('sensor.hermes_cost_24h') | float(0) %}
-              {% set c7 = states('sensor.hermes_cost_7d') | float(0) %}
-              {% set pace = c7 / 7 if c7 > 0 else 0 %}
-              24h vs 7d avg ${{ pace | round(4) }}
-            icon: mdi:speedometer
-            icon_color: >-
-              {% set c24 = states('sensor.hermes_cost_24h') | float(0) %}
-              {% set c7 = states('sensor.hermes_cost_7d') | float(0) %}
-              {% set pace = c7 / 7 if c7 > 0 else 0 %}
-              {{ 'amber' if pace > 0 and c24 > pace * 1.15 else 'green' }}
-            layout: vertical
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_cost_today') | float(0) | round(4) }}
-            secondary: Spent today (calendar)
-            icon: mdi:calendar-today
-            icon_color: green
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_cost_today
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: gauge
-            entity: sensor.hermes_budget_used_percent
-            name: Monthly budget used
-            min: 0
-            max: 100
-            severity:
-              green: 0
-              yellow: 70
-              red: 90
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_projected_month_end_cost') | float(0) | round(2) }}
-            secondary: >-
-              Projected EOM · budget ${{ states('input_number.hermes_monthly_budget_usd') | float(0) | round(0) }}
-            icon: mdi:chart-timeline-variant
-            icon_color: blue
-            layout: horizontal
-            fill_container: true
-            tap_action:
-              action: more-info
-              entity: input_number.hermes_monthly_budget_usd
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Cost (24h)
-              show_states: true
-              colorize_states: true
-            graph_span: 24h
-            update_interval: 5m
-            color_list:
-              - '#059669'
-              - '#2563eb'
-            apex_config:
-              chart:
-                height: 260
-              stroke:
-                curve: smooth
-                width: 2
-            yaxis:
-              - id: rolling
-                decimals: 4
-              - id: cumulative
-                opposite: true
-                decimals: 4
-            series:
-              - entity: sensor.hermes_cost_24h
-                name: Cost 24h
-                yaxis_id: rolling
-                type: area
-                opacity: 0.25
-                stroke_width: 2
-              - entity: sensor.hermes_estimated_cost_usd
-                name: Estimated total
-                yaxis_id: cumulative
-                type: line
-                stroke_width: 2
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-
-      - type: grid
-        cards:
-          - type: heading
-            heading: What can I do about it?
-            heading_style: title
-          - type: conditional
-            conditions:
-              - condition: template
-                value_template: "{{ states('button.hermes_refresh_status') not in ['unavailable', 'unknown'] }}"
+              - condition: and
+                conditions:
+                  - condition: state
+                    entity: button.hermes_agent_integration_hermes_refresh_status
+                    state_not: unavailable
+                  - condition: state
+                    entity: button.hermes_agent_integration_hermes_refresh_status
+                    state_not: unknown
             card:
               type: horizontal-stack
               cards:
-                - type: button
-                  name: Refresh
-                  icon: mdi:refresh
-                  tap_action:
-                    action: call-service
-                    service: button.press
-                    target:
-                      entity_id: button.hermes_refresh_status
-                - type: button
-                  name: Backup
-                  icon: mdi:cloud-upload-outline
-                  tap_action:
-                    action: call-service
-                    service: button.press
-                    target:
-                      entity_id: button.hermes_run_backup
-                - type: button
-                  name: Cleanup
-                  icon: mdi:broom
-                  tap_action:
-                    action: call-service
-                    service: button.press
-                    target:
-                      entity_id: button.hermes_run_cleanup
-                - type: button
-                  name: Restart GW
-                  icon: mdi:restart
-                  tap_action:
-                    action: call-service
-                    service: button.press
-                    target:
-                      entity_id: button.hermes_restart_gateway
-          - type: conditional
-            conditions:
-              - condition: template
-                value_template: "{{ states('select.hermes_approval_mode') not in ['unavailable', 'unknown'] }}"
-            card:
-              type: entities
-              show_header_toggle: false
-              entities:
-                - entity: select.hermes_approval_mode
-                  name: Approval mode (applies after gateway restart)
-                - entity: select.hermes_reasoning_effort
-                  name: Reasoning effort (applies after gateway restart)
-              card_mod:
-                style: |
-                  ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
+                - square: false
+                  type: grid
+                  columns: 2
+                  cards:
+                    - show_name: true
+                      show_icon: true
+                      type: button
+                      name: Refresh
+                      icon: mdi:refresh
+                      tap_action:
+                        action: perform-action
+                        target:
+                          entity_id: >-
+                            button.hermes_agent_integration_hermes_refresh_status
+                        perform_action: button.press
+                      theme: Mushroom Shadow
+                      show_state: false
+                    - show_name: true
+                      show_icon: true
+                      type: button
+                      name: Backup
+                      icon: mdi:cloud-upload-outline
+                      tap_action:
+                        action: perform-action
+                        target:
+                          entity_id: button.hermes_agent_integration_hermes_run_backup
+                        perform_action: button.press
+                        data: {}
+                      theme: Mushroom Shadow
+                    - show_name: true
+                      show_icon: true
+                      type: button
+                      name: Cleanup
+                      icon: mdi:broom
+                      tap_action:
+                        action: perform-action
+                        target:
+                          entity_id: button.hermes_agent_integration_hermes_run_cleanup
+                        perform_action: button.press
+                        data: {}
+                      theme: Mushroom Shadow
+                    - show_name: true
+                      show_icon: true
+                      type: button
+                      name: Restart
+                      icon: mdi:restart
+                      tap_action:
+                        action: perform-action
+                        target:
+                          entity_id: >-
+                            button.hermes_agent_integration_hermes_restart_gateway
+                        perform_action: button.press
+                        data: {}
+                      theme: Mushroom Shadow
+                      show_state: false
+                - type: entities
+                  title: Modes and reasoning
+                  show_header_toggle: false
+                  entities:
+                    - entity: select.hermes_agent_integration_hermes_approval_mode
+                      name: Approval
+                    - entity: select.hermes_agent_integration_hermes_reasoning_effort
+                      name: Reasoning
+                  state_color: false
+                  theme: Mushroom
+                  card_mod:
+                    style: |
+                      ha-card {
+                        border-radius: 18px;
+                        border: 1px solid rgba(148, 163, 184, 0.12);
+                        background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                        box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                        overflow: hidden;
+                        transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                      }
+                      ha-card:hover {
+                        transform: translateY(-2px);
+                        border-color: rgba(59, 130, 246, 0.30);
+                        box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                      }
+            grid_options:
+              columns: full
           - type: markdown
             content: >
-              {% if states('button.hermes_refresh_status') in ['unavailable', 'unknown'] %}
-              **Controls are disabled.** Turn on `mqtt_settings → Enable MQTT Control Entities`
-              in add-on Configuration, then restart the add-on. Only enable on a trusted Mosquitto broker.
-              {% else %}
-              Changing **approval mode** or **reasoning effort** queues a gateway restart so Hermes
-              reloads config. Use **Restart GW** for a manual restart with drain.
-              {% endif %}
+              {% if states('button.hermes_refresh_status') in ['unavailable',
+              'unknown'] %} **Controls off.** Enable `mqtt_settings → Enable
+              MQTT Control Entities`, then restart the add-on. {% else %}
+              Approval / reasoning changes queue a gateway restart. {% endif %}
             card_mod:
               style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-
-      - type: grid
-        cards:
-          - type: heading
-            heading: What is it running?
-            heading_style: title
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_main_provider
-            name: Provider
-            icon: mdi:cloud-outline
-            layout: horizontal
-            fill_container: true
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_main_model
-            name: Model
-            icon: mdi:brain
-            layout: horizontal
-            fill_container: true
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_auxiliary_title_model
-            name: Aux title model
-            icon: mdi:text-box-outline
-            layout: horizontal
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_access_mode
-            name: Access mode
-            icon: mdi:lan
-            layout: horizontal
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_gateway_mode
-            name: Gateway mode
-            icon: mdi:transit-connection-variant
-            layout: horizontal
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_setup_profile
-            name: Setup profile
-            icon: mdi:account-cog-outline
-            layout: horizontal
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_addon_version
-            name: Add-on
-            icon: mdi:package-variant
-            layout: horizontal
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-entity-card
-            entity: sensor.hermes_hermes_agent_version
-            name: Hermes Agent
-            icon: mdi:robot-outline
-            layout: horizontal
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-chips-card
-            alignment: center
-            chips:
-              - type: entity
-                entity: binary_sensor.hermes_provider_openrouter
-                name: OpenRouter
-                content_info: name
-              - type: entity
-                entity: binary_sensor.hermes_provider_anthropic
-                name: Anthropic
-                content_info: name
-              - type: entity
-                entity: binary_sensor.hermes_provider_openai
-                name: OpenAI
-                content_info: name
-              - type: entity
-                entity: binary_sensor.hermes_provider_google
-                name: Google
-                content_info: name
-              - type: entity
-                entity: binary_sensor.hermes_provider_ollama
-                name: Ollama
-                content_info: name
-              - type: entity
-                entity: binary_sensor.hermes_provider_minimax
-                name: MiniMax
-                content_info: name
-              - type: entity
-                entity: binary_sensor.hermes_provider_xai
-                name: xAI
-                content_info: name
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: gauge
-            entity: sensor.hermes_disk_usage_percent
-            name: Disk (/config)
-            min: 0
-            max: 100
-            severity:
-              green: 0
-              yellow: 70
-              red: 90
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); padding-bottom: 8px; }
-          - type: markdown
-            content: |
-              **Assist / voice** — set `enable_openai_api: true`, then point
-              [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation)
-              at `http://<LAN-IP>:8642/v1` with the gateway token. See DOCS.md → Chat, voice, Assist.
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-
+                ha-card { border-radius: 18px; font-size: 0.9rem; }
+            grid_options:
+              columns: full
+    show_icon_and_title: true
+    cards: []
+    badges: []
   - title: Analysis
     path: analysis
     icon: mdi:chart-box-outline
     type: sections
-    max_columns: 3
+    max_columns: 4
+    dense_section_placement: true
     sections:
       - type: grid
-        column_span: 2
+        column_span: 3
         cards:
           - type: heading
-            heading: Where did the money go?
+            heading: Spend breakdown
             heading_style: title
-          - type: custom:mushroom-template-card
-            entity: sensor.hermes_top_provider
-            primary: "{{ states('sensor.hermes_top_provider') }}"
-            secondary: >-
-              Top provider · ${{ state_attr('sensor.hermes_top_provider', 'cost_usd') | float(0) | round(4) }}
-              · {{ state_attr('sensor.hermes_top_provider', 'total_tokens') | default(0) }} tok
-            icon: mdi:cloud
-            icon_color: blue
-            layout: horizontal
-            fill_container: true
-            tap_action:
-              action: more-info
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); border-left: 3px solid #2563eb; }
-          - type: custom:mushroom-template-card
-            entity: sensor.hermes_top_model
-            primary: "{{ states('sensor.hermes_top_model') }}"
-            secondary: >-
-              Top model · ${{ state_attr('sensor.hermes_top_model', 'cost_usd') | float(0) | round(4) }}
-              · {{ state_attr('sensor.hermes_top_model', 'total_tokens') | default(0) }} tok
-            icon: mdi:cube-outline
-            icon_color: purple
-            layout: horizontal
-            fill_container: true
-            tap_action:
-              action: more-info
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); border-left: 3px solid #7c3aed; }
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Cost by provider
-              show_states: false
-            graph_span: 8h
-            span:
-              end: hour
-            update_interval: 5m
-            color_list:
-              - '#2563eb'
-            apex_config:
-              chart:
-                height: 240
-                toolbar:
-                  show: false
-              plotOptions:
-                bar:
-                  columnWidth: "70%"
-                  borderRadius: 4
-              dataLabels:
-                enabled: true
-              xaxis:
-                labels:
-                  show: false
-              legend:
-                show: false
-            series:
-              - entity: sensor.hermes_usage_summary
-                type: column
-                name: Cost USD
-                float_precision: 4
-                unit: USD
-                show:
-                  datalabels: true
-                  in_header: false
-                  legend_value: false
-                data_generator: |
-                  const rows = (entity.attributes.by_provider || []).slice(0, 8);
-                  const step = 3600 * 1000;
-                  const t0 = end.getTime() - Math.max(rows.length, 1) * step;
-                  return rows.map((r, i) => [t0 + i * step, Number(r.cost_usd) || 0]);
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Cost by model
-              show_states: false
-            graph_span: 8h
-            span:
-              end: hour
-            update_interval: 5m
-            color_list:
-              - '#7c3aed'
-            apex_config:
-              chart:
-                height: 240
-                toolbar:
-                  show: false
-              plotOptions:
-                bar:
-                  columnWidth: "70%"
-                  borderRadius: 4
-              dataLabels:
-                enabled: true
-              xaxis:
-                labels:
-                  show: false
-              legend:
-                show: false
-            series:
-              - entity: sensor.hermes_usage_summary
-                type: column
-                name: Cost USD
-                float_precision: 4
-                unit: USD
-                show:
-                  datalabels: true
-                  in_header: false
-                  legend_value: false
-                data_generator: |
-                  const rows = (entity.attributes.by_model || []).slice(0, 8);
-                  const step = 3600 * 1000;
-                  const t0 = end.getTime() - Math.max(rows.length, 1) * step;
-                  return rows.map((r, i) => [t0 + i * step, Number(r.cost_usd) || 0]);
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Cost by task
-              show_states: false
-            graph_span: 8h
-            span:
-              end: hour
-            update_interval: 5m
-            color_list:
-              - '#059669'
-            apex_config:
-              chart:
-                height: 240
-                toolbar:
-                  show: false
-              plotOptions:
-                bar:
-                  columnWidth: "70%"
-                  borderRadius: 4
-              dataLabels:
-                enabled: true
-              xaxis:
-                labels:
-                  show: false
-              legend:
-                show: false
-            series:
-              - entity: sensor.hermes_usage_summary
-                type: column
-                name: Cost USD
-                float_precision: 4
-                unit: USD
-                show:
-                  datalabels: true
-                  in_header: false
-                  legend_value: false
-                data_generator: |
-                  const rows = (entity.attributes.by_task || []).slice(0, 8);
-                  const step = 3600 * 1000;
-                  const t0 = end.getTime() - Math.max(rows.length, 1) * step;
-                  return rows.map((r, i) => [t0 + i * step, Number(r.cost_usd) || 0]);
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-
+          - type: vertical-stack
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 18
+                    entity: sensor.hermes_top_provider
+                    primary: "{{ states('sensor.hermes_top_provider') }}"
+                    secondary: >-
+                      {% set n = state_attr('sensor.hermes_top_provider',
+                      'total_tokens') | float(0) %} ${{
+                      state_attr('sensor.hermes_top_provider', 'cost_usd') |
+                      float(0) | round(2) }} · {% if n >= 1000000 %}{{ (n /
+                      1000000) | round(1) }}M{% elif n >= 1000 %}{{ (n / 1000) |
+                      round(1) }}k{% else %}{{ n | int }}{% endif %} tok
+                    icon: mdi:cloud
+                    icon_color: blue
+                    layout: horizontal
+                    fill_container: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(37, 99, 235, 0.22);
+                          border-left: 3px solid #2563eb;
+                          background: linear-gradient(135deg, rgba(37, 99, 235, 0.13), rgba(255,255,255,0.01)), var(--ha-card-background, #151821);
+                          box-shadow: 0 12px 30px rgba(0,0,0,0.20);
+                        }
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 18
+                    entity: sensor.hermes_top_model
+                    primary: "{{ states('sensor.hermes_top_model') }}"
+                    secondary: >-
+                      {% set n = state_attr('sensor.hermes_top_model',
+                      'total_tokens') | float(0) %} ${{
+                      state_attr('sensor.hermes_top_model', 'cost_usd') |
+                      float(0) | round(2) }} · {% if n >= 1000000 %}{{ (n /
+                      1000000) | round(1) }}M{% elif n >= 1000 %}{{ (n / 1000) |
+                      round(1) }}k{% else %}{{ n | int }}{% endif %} tok
+                    icon: mdi:cube-outline
+                    icon_color: purple
+                    layout: horizontal
+                    fill_container: true
+                    tap_action:
+                      action: more-info
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(124, 58, 237, 0.22);
+                          border-left: 3px solid #7c3aed;
+                          background: linear-gradient(135deg, rgba(124, 58, 237, 0.13), rgba(255,255,255,0.01)), var(--ha-card-background, #151821);
+                          box-shadow: 0 12px 30px rgba(0,0,0,0.20);
+                        }
+              - type: horizontal-stack
+                cards:
+                  - type: vertical-stack
+                    cards:
+                      - type: markdown
+                        grid_options:
+                          columns: 12
+                        title: Provider ranking
+                        content: >
+                          {{ state_attr('sensor.hermes_breakdown_markdown',
+                          'providers')
+                             or '_No provider data yet._' }}
+                        card_mod:
+                          style: |
+                            ha-card { border-radius: 18px; overflow-x: auto; }
+                            ha-markdown { font-size: 0.9rem; line-height: 1.6; }
+                  - type: markdown
+                    grid_options:
+                      columns: 12
+                    title: Model ranking
+                    content: >
+                      {{ state_attr('sensor.hermes_breakdown_markdown',
+                      'models')
+                         or '_No model data yet._' }}
+                    card_mod:
+                      style: |
+                        ha-card { border-radius: 18px; overflow-x: auto; }
+                        ha-markdown { font-size: 0.9rem; line-height: 1.6; }
+                  - type: markdown
+                    grid_options:
+                      columns: 12
+                    title: Task ranking
+                    content: |
+                      {{ state_attr('sensor.hermes_breakdown_markdown', 'tasks')
+                         or '_No task data yet._' }}
+                    card_mod:
+                      style: |
+                        ha-card { border-radius: 18px; overflow-x: auto; }
+                        ha-markdown { font-size: 0.9rem; line-height: 1.6; }
+            grid_options:
+              columns: full
       - type: grid
+        column_span: 1
         cards:
           - type: heading
-            heading: How efficient was it?
+            heading: Efficiency
             heading_style: title
           - type: custom:mushroom-template-card
+            grid_options:
+              columns: 12
             primary: >-
-              {% set cache = states('sensor.hermes_cache_hit_ratio') | float(0) %}
-              {% set oh = states('sensor.hermes_overhead_ratio') | float(0) %}
-              {% if cache >= 40 and oh < 25 %}Efficient
-              {% elif oh >= 50 %}High overhead
-              {% elif cache < 15 %}Low cache hits
-              {% else %}Mixed
-              {% endif %}
-            secondary: Cache / overhead / reasoning snapshot
+              {% set cache = states('sensor.hermes_cache_hit_ratio') | float(0)
+              | round(0) %} {% set oh = states('sensor.hermes_overhead_ratio') |
+              float(0) | round(0) %} {% if cache >= 40 and oh < 25 %}Efficient
+              {% elif oh >= 50 %}High overhead {% elif cache < 15 %}Low cache {%
+              else %}Mixed{% endif %}
+            secondary: >-
+              {{ states('sensor.hermes_cache_hit_ratio') | float(0) | round(0) |
+              int }}% cache · {{ states('sensor.hermes_overhead_ratio') |
+              float(0) | round(0) | int }}% overhead
             icon: mdi:speedometer-medium
             icon_color: >-
-              {% set cache = states('sensor.hermes_cache_hit_ratio') | float(0) %}
-              {% set oh = states('sensor.hermes_overhead_ratio') | float(0) %}
-              {% if cache >= 40 and oh < 25 %}teal
-              {% elif oh >= 50 %}red
-              {% else %}amber
-              {% endif %}
+              {% set cache = states('sensor.hermes_cache_hit_ratio') | float(0)
+              %} {% set oh = states('sensor.hermes_overhead_ratio') | float(0)
+              %} {% if cache >= 40 and oh < 25 %}teal {% elif oh >= 50 %}red {%
+              else %}amber{% endif %}
             layout: horizontal
             fill_container: true
             card_mod:
               style: |
                 ha-card {
-                  border-radius: 12px;
-                  border: 1px solid var(--divider-color);
+                  border-radius: 18px;
+                  border: 1px solid rgba(20, 184, 166, 0.22);
                   border-left: 3px solid #14b8a6;
+                  background: linear-gradient(135deg, rgba(20, 184, 166, 0.13), rgba(255,255,255,0.01)), var(--ha-card-background, #151821);
+                  box-shadow: 0 12px 30px rgba(0,0,0,0.20);
                 }
-          - type: gauge
-            entity: sensor.hermes_cache_hit_ratio
-            name: Cache hit ratio
-            min: 0
-            max: 100
-            severity:
-              green: 40
-              yellow: 15
-              red: 0
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: gauge
-            entity: sensor.hermes_reasoning_share
-            name: Reasoning share
-            min: 0
-            max: 100
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: gauge
-            entity: sensor.hermes_overhead_ratio
-            name: Overhead ratio
-            min: 0
-            max: 100
-            severity:
-              green: 0
-              yellow: 25
-              red: 50
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
           - type: custom:mushroom-template-card
-            primary: "{{ states('sensor.hermes_message_count_total') }}"
+            grid_options:
+              columns: 4
+            primary: >-
+              {{ states('sensor.hermes_cache_hit_ratio') | float(0) | round(0) |
+              int }}%
+            secondary: Cache
+            icon: mdi:cached
+            icon_color: teal
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.hermes_cache_hit_ratio
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
+          - type: custom:mushroom-template-card
+            grid_options:
+              columns: 4
+            primary: >-
+              {{ states('sensor.hermes_reasoning_share') | float(0) | round(0) |
+              int }}%
+            secondary: Reasoning
+            icon: mdi:head-lightbulb-outline
+            icon_color: purple
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.hermes_reasoning_share
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
+          - type: custom:mushroom-template-card
+            grid_options:
+              columns: 4
+            primary: >-
+              {{ states('sensor.hermes_overhead_ratio') | float(0) | round(0) |
+              int }}%
+            secondary: Overhead
+            icon: mdi:chart-donut
+            icon_color: >-
+              {% set oh = states('sensor.hermes_overhead_ratio') | float(0) %}
+              {{ 'red' if oh >= 50 else 'amber' if oh >= 25 else 'green' }}
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.hermes_overhead_ratio
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
+          - type: custom:mushroom-template-card
+            grid_options:
+              columns: 4
+            primary: >-
+              {% set n = states('sensor.hermes_message_count_total') | float(0)
+              %} {% if n >= 1000000 %}{{ (n / 1000000) | round(1) }}M {% elif n
+              >= 1000 %}{{ (n / 1000) | round(1) }}k {% else %}{{ n | int }}{%
+              endif %}
             secondary: Messages
             icon: mdi:message-text-outline
             icon_color: blue
@@ -773,9 +1090,27 @@ views:
               entity: sensor.hermes_message_count_total
             card_mod:
               style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
           - type: custom:mushroom-template-card
-            primary: "{{ states('sensor.hermes_tool_call_count_total') }}"
+            grid_options:
+              columns: 4
+            primary: >-
+              {% set n = states('sensor.hermes_tool_call_count_total') |
+              float(0) %} {% if n >= 1000000 %}{{ (n / 1000000) | round(1) }}M
+              {% elif n >= 1000 %}{{ (n / 1000) | round(1) }}k {% else %}{{ n |
+              int }}{% endif %}
             secondary: Tool calls
             icon: mdi:tools
             icon_color: teal
@@ -785,255 +1120,361 @@ views:
               entity: sensor.hermes_tool_call_count_total
             card_mod:
               style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
           - type: custom:mushroom-template-card
+            grid_options:
+              columns: 4
             primary: >-
-              {% set e = states('sensor.hermes_estimated_cost_usd') | float(0) %}
-              {% set a = states('sensor.hermes_actual_cost_usd') | float(0) %}
-              ${{ (e - a) | round(4) }}
-            secondary: Est − actual delta
+              {% set est = states('sensor.hermes_estimated_cost_usd') | float(0)
+              %} {% set act = states('sensor.hermes_actual_cost_usd') | float(0)
+              %} ${{ (est - act) | round(2) }}
+            secondary: Est − actual
             icon: mdi:scale-balance
             icon_color: amber
             layout: vertical
             card_mod:
               style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
+      - type: grid
+        column_span: 4
+        cards:
+          - type: heading
+            heading: Token waste
+            heading_style: title
           - type: custom:apexcharts-card
+            grid_options:
+              columns: 20
             header:
               show: true
-              title: Token composition (lifetime)
+              title: Overhead $
+              show_states: true
+              colorize_states: true
+            chart_type: donut
+            update_interval: 5m
+            color_list:
+              - "#d97706"
+              - "#2563eb"
+              - "#dc2626"
+            apex_config:
+              chart:
+                height: 220
+              legend:
+                position: bottom
+            series:
+              - entity: sensor.hermes_compression_cost_usd
+                name: Compression
+                float_precision: 2
+                unit: USD
+              - entity: sensor.hermes_aux_cost_usd
+                name: Auxiliary
+                float_precision: 2
+                unit: USD
+              - entity: sensor.hermes_failed_session_cost
+                name: Failed
+                float_precision: 2
+                unit: USD
+            card_mod:
+              style: |
+                ha-card {
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                }
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                }
+          - type: horizontal-stack
+            cards:
+              - type: vertical-stack
+                cards:
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 6
+                    primary: >-
+                      ${{ states('sensor.hermes_aux_cost_usd') | float(0) |
+                      round(2) }}
+                    secondary: Auxiliary
+                    icon: mdi:cog-transfer-outline
+                    icon_color: blue
+                    layout: vertical
+                    tap_action:
+                      action: more-info
+                      entity: sensor.hermes_aux_cost_usd
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 6
+                    primary: >-
+                      ${{ states('sensor.hermes_overhead_cost_usd') | float(0) |
+                      round(2) }}
+                    secondary: Overhead
+                    icon: mdi:alert-decagram
+                    icon_color: orange
+                    layout: vertical
+                    tap_action:
+                      action: more-info
+                      entity: sensor.hermes_overhead_cost_usd
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+              - type: vertical-stack
+                cards:
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 6
+                    primary: >-
+                      ${{ states('sensor.hermes_compression_cost_usd') |
+                      float(0) | round(2) }}
+                    secondary: Compression
+                    icon: mdi:arrow-collapse-vertical
+                    icon_color: amber
+                    layout: vertical
+                    tap_action:
+                      action: more-info
+                      entity: sensor.hermes_compression_cost_usd
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 6
+                    primary: >-
+                      ${{ states('sensor.hermes_failed_session_cost') | float(0)
+                      | round(2) }}
+                    secondary: Failed sessions
+                    icon: mdi:close-octagon-outline
+                    icon_color: red
+                    layout: vertical
+                    tap_action:
+                      action: more-info
+                      entity: sensor.hermes_failed_session_cost
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+              - type: vertical-stack
+                cards:
+                  - type: custom:mushroom-template-card
+                    grid_options:
+                      columns: 6
+                    primary: "{{ states('sensor.hermes_compression_splits') | int(0) }}"
+                    secondary: Compression splits
+                    icon: mdi:call-split
+                    icon_color: grey
+                    layout: vertical
+                    tap_action:
+                      action: more-info
+                      entity: sensor.hermes_compression_splits
+                    card_mod:
+                      style: |
+                        ha-card {
+                          border-radius: 18px;
+                          border: 1px solid rgba(148, 163, 184, 0.12);
+                          background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                          overflow: hidden;
+                          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                        }
+                        ha-card:hover {
+                          transform: translateY(-2px);
+                          border-color: rgba(59, 130, 246, 0.30);
+                          box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                        }
+            grid_options:
+              rows: auto
+              columns: 15
+      - type: grid
+        column_span: 4
+        cards:
+          - type: heading
+            heading: Reference
+            heading_style: title
+          - type: horizontal-stack
+            cards:
+              - type: entities
+                grid_options:
+                  columns: 18
+                title: Lifetime
+                show_header_toggle: false
+                entities:
+                  - entity: sensor.hermes_estimated_cost_usd
+                    name: Estimated cost
+                  - entity: sensor.hermes_actual_cost_usd
+                    name: Actual cost
+                  - entity: sensor.hermes_total_tokens
+                    name: Total tokens
+                  - entity: sensor.hermes_api_call_count_total
+                    name: API calls
+                  - entity: sensor.hermes_sessions_total
+                    name: Sessions
+                card_mod:
+                  style: |
+                    ha-card {
+                      border-radius: 18px;
+                      border: 1px solid rgba(148, 163, 184, 0.12);
+                      background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                      overflow: hidden;
+                      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+                    }
+                    ha-card:hover {
+                      transform: translateY(-2px);
+                      border-color: rgba(59, 130, 246, 0.30);
+                      box-shadow: 0 14px 34px rgba(0,0,0,0.24);
+                    }
+              - type: markdown
+                content: >-
+                  Proxies only: **aux/compression** = non-`main` tasks ·
+                  **overhead %** = overhead÷total ·
+
+                  **cache %** = cache read÷(input+cache read) · **failed $** =
+                  error/timeout sessions.
+                title: Overhead math
+            grid_options:
+              columns: full
+      - type: grid
+        cards:
+          - type: heading
+            heading: Token usage
+            heading_style: title
+          - type: custom:apexcharts-card
+            grid_options:
+              columns: 28
+            header:
+              show: true
+              title: Token composition
               show_states: true
               colorize_states: true
             graph_span: 24h
             stacked: true
             update_interval: 5m
             color_list:
-              - '#2563eb'
-              - '#059669'
-              - '#14b8a6'
-              - '#d97706'
-              - '#7c3aed'
+              - "#2563eb"
+              - "#059669"
+              - "#14b8a6"
+              - "#d97706"
+              - "#7c3aed"
             apex_config:
               chart:
-                height: 260
+                height: 220
               stroke:
                 width: 1
+              legend:
+                position: bottom
             series:
               - entity: sensor.hermes_input_tokens_total
                 name: Input
                 type: area
-                opacity: 0.55
+                opacity: 0.5
               - entity: sensor.hermes_output_tokens_total
                 name: Output
                 type: area
-                opacity: 0.55
+                opacity: 0.5
               - entity: sensor.hermes_cache_read_tokens_total
                 name: Cache read
                 type: area
-                opacity: 0.55
+                opacity: 0.5
               - entity: sensor.hermes_cache_write_tokens_total
                 name: Cache write
                 type: area
-                opacity: 0.55
+                opacity: 0.5
               - entity: sensor.hermes_reasoning_tokens_total
                 name: Reasoning
                 type: area
-                opacity: 0.55
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-
-      - type: grid
-        cards:
-          - type: heading
-            heading: What was wasted?
-            heading_style: title
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_overhead_cost_usd') | float(0) | round(4) }}
-            secondary: Overhead cost
-            icon: mdi:alert-decagram
-            icon_color: orange
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_overhead_cost_usd
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_compression_cost_usd') | float(0) | round(4) }}
-            secondary: Compression
-            icon: mdi:arrow-collapse-vertical
-            icon_color: amber
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_compression_cost_usd
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_aux_cost_usd') | float(0) | round(4) }}
-            secondary: Auxiliary
-            icon: mdi:cog-transfer-outline
-            icon_color: blue
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_aux_cost_usd
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: >-
-              ${{ states('sensor.hermes_failed_session_cost') | float(0) | round(4) }}
-            secondary: Failed sessions
-            icon: mdi:close-octagon-outline
-            icon_color: red
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_failed_session_cost
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:mushroom-template-card
-            primary: "{{ states('sensor.hermes_compression_splits') }}"
-            secondary: Compression splits
-            icon: mdi:call-split
-            icon_color: grey
-            layout: vertical
-            tap_action:
-              action: more-info
-              entity: sensor.hermes_compression_splits
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: custom:apexcharts-card
-            header:
-              show: true
-              title: Overhead composition
-              show_states: true
-              colorize_states: true
-            chart_type: donut
-            update_interval: 5m
-            color_list:
-              - '#d97706'
-              - '#2563eb'
-              - '#dc2626'
-            apex_config:
-              chart:
-                height: 280
-              legend:
-                position: bottom
-            series:
-              - entity: sensor.hermes_compression_cost_usd
-                name: Compression
-                float_precision: 4
-                unit: USD
-              - entity: sensor.hermes_aux_cost_usd
-                name: Auxiliary
-                float_precision: 4
-                unit: USD
-              - entity: sensor.hermes_failed_session_cost
-                name: Failed sessions
-                float_precision: 4
-                unit: USD
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-
-      - type: grid
-        cards:
-          - type: heading
-            heading: Reference
-            heading_style: title
-          - type: entities
-            title: Lifetime totals
-            show_header_toggle: false
-            entities:
-              - entity: sensor.hermes_estimated_cost_usd
-                name: Estimated cost
-              - entity: sensor.hermes_actual_cost_usd
-                name: Actual cost
-              - entity: sensor.hermes_total_tokens
-                name: Total tokens
-              - entity: sensor.hermes_input_tokens_total
-                name: Input tokens
-              - entity: sensor.hermes_output_tokens_total
-                name: Output tokens
-              - entity: sensor.hermes_api_call_count_total
-                name: API calls
-              - entity: sensor.hermes_sessions_total
-                name: Sessions
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
-          - type: markdown
-            title: Providers (table)
-            content: >
-              {{ state_attr('sensor.hermes_breakdown_markdown', 'providers')
-                 or '_No provider breakdown yet — wait for the next status poll._' }}
+                opacity: 0.5
             card_mod:
               style: |
                 ha-card {
-                  border-radius: 12px;
-                  border: 1px solid var(--divider-color);
-                  overflow-x: auto;
+                  border-radius: 18px;
+                  border: 1px solid rgba(148, 163, 184, 0.12);
+                  background: linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008)), var(--ha-card-background, #151821);
+                  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+                  overflow: hidden;
+                  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
                 }
-                ha-markdown {
-                  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                  font-size: 0.85rem;
+                ha-card:hover {
+                  transform: translateY(-2px);
+                  border-color: rgba(59, 130, 246, 0.30);
+                  box-shadow: 0 14px 34px rgba(0,0,0,0.24);
                 }
-          - type: markdown
-            title: Models (table)
-            content: >
-              {{ state_attr('sensor.hermes_breakdown_markdown', 'models')
-                 or '_No model breakdown yet._' }}
-            card_mod:
-              style: |
-                ha-card {
-                  border-radius: 12px;
-                  border: 1px solid var(--divider-color);
-                  overflow-x: auto;
-                }
-                ha-markdown {
-                  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                  font-size: 0.85rem;
-                }
-          - type: markdown
-            title: Tasks (table)
-            content: >
-              {{ state_attr('sensor.hermes_breakdown_markdown', 'tasks')
-                 or '_No task breakdown yet (requires session_model_usage in state.db)._' }}
-            card_mod:
-              style: |
-                ha-card {
-                  border-radius: 12px;
-                  border: 1px solid var(--divider-color);
-                  overflow-x: auto;
-                }
-                ha-markdown {
-                  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                  font-size: 0.85rem;
-                }
-          - type: markdown
-            title: How overhead is calculated
-            content: |
-              These are **proxies**, not absolute waste:
-
-              - **Aux cost / tokens** — `session_model_usage` rows where `task ≠ main`
-              - **Compression cost** — task `compression` only
-              - **Compression splits** — sessions with a `parent_session_id`
-              - **Overhead tokens** ≈ aux + reasoning + cache write
-              - **Overhead cost** ≈ aux + session cost share of reasoning + cache write
-              - **Overhead ratio** = overhead cost ÷ total cost
-              - **Cache hit ratio** = cache read ÷ (input + cache read)
-              - **Reasoning share** = reasoning ÷ (output + reasoning)
-              - **Failed-session cost** — sessions whose `end_reason` looks like error/timeout/crash
-            card_mod:
-              style: |
-                ha-card { border-radius: 12px; border: 1px solid var(--divider-color); }
+        column_span: 2
+    show_icon_and_title: true
+    cards: []

@@ -67,7 +67,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.46"
+    fallback = "0.0.47"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -1104,14 +1104,20 @@ def _device_block(sw_version: str) -> dict[str, Any]:
     }
 
 
-def _discovery_object_id(slug: str) -> dict[str, str]:
+def _discovery_entity_id(domain: str, slug: str) -> dict[str, str]:
     """Pin entity_id slug so HA does not prefix the device name.
 
-    Without object_id, newer Home Assistant often creates IDs like
+    Without this, newer Home Assistant often creates IDs like
     sensor.hermes_agent_integration_hermes_last_error. The usage dashboard and
-    package expect sensor.hermes_* / binary_sensor.hermes_*.
+    package expect sensor.hermes_* / binary_sensor.hermes_* / button.hermes_*.
+
+    HA 2025.10+ prefers default_entity_id (domain.slug); object_id is deprecated
+    and ignored by Core 2026.4+. Publish both during the transition window.
     """
-    return {"object_id": slug}
+    return {
+        "object_id": slug,
+        "default_entity_id": f"{domain}.{slug}",
+    }
 
 
 def resolve_mqtt_config(payload: dict) -> dict[str, Any]:
@@ -1418,7 +1424,7 @@ def publish_mqtt_discovery(
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{name}",
-            **_discovery_object_id(f"hermes_{name}"),
+            **_discovery_entity_id("binary_sensor", f"hermes_{name}"),
             "state_topic": f"{base}/status/{name}",
             "payload_on": "true",
             "payload_off": "false",
@@ -1436,7 +1442,7 @@ def publish_mqtt_discovery(
         cfg = {
             "name": f"Hermes Provider {prov_name.title()}",
             "unique_id": f"hermes_agent_ha_addon_provider_{prov_name}",
-            **_discovery_object_id(f"hermes_provider_{prov_name}"),
+            **_discovery_entity_id("binary_sensor", f"hermes_provider_{prov_name}"),
             "state_topic": f"{base}/status/provider_{prov_name}",
             "payload_on": "true",
             "payload_off": "false",
@@ -1462,7 +1468,7 @@ def publish_mqtt_discovery(
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{key}",
-            **_discovery_object_id(f"hermes_{key}"),
+            **_discovery_entity_id("sensor", f"hermes_{key}"),
             "state_topic": f"{base}/status/{key}",
             "availability_topic": avail_topic,
             "payload_available": "online",
@@ -1476,7 +1482,7 @@ def publish_mqtt_discovery(
     last_error_cfg = {
         "name": "Hermes Last Error",
         "unique_id": "hermes_agent_ha_addon_last_error",
-        **_discovery_object_id("hermes_last_error"),
+        **_discovery_entity_id("sensor", "hermes_last_error"),
         "state_topic": f"{base}/status/last_error",
         "json_attributes_topic": f"{base}/status/last_error_attributes",
         "availability_topic": avail_topic,
@@ -1499,7 +1505,7 @@ def publish_mqtt_discovery(
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{key}",
-            **_discovery_object_id(f"hermes_{key}"),
+            **_discovery_entity_id("sensor", f"hermes_{key}"),
             "state_topic": f"{base}/status/{key}",
             "device_class": "timestamp",
             "availability_topic": avail_topic,
@@ -1538,7 +1544,7 @@ def publish_mqtt_discovery(
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{key}",
-            **_discovery_object_id(f"hermes_{key}"),
+            **_discovery_entity_id("sensor", f"hermes_{key}"),
             "state_topic": f"{base}/status/{key}",
             "availability_topic": avail_topic,
             "payload_available": "online",
@@ -1551,14 +1557,16 @@ def publish_mqtt_discovery(
         if unit:
             cfg["unit_of_measurement"] = unit
         if device_class == "monetary":
-            cfg["suggested_display_precision"] = 4
+            cfg["suggested_display_precision"] = 2
+        elif unit == "%":
+            cfg["suggested_display_precision"] = 0
         topic = f"homeassistant/sensor/hermes_agent/{key}/config"
         publisher.publish(topic, json.dumps(cfg), retain=True)
 
     usage_summary_cfg = {
         "name": "Hermes Usage Summary",
         "unique_id": "hermes_agent_ha_addon_usage_summary",
-        **_discovery_object_id("hermes_usage_summary"),
+        **_discovery_entity_id("sensor", "hermes_usage_summary"),
         "state_topic": f"{base}/status/usage_summary_state",
         "json_attributes_topic": f"{base}/status/usage_attributes",
         "availability_topic": avail_topic,
@@ -1591,7 +1599,7 @@ def publish_control_discovery(
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{slug}",
-            **_discovery_object_id(f"hermes_{slug}"),
+            **_discovery_entity_id("button", f"hermes_{slug}"),
             "command_topic": f"{base}/command/{slug}",
             "availability_topic": avail_topic,
             "payload_available": "online",
@@ -1620,7 +1628,7 @@ def publish_control_discovery(
         cfg = {
             "name": f"Hermes {label}",
             "unique_id": f"hermes_agent_ha_addon_{slug}",
-            **_discovery_object_id(f"hermes_{slug}"),
+            **_discovery_entity_id("select", f"hermes_{slug}"),
             "command_topic": f"{base}/command/{slug}",
             "state_topic": f"{base}/status/{slug}",
             "options": options,
@@ -1646,7 +1654,7 @@ def _ratio_as_percent(value: Any) -> str:
     if value is None:
         return "unknown"
     try:
-        return str(round(float(value) * 100.0, 4))
+        return str(int(round(float(value) * 100.0)))
     except (TypeError, ValueError):
         return "unknown"
 
