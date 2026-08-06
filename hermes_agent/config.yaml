@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.0.47"
+version: "0.1.0"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -11,7 +11,6 @@ services:
 arch:
   - amd64
   - aarch64
-  - armv7
 startup: services
 boot: auto
 init: false
@@ -34,9 +33,9 @@ options:
   # "auto" = detect from Home Assistant Core (Supervisor); fallback Etc/UTC
   timezone: "auto"
   addon_log_level: info
-
-  # --- First-run setup ---
   setup_profile: home_assistant
+
+  # --- Model & Providers ---
   default_provider: openrouter
   default_model_preset: custom
   default_model: ""
@@ -55,6 +54,9 @@ options:
     xai_api_key: ""
     firecrawl_api_key: ""
     searxng_url: ""
+    elevenlabs_api_key: ""
+    groq_api_key: ""
+    deepinfra_api_key: ""
 
   # --- Home Assistant integration ---
   home_assistant:
@@ -65,17 +67,55 @@ options:
     enable_native_ha_platform: false
     ha_system_prompt_hint: ""
 
+  # --- Voice & speech (Hermes STT/TTS; wake word stays on HA satellites) ---
+  voice_speech:
+    stt_enabled: true
+    stt_provider: local
+    # "auto" = blank language hint (or HA Core language when detectable)
+    stt_language: auto
+    stt_local_model: base
+    stt_echo_transcripts: true
+    tts_provider: edge
+    tts_voice: "en-US-AriaNeural"
+    tts_speed: 1.0
+
+  # --- HA Voice bridge (Assist inbound + spoken announcements outbound) ---
+  ha_voice_bridge:
+    seed_ha_speak_route: true
+    seed_ha_tts_command_script: true
+
   # --- Agent behavior (Hermes config.yaml bootstrap) ---
   agent_behavior:
     approval_mode: smart
     reasoning_effort: medium
     show_reasoning: true
+    # Cap tool iterations per turn (upstream default is 500; 60 is safer for Assist).
+    max_turns: 60
+    smart_policy: ""
+    denial_breaker_threshold: 3
+    deny_patterns:
+      - "ha core stop*"
+      - "rm -rf /config*"
 
-  # --- Webhooks (gateway adapter on host network) ---
+  # --- Context compression ---
+  context_compression:
+    threshold_tokens: 0
+    proactive_prune_tokens: 0
+    min_tail_user_messages: 4
+    idle_compact_after_seconds: 0
+
+  # --- Webhooks (inbound gateway adapter on host network) ---
   webhooks:
     enable_webhooks: false
     webhook_port: 8644
     seed_ha_direct_delivery_route: true
+
+  # --- Outbound lifecycle events (Hermes → HA webhook) ---
+  outbound_events:
+    enable_outbound_events: false
+    ha_webhook_id: ""
+    events:
+      - "turn.completed"
 
   # --- Backup to /share ---
   backup:
@@ -89,15 +129,6 @@ options:
     ntfy_token: ""
     # When true: push-only (set publish topic = topic, no inbound allowlist).
     ntfy_publish_only: true
-
-  # --- Web terminal (Ingress) ---
-  enable_terminal: true
-  terminal_port: 7681
-
-  # --- Hermes Web UI (hermes dashboard) ---
-  web_interface:
-    enable_web_interface: true
-    auto_start_with_integration: true
 
   # --- Gateway access ---
   gateway_access:
@@ -113,6 +144,15 @@ options:
     gateway_additional_allowed_origins: []
     controlui_disable_device_auth: true
 
+  # --- Web terminal (Ingress) ---
+  enable_terminal: true
+  terminal_port: 7681
+
+  # --- Hermes Web UI (hermes dashboard) ---
+  web_interface:
+    enable_web_interface: true
+    auto_start_with_integration: true
+
   # --- MQTT status sensors ---
   mqtt_settings:
     broker_host: ""
@@ -125,12 +165,6 @@ options:
     status_poll_interval_seconds: 60
     state_prefix: "hermes"
 
-  # --- Optional router SSH ---
-  router_ssh:
-    host: ""
-    user: ""
-    key_path: "/config/keys/router_ssh"
-
   # --- Tool bootstrap ---
   tools_bootstrap:
     tool_telegram_enabled: false
@@ -138,6 +172,14 @@ options:
     tool_browser_enabled: true
     tool_skills_hub_enabled: true
     seed_example_scripts: true
+    tool_a2a_enabled: false
+    tool_office_skills_enabled: false
+
+  # --- Optional router SSH ---
+  router_ssh:
+    host: ""
+    user: ""
+    key_path: "/config/keys/router_ssh"
 
   # --- Advanced ---
   advanced_settings:
@@ -146,7 +188,7 @@ options:
     nginx_log_level: minimal
     gateway_env_vars: []
     hermes_agent_version_preset: custom
-    hermes_agent_version_custom: "0.19.0"
+    hermes_agent_version_custom: "0.20.0"
     # Bootstrap fallback_providers in Hermes config.yaml when the key is missing.
     # Entries: "provider" or "provider/model" (e.g. openrouter or openrouter/google/gemini-2.5-flash).
     fallback_providers: []
@@ -176,6 +218,9 @@ schema:
     xai_api_key: str?
     firecrawl_api_key: str?
     searxng_url: str?
+    elevenlabs_api_key: password?
+    groq_api_key: password?
+    deepinfra_api_key: password?
   home_assistant:
     hass_url: str?
     homeassistant_token: password?
@@ -183,14 +228,41 @@ schema:
     auto_configure_mcp: bool?
     enable_native_ha_platform: bool?
     ha_system_prompt_hint: str?
+  voice_speech:
+    stt_enabled: bool?
+    stt_provider: list(local|groq|openai|mistral|xai|elevenlabs|deepinfra)?
+    stt_language: str?
+    stt_local_model: list(tiny|base|small|medium|large-v3)?
+    stt_echo_transcripts: bool?
+    tts_provider: list(edge|piper|kittentts|openai|elevenlabs|gemini|xai|minimax|mistral|neutts)?
+    tts_voice: str?
+    tts_speed: float(0.5,2.0)?
+  ha_voice_bridge:
+    seed_ha_speak_route: bool?
+    seed_ha_tts_command_script: bool?
   agent_behavior:
     approval_mode: list(smart|manual|off)?
     reasoning_effort: list(none|minimal|low|medium|high|xhigh|max|ultra)?
     show_reasoning: bool?
+    max_turns: int(10,500)?
+    smart_policy: str?
+    denial_breaker_threshold: int(0,10)?
+    deny_patterns:
+      - str
+  context_compression:
+    threshold_tokens: int(0,2000000)?
+    proactive_prune_tokens: int(0,2000000)?
+    min_tail_user_messages: int(0,50)?
+    idle_compact_after_seconds: int(0,86400)?
   webhooks:
     enable_webhooks: bool?
     webhook_port: port?
     seed_ha_direct_delivery_route: bool?
+  outbound_events:
+    enable_outbound_events: bool?
+    ha_webhook_id: str?
+    events:
+      - str
   backup:
     auto_backup_on_start: bool?
   ntfy:
@@ -199,11 +271,6 @@ schema:
     ntfy_server_url: str?
     ntfy_token: password?
     ntfy_publish_only: bool?
-  enable_terminal: bool?
-  terminal_port: port?
-  web_interface:
-    enable_web_interface: bool?
-    auto_start_with_integration: bool?
   gateway_access:
     access_mode: list(custom|local_only|lan_https|lan_reverse_proxy|tailnet_https)?
     gateway_port: port?
@@ -218,6 +285,11 @@ schema:
     gateway_additional_allowed_origins:
       - value: str
     controlui_disable_device_auth: bool?
+  enable_terminal: bool?
+  terminal_port: port?
+  web_interface:
+    enable_web_interface: bool?
+    auto_start_with_integration: bool?
   mqtt_settings:
     broker_host: str?
     broker_port: port?
@@ -228,16 +300,18 @@ schema:
     enable_control_entities: bool?
     status_poll_interval_seconds: int(30,300)?
     state_prefix: str?
-  router_ssh:
-    host: str?
-    user: str?
-    key_path: str?
   tools_bootstrap:
     tool_telegram_enabled: bool?
     tool_discord_enabled: bool?
     tool_browser_enabled: bool?
     tool_skills_hub_enabled: bool?
     seed_example_scripts: bool?
+    tool_a2a_enabled: bool?
+    tool_office_skills_enabled: bool?
+  router_ssh:
+    host: str?
+    user: str?
+    key_path: str?
   advanced_settings:
     http_proxy: str?
     force_ipv4_dns: bool?

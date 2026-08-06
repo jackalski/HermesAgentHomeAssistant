@@ -56,17 +56,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh \
     | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh \
     && uv --version
 
-# Node.js from NodeSource (Debian Bookworm ships Node 18; Hermes requires 20+).
-# amd64/aarch64 → Node 24 LTS "Krypton". armv7 → Node 22 LTS "Jod": NodeSource
-# 24.x publishes only nsolid for armhf, not nodejs, so apt would fall back to
-# Debian Node 18 and fail the version guard.
+# Node.js from NodeSource (Debian Bookworm ships Node 18; Hermes 0.20+ requires Node 26).
+# Supported add-on arches: amd64 / aarch64 only (armv7 dropped — NodeSource does not
+# ship nodejs for armhf at Node 26, and Hermes 0.20 no longer supports Node < 26).
 ARG BUILD_ARCH
 RUN ARCH_FOR_NODE="${BUILD_ARCH:-}" \
     && if [ -z "$ARCH_FOR_NODE" ]; then ARCH_FOR_NODE="$(dpkg --print-architecture)"; fi \
-    && case "$ARCH_FOR_NODE" in \
-         armv7|armhf|arm/v7) NODE_MAJOR=22 ;; \
-         *) NODE_MAJOR=24 ;; \
-       esac \
+    && NODE_MAJOR=26 \
     && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
@@ -152,7 +148,7 @@ RUN python3 -m pip config set global.break-system-packages true \
          echo "ERROR: npm install ${pkg} failed after 5 attempts"; \
          return 1; \
        } \
-    && npm_install_retry "hermes-agent@0.19.0" \
+    && npm_install_retry "hermes-agent@0.20.0" \
     && npm_install_retry "@botiverse/raft@0.0.15" \
     && npm_install_retry "agent-browser@latest"
 
@@ -161,7 +157,7 @@ COPY repair_hermes_wheel.py /repair_hermes_wheel.py
 RUN python3 /repair_hermes_wheel.py
 
 # System-wide Python deps: MCP SDK + gateway/dashboard/tooling (uv preferred, pip fallback).
-# Pin mcp to the 1.x line Hermes 0.19 declares (mcp==1.26.0 extra). Unpinned `mcp`
+# Pin mcp to the 1.x line Hermes 0.20 declares. Unpinned `mcp`
 # resolves to 2.x, which dropped streamablehttp_client; Hermes then reports
 # "mcp.client.streamable_http is not available" for every HTTP MCP server (HA, etc.).
 RUN uv pip install --system --break-system-packages --no-cache \

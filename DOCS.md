@@ -27,7 +27,7 @@ Or add the repository manually:
 2. Add `https://github.com/jackalski/HermesAgentHomeAssistant`
 3. Install **Hermes Agent Integration** and start it.
 
-Architectures: `amd64`, `aarch64`, `armv7`.
+Architectures: `amd64`, `aarch64` (armv7 dropped in **0.1.0** — Hermes 0.20 requires Node 26).
 
 From **0.0.37**, the Supervisor **pulls** a prebuilt image (`ghcr.io/jackalski/hermes-agent-addon:<version>`) built by GitHub Actions. It does **not** run `docker build` on the HA host. If install fails with a pull/manifest error, confirm that GHCR package version exists and is **Public**.
 
@@ -284,9 +284,16 @@ Upstream **Chronos** cron (`cron.provider: chronos`) is for Nous-hosted scale-to
 
 ### Chat, voice, Assist
 
-- Set **`enable_openai_api: true`** in add-on Configuration (syncs `API_SERVER_ENABLED=true` to `/config/.hermes/.env`).
-- Install [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) via HACS, or the [Hermes Agent integration](https://github.com/jackalski/HermesAgentHomeAssistantIntegration) for chat card and voice.
-- **Extended OpenAI Conversation** settings:
+Hermes 0.20 splits voice into two directions. **Wake word and microphone stay on Home Assistant
+Voice satellites** (Voice PE, ESPHome Assist satellite, Android companion) — the add-on container
+has no audio device. Hermes is the **brain** (conversation agent) and can also **push spoken
+announcements** back into the house.
+
+#### Inbound — you talk to the house (Assist)
+
+1. Set **`enable_openai_api: true`** in add-on Configuration (syncs `API_SERVER_ENABLED=true` to `/config/.hermes/.env`).
+2. Install [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) via HACS, or the [Hermes Agent integration](https://github.com/jackalski/HermesAgentHomeAssistantIntegration) for chat card and voice.
+3. **Extended OpenAI Conversation** settings:
 
 | Field | Value |
 |-------|-------|
@@ -297,12 +304,38 @@ Upstream **Chronos** cron (`cron.provider: chronos`) is for Nous-hosted scale-to
 
 HTTPS on port 18789 still works for browsers and `curl -k`; HA Core rejects the self-signed cert, so use **8642** for Extended OpenAI.
 
-- Restart add-on after enabling Assist API or after first `hermes onboard` (gateway reads `API_SERVER_*` at startup).
-- In **Settings → Voice assistants**, set conversation agent to Extended OpenAI Conversation and expose entities.
-- For Assist session memory continuity, clients can send Hermes session headers:
-  - `X-Hermes-Session-Key: ha-assist-<device_id>` (stable per device/conversation)
-  - optional `X-Hermes-Session-Name: Assist Kitchen`
-  - Without a session key, each Assist request may start a fresh Hermes session.
+4. Restart add-on after enabling Assist API or after first `hermes onboard` (gateway reads `API_SERVER_*` at startup).
+5. In **Settings → Voice assistants**, set conversation agent to Extended OpenAI Conversation (or Hermes Agent), STT to Whisper (or cloud), TTS to Piper / HA Cloud, and expose entities.
+6. Keep **`agent_behavior.max_turns`** modest (default **60**). Upstream Hermes jumped the iteration default to 500 — fine for coding, expensive and slow for Assist.
+7. For Assist session memory continuity, clients can send Hermes session headers:
+   - `X-Hermes-Session-Key: ha-assist-<device_id>` (stable per device/conversation)
+   - optional `X-Hermes-Session-Name: Assist Kitchen`
+   - Without a session key, each Assist request may start a fresh Hermes session.
+
+#### Outbound — the house talks to you
+
+1. Create a Home Assistant webhook automation from blueprint
+   `/share/hermes/ha/blueprints/automation/hermes_voice_announce.yaml`
+   (copy into `config/blueprints/automation/hermes/` first).
+2. Set add-on **`outbound_events.enable_outbound_events: true`** and
+   **`outbound_events.ha_webhook_id`** to that webhook id (HMAC secret stored at
+   `/config/secrets/outbound_webhook.secret` — never logged).
+3. Or enable webhooks and keep **`ha_voice_bridge.seed_ha_speak_route: true`** so Hermes gets a
+   zero-LLM `ha-speak` direct-delivery route (`deliver: homeassistant`).
+4. Package scripts `script.hermes_announce` / `script.hermes_ask` (in
+   `/share/hermes/ha/packages/hermes_usage.yaml`) speak arbitrary text or run Assist then TTS.
+
+#### Hermes STT / TTS tools (gateway voice notes)
+
+Use the **Voice & Speech** panel for Hermes-side transcription of inbound voice notes and the
+`text_to_speech` tool (`edge` default; optional Piper / KittenTTS / cloud providers).
+`stt_language: auto` picks up Home Assistant Core's language when available.
+
+Optional: seed **`ha-tts-command.py`** (`ha_voice_bridge.seed_ha_tts_command_script`) so Hermes
+command-TTS can call HA `/api/tts_get_url` and speak in your existing Piper / Cloud voice.
+
+**Troubleshooting:** if you expected on-device wake words inside the add-on terminal, use a Voice
+satellite instead — wake word detection requires a microphone, which the container does not have.
 
 ## Configuration reference
 
@@ -333,25 +366,43 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `approval_mode` | `smart` | Bootstraps `approvals.mode` if missing |
 | `reasoning_effort` | `medium` | Bootstraps `agent.reasoning_effort` if missing |
 | `show_reasoning` | `true` | Bootstraps `display.show_reasoning` if missing |
+| `max_turns` | `60` | Bootstraps `agent.max_turns` if missing (Assist-safe) |
+| `smart_policy` | *(empty)* | Bootstraps `approvals.smart_policy` if missing |
+| `denial_breaker_threshold` | `3` | Bootstraps `approvals.denial_breaker_threshold` |
+| `deny_patterns` | HA-safe defaults | Bootstraps `approvals.deny` if missing |
+| `stt_enabled` / `stt_provider` / `stt_language` | on / local / auto | Voice & Speech panel → `stt.*` |
+| `tts_provider` / `tts_voice` / `tts_speed` | edge / AriaNeural / 1.0 | Voice & Speech panel → `tts.*` |
+| `threshold_tokens` / `proactive_prune_tokens` | `0` / `0` | Context compression (0 = unset/off) |
+| `min_tail_user_messages` | `4` | Guaranteed recent user messages after compression |
+| `enable_outbound_events` | `false` | Seed `hooks.outbound` when Hermes supports it |
+| `ha_webhook_id` | *(empty)* | Target HA webhook for outbound lifecycle events |
+| `seed_ha_speak_route` | `true` | Seed webhook route `ha-speak` |
+| `seed_ha_tts_command_script` | `true` | Seed `ha-tts-command.py` |
+| `tool_a2a_enabled` | `false` | A2A plugin (capability-probed) |
+| `tool_office_skills_enabled` | `false` | Attempt office skills install |
 | `enable_openai_api` | `false` | Syncs `API_SERVER_ENABLED`; Assist API on **8642**, nginx `/v1/` and `/health` on **18789** |
 | `enable_ha_status_sensors` | `true` | MQTT + status.json |
 | `enable_control_entities` | `false` | MQTT buttons/selects for backup, cleanup, restart, approval/reasoning (trusted broker only) |
 | **Home Assistant** panel | — | URL, token, prefer supervisor, MCP, native platform |
-| **Agent Behavior** panel | smart / medium / ON | Approvals + reasoning bootstrap |
+| **Voice & Speech** panel | local STT / Edge TTS | Hermes STT/TTS bootstrap |
+| **HA Voice Bridge** panel | speak route ON | Assist + announcement helpers |
+| **Agent Behavior** panel | smart / medium / ON / 60 | Approvals + reasoning + max turns |
+| **Context Compression** panel | — | Token thresholds / tail / idle compact |
+| **Outbound Events** panel | OFF | Hermes → HA webhook lifecycle push |
 | **Gateway Access** panel | `lan_https` | `access_mode`, `gateway_port`, trusted proxies, Assist API, etc. |
 | **MQTT Status Sensors** panel | autodetect | `broker_host` / `broker_port` / `broker_username` / `broker_password`; leave host empty for Mosquitto autodetect |
 | **Provider API Keys** panel | *(empty)* | Synced to `/config/.hermes/.env` (preserved on reinstall) |
 | **Router SSH** panel | — | `host`, `user`, `key_path` (default `/config/keys/router_ssh`) |
-| **Tool Bootstrap** panel | browser ON | Telegram / Discord / browser / Skills Hub auto-install toggles |
+| **Tool Bootstrap** panel | browser ON | Telegram / Discord / browser / Skills Hub / A2A / office |
 | **Hermes Web UI** panel | ON / auto-start | `enable_web_interface`, `auto_start_with_integration` (dashboard binds a fixed internal port; not user-configurable) |
 | **Advanced Settings** panel | — | `http_proxy`, `nginx_log_level`, `gateway_env_vars`, Hermes version |
 | `addon_log_level` | `info` | Add-on startup log verbosity |
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
-| `hermes_agent_version_custom` | `0.19.0` | npm tag/semver when preset is `custom` |
+| `hermes_agent_version_custom` | `0.20.0` | npm tag/semver when preset is `custom` |
 
-Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
+Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG, ElevenLabs, Groq, DeepInfra). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
 
 **`enable_openai_api`** maps directly to Hermes **`API_SERVER_ENABLED`** in `/config/.hermes/.env` (with `API_SERVER_HOST`, `API_SERVER_PORT`, `API_SERVER_KEY`).
 
@@ -421,6 +472,9 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.19.0 > /config/.hermes/.addon-managed-hermes-version` |
 | `[raft] raft CLI not found in PATH` in gateway logs | Fixed in **0.0.29+** — add-on installs `@botiverse/raft` globally. Only needed if you use Raft messaging (`RAFT_PROFILE` in `/config/.hermes/.env`); see [Hermes Raft docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/raft). |
 | Mosquitto log spam (`New connection` / `disconnected` every minute) | Fixed in **0.0.19+** — persistent MQTT client + one-shot discovery. Optional: Mosquitto `connection_messages false` in customize |
+| Expected wake word / barge-in inside the add-on | The container has **no microphone** — use HA Voice PE / ESPHome Assist satellites for wake word + STT/TTS. Hermes is the conversation agent via Assist API (`enable_openai_api`). |
+| Hermes 0.20.0 install fails on restart | Package may not be published on npm/PyPI yet — startup keeps the previous CLI and logs a tip. Pin `hermes_agent_version_custom` to a published tag (e.g. `0.19.0`) until 0.20.0 is available. |
+| Node version warning after upgrade | Hermes 0.20 requires **Node 26** (baked in the image). Update/rebuild the add-on; `/config/.node_global` cannot raise the system Node major. |
 
 Gateway token (if CLI redacts secrets):
 

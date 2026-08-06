@@ -157,7 +157,8 @@
         <div>Home Assistant MCP: <b id="setupMcp">__SETUP_MCP__</b></div>
         <div>Assist API enabled: <b id="setupAssist">__SETUP_ASSIST__</b>
           <span class="muted">(optional — set <code>enable_openai_api</code>, then point Extended OpenAI Conversation at
-          <code>http://&lt;LAN-IP&gt;:8642/v1</code> — see DOCS.md → Chat, voice, Assist)</span>
+          <code>http://&lt;LAN-IP&gt;:8642/v1</code>. Wake word / mic stay on Voice satellites; see DOCS.md → Chat, voice, Assist.
+          Session continuity: send <code>X-Hermes-Session-Key: ha-assist-&lt;device_id&gt;</code>.)</span>
         </div>
         <div id="setupGatewayHint" class="muted" style="margin-top:6px"></div>
       </div>
@@ -197,9 +198,10 @@
         </div>
         <div id="copyDashMsg" class="muted" style="margin-top:6px;font-size:12px"></div>
         <div class="muted" style="margin-top:8px;font-size:12px">
-          Blueprints (budget / gateway offline / disk): copy from
+          Blueprints (budget / gateway offline / disk / voice announce): copy from
           <code>/share/hermes/ha/blueprints/automation/</code> into
           <code>config/blueprints/automation/hermes/</code>.
+          Spoken announcements: enable <code>outbound_events</code> or the <code>ha-speak</code> webhook route.
         </div>
       </div>
     </details>

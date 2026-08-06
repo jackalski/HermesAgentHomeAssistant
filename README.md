@@ -55,7 +55,7 @@ Restart the add-on. Full walkthrough: [Quick start in DOCS.md](DOCS.md#quick-sta
 |---|---|
 | amd64 | ✅ |
 | aarch64 (RPi 4/5) | ✅ |
-| armv7 (RPi 3) | ✅ |
+| armv7 (RPi 3) | ❌ (dropped in 0.1.0 — Hermes 0.20 requires Node 26) |
 
 ## Documentation
 

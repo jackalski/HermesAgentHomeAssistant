@@ -85,6 +85,36 @@ HA_SYSTEM_PROMPT_HINT="$(read_nested_option home_assistant ha_system_prompt_hint
 APPROVAL_MODE="$(read_nested_option agent_behavior approval_mode)"
 REASONING_EFFORT="$(read_nested_option agent_behavior reasoning_effort)"
 SHOW_REASONING="$(read_nested_option agent_behavior show_reasoning)"
+MAX_TURNS="$(read_nested_option agent_behavior max_turns)"
+SMART_POLICY="$(read_nested_option agent_behavior smart_policy)"
+DENIAL_BREAKER_THRESHOLD="$(read_nested_option agent_behavior denial_breaker_threshold)"
+DENY_PATTERNS_JSON="$(jq -c '.agent_behavior.deny_patterns // []' "$OPTIONS_FILE" 2>/dev/null || echo '[]')"
+
+# Voice & speech
+STT_ENABLED="$(read_nested_option voice_speech stt_enabled)"
+STT_PROVIDER="$(read_nested_option voice_speech stt_provider)"
+STT_LANGUAGE="$(read_nested_option voice_speech stt_language)"
+STT_LOCAL_MODEL="$(read_nested_option voice_speech stt_local_model)"
+STT_ECHO_TRANSCRIPTS="$(read_nested_option voice_speech stt_echo_transcripts)"
+TTS_PROVIDER="$(read_nested_option voice_speech tts_provider)"
+TTS_VOICE="$(read_nested_option voice_speech tts_voice)"
+TTS_SPEED="$(read_nested_option voice_speech tts_speed)"
+
+# HA voice bridge
+SEED_HA_SPEAK_ROUTE="$(read_nested_option ha_voice_bridge seed_ha_speak_route)"
+SEED_HA_TTS_COMMAND_SCRIPT="$(read_nested_option ha_voice_bridge seed_ha_tts_command_script)"
+
+# Context compression
+COMPRESSION_THRESHOLD_TOKENS="$(read_nested_option context_compression threshold_tokens)"
+COMPRESSION_PROACTIVE_PRUNE="$(read_nested_option context_compression proactive_prune_tokens)"
+COMPRESSION_MIN_TAIL_USER="$(read_nested_option context_compression min_tail_user_messages)"
+COMPRESSION_IDLE_COMPACT="$(read_nested_option context_compression idle_compact_after_seconds)"
+
+# Outbound lifecycle events
+ENABLE_OUTBOUND_EVENTS="$(read_nested_option outbound_events enable_outbound_events)"
+OUTBOUND_HA_WEBHOOK_ID="$(read_nested_option outbound_events ha_webhook_id)"
+OUTBOUND_EVENTS_JSON="$(jq -c '.outbound_events.events // ["turn.completed"]' "$OPTIONS_FILE" 2>/dev/null || echo '["turn.completed"]')"
+
 ENABLE_WEBHOOKS="$(read_nested_option webhooks enable_webhooks)"
 WEBHOOK_PORT_RAW="$(read_nested_option webhooks webhook_port)"
 SEED_HA_DIRECT_DELIVERY="$(read_nested_option webhooks seed_ha_direct_delivery_route)"
@@ -166,6 +196,8 @@ TOOL_DISCORD_ENABLED="$(read_nested_option tools_bootstrap tool_discord_enabled)
 TOOL_BROWSER_ENABLED="$(read_nested_option tools_bootstrap tool_browser_enabled)"
 TOOL_SKILLS_HUB_ENABLED="$(read_nested_option tools_bootstrap tool_skills_hub_enabled)"
 SEED_EXAMPLE_SCRIPTS="$(read_nested_option tools_bootstrap seed_example_scripts)"
+TOOL_A2A_ENABLED="$(read_nested_option tools_bootstrap tool_a2a_enabled)"
+TOOL_OFFICE_SKILLS_ENABLED="$(read_nested_option tools_bootstrap tool_office_skills_enabled)"
 OPENAI_API_KEY_OPT="$(read_provider_option openai_api_key)"
 OPENROUTER_API_KEY_OPT="$(read_provider_option openrouter_api_key)"
 ANTHROPIC_API_KEY_OPT="$(read_provider_option anthropic_api_key)"
@@ -175,9 +207,12 @@ MINIMAX_API_KEY_OPT="$(read_provider_option minimax_api_key)"
 DISCORD_BOT_TOKEN_OPT="$(read_provider_option discord_bot_token)"
 GITHUB_TOKEN_OPT="$(read_provider_option github_token)"
 XAI_API_KEY_OPT="$(read_provider_option xai_api_key)"
+ELEVENLABS_API_KEY_OPT="$(read_provider_option elevenlabs_api_key)"
+GROQ_API_KEY_OPT="$(read_provider_option groq_api_key)"
+DEEPINFRA_API_KEY_OPT="$(read_provider_option deepinfra_api_key)"
 HERMES_AGENT_VERSION_PRESET="$(read_nested_option advanced_settings hermes_agent_version_preset)"
 HERMES_AGENT_VERSION_CUSTOM="$(read_nested_option advanced_settings hermes_agent_version_custom)"
-ADDON_HERMES_DEFAULT_VERSION="0.19.0"
+ADDON_HERMES_DEFAULT_VERSION="0.20.0"
 IMAGE_BAKED_HERMES_SPEC="${ADDON_HERMES_DEFAULT_VERSION}"
 GW_ENV_VARS_TYPE=$(jq -r 'if (.advanced_settings.gateway_env_vars // .gateway_env_vars) == null then "null" else ((.advanced_settings.gateway_env_vars // .gateway_env_vars) | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.advanced_settings.gateway_env_vars // .gateway_env_vars // empty' "$OPTIONS_FILE")
@@ -221,7 +256,7 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 [ -z "$NTFY_PUBLISH_ONLY" ] && NTFY_PUBLISH_ONLY="true"
 [ -z "$LM_STUDIO_BASE_URL" ] && LM_STUDIO_BASE_URL="http://127.0.0.1:1234/v1"
 [ -z "$HERMES_AGENT_VERSION_PRESET" ] && HERMES_AGENT_VERSION_PRESET="custom"
-[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.19.0"
+[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.20.0"
 [ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
 [ -z "$PUBLISH_MQTT_DISCOVERY" ] && PUBLISH_MQTT_DISCOVERY="true"
 [ -z "$ENABLE_CONTROL_ENTITIES" ] && ENABLE_CONTROL_ENTITIES="false"
@@ -235,6 +270,25 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 [ -z "$APPROVAL_MODE" ] && APPROVAL_MODE="smart"
 [ -z "$REASONING_EFFORT" ] && REASONING_EFFORT="medium"
 [ -z "$SHOW_REASONING" ] && SHOW_REASONING="true"
+[ -z "$MAX_TURNS" ] && MAX_TURNS="60"
+[ -z "$DENIAL_BREAKER_THRESHOLD" ] && DENIAL_BREAKER_THRESHOLD="3"
+[ -z "$STT_ENABLED" ] && STT_ENABLED="true"
+[ -z "$STT_PROVIDER" ] && STT_PROVIDER="local"
+[ -z "$STT_LANGUAGE" ] && STT_LANGUAGE="auto"
+[ -z "$STT_LOCAL_MODEL" ] && STT_LOCAL_MODEL="base"
+[ -z "$STT_ECHO_TRANSCRIPTS" ] && STT_ECHO_TRANSCRIPTS="true"
+[ -z "$TTS_PROVIDER" ] && TTS_PROVIDER="edge"
+[ -z "$TTS_VOICE" ] && TTS_VOICE="en-US-AriaNeural"
+[ -z "$TTS_SPEED" ] && TTS_SPEED="1.0"
+[ -z "$SEED_HA_SPEAK_ROUTE" ] && SEED_HA_SPEAK_ROUTE="true"
+[ -z "$SEED_HA_TTS_COMMAND_SCRIPT" ] && SEED_HA_TTS_COMMAND_SCRIPT="true"
+[ -z "$COMPRESSION_THRESHOLD_TOKENS" ] && COMPRESSION_THRESHOLD_TOKENS="0"
+[ -z "$COMPRESSION_PROACTIVE_PRUNE" ] && COMPRESSION_PROACTIVE_PRUNE="0"
+[ -z "$COMPRESSION_MIN_TAIL_USER" ] && COMPRESSION_MIN_TAIL_USER="4"
+[ -z "$COMPRESSION_IDLE_COMPACT" ] && COMPRESSION_IDLE_COMPACT="0"
+[ -z "$ENABLE_OUTBOUND_EVENTS" ] && ENABLE_OUTBOUND_EVENTS="false"
+[ -z "$TOOL_A2A_ENABLED" ] && TOOL_A2A_ENABLED="false"
+[ -z "$TOOL_OFFICE_SKILLS_ENABLED" ] && TOOL_OFFICE_SKILLS_ENABLED="false"
 [ -z "$TZNAME" ] && TZNAME="auto"
 [ -z "$ENABLE_WEBHOOKS" ] && ENABLE_WEBHOOKS="false"
 [ -z "$WEBHOOK_PORT_RAW" ] && WEBHOOK_PORT_RAW="8644"
@@ -413,6 +467,25 @@ resolve_timezone() {
   log_info "Timezone autodetection unavailable; using Etc/UTC (set timezone in Configuration to override)"
 }
 
+# When stt_language is "auto", prefer HA Core language (fixes wrong-language STT).
+resolve_stt_language() {
+  if [ -n "$STT_LANGUAGE" ] && [ "$STT_LANGUAGE" != "auto" ]; then
+    return 0
+  fi
+  local lang=""
+  if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    lang=$(curl -fsS -m 5 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+      "http://supervisor/core/api/config" 2>/dev/null \
+      | jq -r '.language // empty' 2>/dev/null || true)
+  fi
+  if [ -n "$lang" ]; then
+    STT_LANGUAGE="$lang"
+    log_info "STT language autodetection from Home Assistant Core: ${STT_LANGUAGE}"
+  else
+    STT_LANGUAGE="auto"
+  fi
+}
+
 verify_ha_instance_reachable() {
   if [ -z "$HA_TOKEN" ]; then
     return 0
@@ -434,6 +507,7 @@ verify_ha_instance_reachable() {
 resolve_ha_instance_urls
 resolve_timezone
 export TZ="$TZNAME"
+resolve_stt_language
 verify_ha_instance_reachable
 
 apply_reverse_proxy_defaults() {
@@ -675,15 +749,34 @@ reconcile_hermes_agent_version() {
     return 0
   fi
 
-  log_error "Failed to install hermes-agent@${spec}. Check network connectivity and version tag."
+  log_error "Failed to install hermes-agent@${spec}."
+  log_warn "The requested version may not be published on npm/PyPI yet, or the network is unreachable."
+  log_warn "Tip: set advanced_settings.hermes_agent_version_custom to a published tag (e.g. 0.19.0) and restart."
   if command -v hermes >/dev/null 2>&1; then
     log_warn "Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
-    printf '%s\n' "$spec" > "$marker"
-    chmod 600 "$marker" 2>/dev/null || true
+    # Do NOT overwrite the marker with the failed target — keep the last known-good marker
+    # so the next restart retries the upgrade instead of silently treating it as done.
     return 0
   fi
   return 1
 }
+
+# Hermes 0.20+ requires Node 26. Warn when a stale image or leftover managed tree is older.
+warn_if_node_too_old() {
+  local ver major
+  ver="$(node -v 2>/dev/null || true)"
+  major="$(echo "$ver" | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')"
+  if [ -z "$major" ]; then
+    log_warn "Node.js not found on PATH; Hermes 0.20.0 requires Node 26+."
+    return 0
+  fi
+  if [ "$major" -lt 26 ]; then
+    log_warn "Node ${ver} is below the Hermes 0.20.0 requirement (Node 26+)."
+    log_warn "Rebuild/update this add-on image (Node is baked at build time). Persistent /config/.node_global cannot raise the system Node major."
+  fi
+}
+
+warn_if_node_too_old
 
 if ! reconcile_hermes_agent_version; then
   exit 1
@@ -874,6 +967,19 @@ bootstrap_selected_tools() {
   install_python_package_if_missing "ddgs" "ddgs"
   install_python_package_if_missing "aiohttp" "aiohttp"
 
+  # Provider-gated STT/TTS deps (avoid bloating every install).
+  if [ "$STT_PROVIDER" = "local" ] && { [ "$STT_ENABLED" = "true" ] || [ "$STT_ENABLED" = "1" ]; }; then
+    install_python_package_if_missing "faster_whisper" "faster-whisper"
+  fi
+  case "$TTS_PROVIDER" in
+    piper)
+      install_python_package_if_missing "piper" "piper-tts" || install_python_package_if_missing "piper_tts" "piper-tts" || true
+      ;;
+    kittentts)
+      install_python_package_if_missing "kittentts" "kittentts" || true
+      ;;
+  esac
+
   # Hermes 0.17+ bundled raft-platform plugin probes for `raft` on PATH during
   # gateway config loads. Install the canonical CLI so logs stay quiet for users
   # who do not use RAFT_PROFILE (optional Raft messaging integration).
@@ -890,6 +996,16 @@ bootstrap_selected_tools() {
 
   if [ "$TOOL_BROWSER_ENABLED" = "true" ] || [ "$TOOL_BROWSER_ENABLED" = "1" ]; then
     install_npm_package_if_missing "agent-browser" "agent-browser@latest"
+  fi
+
+  if [ "$TOOL_OFFICE_SKILLS_ENABLED" = "true" ] || [ "$TOOL_OFFICE_SKILLS_ENABLED" = "1" ]; then
+    # Soft attempt — package names vary by Hermes release; never abort startup.
+    if command -v hermes >/dev/null 2>&1; then
+      load_hermes_env_file
+      hermes skills install office >/dev/null 2>&1 \
+        || hermes skills install docx >/dev/null 2>&1 \
+        || log_info "Office skills not auto-installable via CLI yet; enable later with hermes skills."
+    fi
   fi
 }
 
@@ -1047,6 +1163,9 @@ safe_export_secret_env "MINIMAX_API_KEY" "$MINIMAX_API_KEY_OPT"
 safe_export_secret_env "DISCORD_BOT_TOKEN" "$DISCORD_BOT_TOKEN_OPT"
 safe_export_secret_env "GITHUB_TOKEN" "$GITHUB_TOKEN_OPT"
 safe_export_secret_env "XAI_API_KEY" "$XAI_API_KEY_OPT"
+safe_export_secret_env "ELEVENLABS_API_KEY" "$ELEVENLABS_API_KEY_OPT"
+safe_export_secret_env "GROQ_API_KEY" "$GROQ_API_KEY_OPT"
+safe_export_secret_env "DEEPINFRA_API_KEY" "$DEEPINFRA_API_KEY_OPT"
 
 # Protect critical runtime variables from accidental override via gateway_env_vars.
 is_reserved_gateway_env_var() {
@@ -1333,6 +1452,21 @@ if [ "$ENABLE_WEBHOOKS" = "true" ] || [ "$ENABLE_WEBHOOKS" = "1" ]; then
   fi
 fi
 
+# Outbound lifecycle webhook HMAC secret (persisted; never logged).
+OUTBOUND_WEBHOOK_SECRET=""
+if [ "$ENABLE_OUTBOUND_EVENTS" = "true" ] || [ "$ENABLE_OUTBOUND_EVENTS" = "1" ]; then
+  mkdir -p /config/secrets
+  umask 077
+  if [ -f /config/secrets/outbound_webhook.secret ]; then
+    OUTBOUND_WEBHOOK_SECRET="$(tr -d '\r\n' < /config/secrets/outbound_webhook.secret)"
+  fi
+  if [ -z "$OUTBOUND_WEBHOOK_SECRET" ]; then
+    OUTBOUND_WEBHOOK_SECRET="$(openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | xxd -p | head -c 48)"
+    printf '%s' "$OUTBOUND_WEBHOOK_SECRET" > /config/secrets/outbound_webhook.secret
+    log_info "Generated outbound webhook HMAC secret at /config/secrets/outbound_webhook.secret"
+  fi
+fi
+
 
 # ------------------------------------------------------------------------------
 # Hermes config is managed by Hermes itself (onboarding / configure).
@@ -1343,6 +1477,7 @@ fi
 cat > /config/CONNECTION_NOTES.txt <<EOF
 Home Assistant token (if set): /config/secrets/homeassistant.token
 Webhook secret (if webhooks enabled): /config/secrets/webhook.secret
+Outbound webhook secret (if outbound_events enabled): /config/secrets/outbound_webhook.secret
 Router SSH (generic):
   host=${ROUTER_HOST}
   user=${ROUTER_USER}
@@ -1504,6 +1639,9 @@ sync_addon_api_keys_to_hermes_env() {
     --arg xai "$XAI_API_KEY_OPT" \
     --arg firecrawl "$FIRECRAWL_API_KEY_OPT" \
     --arg searxng "$SEARXNG_URL_OPT" \
+    --arg elevenlabs "$ELEVENLABS_API_KEY_OPT" \
+    --arg groq "$GROQ_API_KEY_OPT" \
+    --arg deepinfra "$DEEPINFRA_API_KEY_OPT" \
     '{
       OPENAI_API_KEY: $openai,
       OPENROUTER_API_KEY: $openrouter,
@@ -1515,7 +1653,10 @@ sync_addon_api_keys_to_hermes_env() {
       GITHUB_TOKEN: $github,
       XAI_API_KEY: $xai,
       FIRECRAWL_API_KEY: $firecrawl,
-      SEARXNG_URL: $searxng
+      SEARXNG_URL: $searxng,
+      ELEVENLABS_API_KEY: $elevenlabs,
+      GROQ_API_KEY: $groq,
+      DEEPINFRA_API_KEY: $deepinfra
     }')
 
   if ! python3 "$HELPER_PATH" sync-addon-api-keys "$sync_json"; then
@@ -1578,6 +1719,34 @@ bootstrap_hermes_first_run() {
   if [ "$SEED_EXAMPLE_SCRIPTS" = "false" ] || [ "$SEED_EXAMPLE_SCRIPTS" = "0" ]; then
     seed_scripts_json="false"
   fi
+  local seed_ha_speak_json="true"
+  if [ "$SEED_HA_SPEAK_ROUTE" = "false" ] || [ "$SEED_HA_SPEAK_ROUTE" = "0" ]; then
+    seed_ha_speak_json="false"
+  fi
+  local seed_ha_tts_cmd_json="true"
+  if [ "$SEED_HA_TTS_COMMAND_SCRIPT" = "false" ] || [ "$SEED_HA_TTS_COMMAND_SCRIPT" = "0" ]; then
+    seed_ha_tts_cmd_json="false"
+  fi
+  local stt_enabled_json="true"
+  if [ "$STT_ENABLED" = "false" ] || [ "$STT_ENABLED" = "0" ]; then
+    stt_enabled_json="false"
+  fi
+  local stt_echo_json="true"
+  if [ "$STT_ECHO_TRANSCRIPTS" = "false" ] || [ "$STT_ECHO_TRANSCRIPTS" = "0" ]; then
+    stt_echo_json="false"
+  fi
+  local enable_outbound_json="false"
+  if [ "$ENABLE_OUTBOUND_EVENTS" = "true" ] || [ "$ENABLE_OUTBOUND_EVENTS" = "1" ]; then
+    enable_outbound_json="true"
+  fi
+  local tool_a2a_json="false"
+  if [ "$TOOL_A2A_ENABLED" = "true" ] || [ "$TOOL_A2A_ENABLED" = "1" ]; then
+    tool_a2a_json="true"
+  fi
+  local tool_office_json="false"
+  if [ "$TOOL_OFFICE_SKILLS_ENABLED" = "true" ] || [ "$TOOL_OFFICE_SKILLS_ENABLED" = "1" ]; then
+    tool_office_json="true"
+  fi
 
   local bootstrap_json
   local mcp_configured_json="false"
@@ -1606,17 +1775,41 @@ bootstrap_hermes_first_run() {
     --arg ntfy_topic "$NTFY_TOPIC" \
     --arg ntfy_server_url "$NTFY_SERVER_URL" \
     --arg ntfy_token "$NTFY_TOKEN" \
+    --arg smart_policy "$SMART_POLICY" \
+    --arg stt_provider "$STT_PROVIDER" \
+    --arg stt_language "$STT_LANGUAGE" \
+    --arg stt_local_model "$STT_LOCAL_MODEL" \
+    --arg tts_provider "$TTS_PROVIDER" \
+    --arg tts_voice "$TTS_VOICE" \
+    --arg tts_speed "$TTS_SPEED" \
+    --arg max_turns "$MAX_TURNS" \
+    --arg denial_breaker_threshold "$DENIAL_BREAKER_THRESHOLD" \
+    --arg threshold_tokens "$COMPRESSION_THRESHOLD_TOKENS" \
+    --arg proactive_prune_tokens "$COMPRESSION_PROACTIVE_PRUNE" \
+    --arg min_tail_user_messages "$COMPRESSION_MIN_TAIL_USER" \
+    --arg idle_compact_after_seconds "$COMPRESSION_IDLE_COMPACT" \
+    --arg ha_webhook_id "$OUTBOUND_HA_WEBHOOK_ID" \
+    --arg outbound_webhook_secret "$OUTBOUND_WEBHOOK_SECRET" \
     --argjson webhook_port "$WEBHOOK_PORT" \
     --argjson browser_enabled "$browser_enabled_json" \
     --argjson show_reasoning "$show_reasoning_json" \
     --argjson enable_native_ha_platform "$native_ha_json" \
     --argjson enable_webhooks "$enable_webhooks_json" \
     --argjson seed_ha_direct_delivery_route "$seed_ha_direct_json" \
+    --argjson seed_ha_speak_route "$seed_ha_speak_json" \
+    --argjson seed_ha_tts_command_script "$seed_ha_tts_cmd_json" \
     --argjson nous_tool_gateway "$nous_tg_json" \
     --argjson enable_ntfy "$enable_ntfy_json" \
     --argjson ntfy_publish_only "$ntfy_publish_only_json" \
     --argjson seed_example_scripts "$seed_scripts_json" \
     --argjson fallback_providers "$FALLBACK_PROVIDERS_JSON" \
+    --argjson deny_patterns "$DENY_PATTERNS_JSON" \
+    --argjson stt_enabled "$stt_enabled_json" \
+    --argjson stt_echo_transcripts "$stt_echo_json" \
+    --argjson enable_outbound_events "$enable_outbound_json" \
+    --argjson outbound_events "$OUTBOUND_EVENTS_JSON" \
+    --argjson tool_a2a_enabled "$tool_a2a_json" \
+    --argjson tool_office_skills_enabled "$tool_office_json" \
     --arg openai "$OPENAI_API_KEY_OPT" \
     --arg openrouter "$OPENROUTER_API_KEY_OPT" \
     --arg anthropic "$ANTHROPIC_API_KEY_OPT" \
@@ -1642,12 +1835,36 @@ bootstrap_hermes_first_run() {
       approval_mode: $approval_mode,
       reasoning_effort: $reasoning_effort,
       show_reasoning: $show_reasoning,
+      max_turns: ($max_turns | tonumber),
+      smart_policy: $smart_policy,
+      denial_breaker_threshold: ($denial_breaker_threshold | tonumber),
+      deny_patterns: $deny_patterns,
+      stt_enabled: $stt_enabled,
+      stt_provider: $stt_provider,
+      stt_language: $stt_language,
+      stt_local_model: $stt_local_model,
+      stt_echo_transcripts: $stt_echo_transcripts,
+      tts_provider: $tts_provider,
+      tts_voice: $tts_voice,
+      tts_speed: ($tts_speed | tonumber),
+      threshold_tokens: ($threshold_tokens | tonumber),
+      proactive_prune_tokens: ($proactive_prune_tokens | tonumber),
+      min_tail_user_messages: ($min_tail_user_messages | tonumber),
+      idle_compact_after_seconds: ($idle_compact_after_seconds | tonumber),
       enable_native_ha_platform: $enable_native_ha_platform,
       ha_system_prompt_hint: $ha_system_prompt_hint,
       enable_webhooks: $enable_webhooks,
       webhook_port: $webhook_port,
       webhook_secret: $webhook_secret,
       seed_ha_direct_delivery_route: $seed_ha_direct_delivery_route,
+      seed_ha_speak_route: $seed_ha_speak_route,
+      seed_ha_tts_command_script: $seed_ha_tts_command_script,
+      enable_outbound_events: $enable_outbound_events,
+      ha_webhook_id: $ha_webhook_id,
+      outbound_events: $outbound_events,
+      outbound_webhook_secret: $outbound_webhook_secret,
+      tool_a2a_enabled: $tool_a2a_enabled,
+      tool_office_skills_enabled: $tool_office_skills_enabled,
       nous_tool_gateway: $nous_tool_gateway,
       fallback_providers: $fallback_providers,
       enable_ntfy: $enable_ntfy,

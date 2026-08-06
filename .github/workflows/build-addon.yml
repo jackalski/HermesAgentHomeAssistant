@@ -52,8 +52,6 @@ jobs:
             platform: linux/amd64
           - arch: aarch64
             platform: linux/arm64
-          - arch: armv7
-            platform: linux/arm/v7
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -117,10 +115,8 @@ jobs:
           set -euo pipefail
           docker buildx imagetools create -t "${IMAGE}:${VERSION}" \
             "${IMAGE}:${VERSION}-amd64" \
-            "${IMAGE}:${VERSION}-aarch64" \
-            "${IMAGE}:${VERSION}-armv7"
+            "${IMAGE}:${VERSION}-aarch64"
           docker buildx imagetools create -t "${IMAGE}:latest" \
             "${IMAGE}:${VERSION}-amd64" \
-            "${IMAGE}:${VERSION}-aarch64" \
-            "${IMAGE}:${VERSION}-armv7"
+            "${IMAGE}:${VERSION}-aarch64"
           docker buildx imagetools inspect "${IMAGE}:${VERSION}"

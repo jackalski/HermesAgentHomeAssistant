@@ -186,3 +186,111 @@ template:
             {% endfor %}
             {{ ns.lines | join('\n') }}
         availability: "{{ states('sensor.hermes_usage_summary') not in ['unknown', 'unavailable'] }}"
+
+# Voice helpers — copy with this package under /share/hermes/ha/packages/
+# hermes_announce: speak an arbitrary line on a satellite (pairs with ha-speak webhook).
+# hermes_ask: send text to the Assist conversation agent (Hermes via Extended OpenAI /
+# Hermes Agent integration), then speak the reply with the chosen TTS engine.
+script:
+  hermes_announce:
+    alias: Hermes announce
+    description: Speak a message on a media_player / Voice satellite via Home Assistant TTS.
+    icon: mdi:bullhorn-outline
+    fields:
+      message:
+        name: Message
+        required: true
+        selector:
+          text:
+            multiline: true
+      tts_entity:
+        name: TTS entity
+        required: true
+        example: tts.piper
+        selector:
+          entity:
+            domain: tts
+      media_player:
+        name: Media player
+        required: true
+        selector:
+          entity:
+            domain:
+              - media_player
+              - assist_satellite
+    sequence:
+      - condition: template
+        value_template: "{{ message is string and message | trim | length > 0 }}"
+      - service: tts.speak
+        target:
+          entity_id: "{{ tts_entity }}"
+        data:
+          media_player_entity_id: "{{ media_player }}"
+          message: "{{ message }}"
+    mode: queued
+    max: 5
+
+  hermes_ask:
+    alias: Hermes ask (Assist)
+    description: >
+      Send a prompt to your Assist conversation agent (configure Hermes as the
+      agent first), then speak the reply. Requires enable_openai_api and a
+      conversation agent wired to Hermes (Extended OpenAI Conversation or the
+      Hermes Agent custom integration).
+    icon: mdi:microphone-message
+    fields:
+      message:
+        name: Message
+        required: true
+        selector:
+          text:
+            multiline: true
+      agent_id:
+        name: Conversation agent ID
+        description: Leave empty to use the default Assist agent.
+        required: false
+        selector:
+          text:
+      tts_entity:
+        name: TTS entity
+        required: true
+        selector:
+          entity:
+            domain: tts
+      media_player:
+        name: Media player
+        required: true
+        selector:
+          entity:
+            domain:
+              - media_player
+              - assist_satellite
+    sequence:
+      - variables:
+          ask_text: "{{ message }}"
+      - condition: template
+        value_template: "{{ ask_text is string and ask_text | trim | length > 0 }}"
+      - service: conversation.process
+        data:
+          text: "{{ ask_text }}"
+          agent_id: "{{ agent_id | default('', true) }}"
+        response_variable: hermes_reply
+      - variables:
+          spoken: >
+            {% set r = hermes_reply.response.speech.plain.speech
+               if hermes_reply is mapping
+               and hermes_reply.get('response')
+               and hermes_reply.response.get('speech')
+               and hermes_reply.response.speech.get('plain')
+               else none %}
+            {{ r if r else (hermes_reply.response.speech if hermes_reply is mapping and hermes_reply.get('response') else ask_text) }}
+      - condition: template
+        value_template: "{{ spoken is string and spoken | trim | length > 0 }}"
+      - service: tts.speak
+        target:
+          entity_id: "{{ tts_entity }}"
+        data:
+          media_player_entity_id: "{{ media_player }}"
+          message: "{{ spoken }}"
+    mode: queued
+    max: 3

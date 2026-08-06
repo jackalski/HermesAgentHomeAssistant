@@ -85,6 +85,15 @@ configuration:
       searxng_url:
         name: SearXNG URL
         description: Synced as SEARXNG_URL.
+      elevenlabs_api_key:
+        name: ElevenLabs API Key
+        description: Synced as ELEVENLABS_API_KEY (premium TTS / STT).
+      groq_api_key:
+        name: Groq API Key
+        description: Synced as GROQ_API_KEY (Groq Whisper STT).
+      deepinfra_api_key:
+        name: DeepInfra API Key
+        description: Synced as DEEPINFRA_API_KEY (optional STT/TTS provider).
 
   home_assistant:
     name: Home Assistant Integration
@@ -108,6 +117,71 @@ configuration:
       ha_system_prompt_hint:
         name: HA System Prompt Hint
         description: Optional short context stored with the native HA platform block (only applied when native platform bootstrap runs).
+
+  voice_speech:
+    name: Voice & Speech
+    description: "Hermes STT/TTS for gateway voice notes and the text_to_speech tool. Wake words and microphones stay on HA Voice satellites — this add-on has no audio device."
+    fields:
+      stt_enabled:
+        name: Enable STT
+        description: Auto-transcribe inbound voice messages on messaging platforms (stt.enabled).
+      stt_provider:
+        name: STT Provider
+        description: "local (faster-whisper), groq, openai, mistral, xai, elevenlabs, or deepinfra."
+        options:
+          local: "Local (faster-whisper)"
+          groq: "Groq"
+          openai: "OpenAI"
+          mistral: "Mistral"
+          xai: "xAI"
+          elevenlabs: "ElevenLabs"
+          deepinfra: "DeepInfra"
+      stt_language:
+        name: STT Language
+        description: "ISO language code (e.g. en, pl, de). Use auto to detect from Home Assistant Core language (or provider auto-detect)."
+      stt_local_model:
+        name: Local STT Model
+        description: faster-whisper model size when STT provider is local.
+        options:
+          tiny: "tiny"
+          base: "base (default)"
+          small: "small"
+          medium: "medium"
+          large-v3: "large-v3"
+      stt_echo_transcripts:
+        name: Echo Transcripts
+        description: Post raw transcripts back to chat as voice-note captions.
+      tts_provider:
+        name: TTS Provider
+        description: "edge (free default), piper, kittentts, openai, elevenlabs, gemini, xai, minimax, mistral, or neutts."
+        options:
+          edge: "Edge TTS (default)"
+          piper: "Piper"
+          kittentts: "KittenTTS"
+          openai: "OpenAI"
+          elevenlabs: "ElevenLabs"
+          gemini: "Gemini"
+          xai: "xAI"
+          minimax: "MiniMax"
+          mistral: "Mistral"
+          neutts: "NeuTTS"
+      tts_voice:
+        name: TTS Voice
+        description: "Provider-specific voice id (e.g. en-US-AriaNeural for Edge, en_US-lessac-medium for Piper)."
+      tts_speed:
+        name: TTS Speed
+        description: Global speech speed multiplier (0.5–2.0).
+
+  ha_voice_bridge:
+    name: HA Voice Bridge
+    description: "Wire Hermes to Home Assistant Assist satellites — Assist inbound (brain) and spoken announcements outbound."
+    fields:
+      seed_ha_speak_route:
+        name: Seed ha-speak Webhook Route
+        description: "When webhooks are enabled, seed route ha-speak (deliver_only → homeassistant) for zero-LLM spoken announcements."
+      seed_ha_tts_command_script:
+        name: Seed HA TTS Command Script
+        description: "Copy ha-tts-command.py into /config/.hermes/scripts/ so Hermes can speak via HA Piper / Cloud TTS."
 
   agent_behavior:
     name: Agent Behavior
@@ -135,7 +209,35 @@ configuration:
       show_reasoning:
         name: Show Reasoning
         description: Stream model thinking traces (display.show_reasoning). Recommended ON.
+      max_turns:
+        name: Max Turns
+        description: "Max tool iterations per turn (agent.max_turns). Upstream default is 500; 60 is safer for Assist / home use."
+      smart_policy:
+        name: Smart Approval Policy
+        description: "Optional extra rules appended to the smart-approval reviewer (approvals.smart_policy)."
+      denial_breaker_threshold:
+        name: Denial Breaker Threshold
+        description: "Stop after N consecutive smart-approval denials (0 disables). Default 3."
+      deny_patterns:
+        name: Deny Patterns
+        description: "Glob patterns that always block terminal commands (approvals.deny). Seeded with HA-safe defaults when missing."
 
+  context_compression:
+    name: Context Compression
+    description: "Hermes conversation compression / pruning (writes keys only if missing)."
+    fields:
+      threshold_tokens:
+        name: Absolute Token Threshold
+        description: "Compress when context exceeds this many tokens (0 = use ratio threshold only)."
+      proactive_prune_tokens:
+        name: Proactive Prune Tokens
+        description: "Prune oversized tool results without an LLM when re-sent history exceeds this (0 = off; try 48000)."
+      min_tail_user_messages:
+        name: Min Tail User Messages
+        description: Guaranteed number of recent user messages to keep after compression.
+      idle_compact_after_seconds:
+        name: Idle Compact After Seconds
+        description: "Opt-in idle compaction delay (0 = disabled)."
 
   webhooks:
     name: Webhooks
@@ -150,6 +252,20 @@ configuration:
       seed_ha_direct_delivery_route:
         name: Seed HA Direct-Delivery Route
         description: "When ON and webhooks are new, seed route ha-alert (deliver_only → homeassistant). Payload field {message}."
+
+  outbound_events:
+    name: Outbound Events
+    description: "Push signed Hermes lifecycle events to a Home Assistant webhook (requires Hermes that supports hooks.outbound)."
+    fields:
+      enable_outbound_events:
+        name: Enable Outbound Events
+        description: "When ON and ha_webhook_id is set, seed hooks.outbound (capability-probed). HMAC secret at /config/secrets/outbound_webhook.secret."
+      ha_webhook_id:
+        name: HA Webhook ID
+        description: "Home Assistant webhook id (Settings → Automations → Webhook). Pair with the Hermes voice announce blueprint."
+      events:
+        name: Event Types
+        description: "Lifecycle event names to forward (default turn.completed)."
 
   backup:
     name: Backup
@@ -326,6 +442,12 @@ configuration:
       seed_example_scripts:
         name: Seed Example Scripts
         description: "Copy disk-alert.sh and morning-heartbeat.sh into /config/.hermes/scripts/ when missing (for no_agent cron)."
+      tool_a2a_enabled:
+        name: Enable A2A Plugin
+        description: "Opt-in Agent-to-Agent (A2A v1.0) plugin when the installed Hermes supports it (capability-probed)."
+      tool_office_skills_enabled:
+        name: Enable Office Skills Bootstrap
+        description: "Attempt to install bundled office skills (docx/xlsx/pdf/powerpoint) when available."
 
   advanced_settings:
     name: Advanced Settings
@@ -351,10 +473,10 @@ configuration:
         description: npm package for the `hermes` CLI — latest or custom pin.
         options:
           latest: "Latest (npm @latest)"
-          custom: "Custom version (default 0.19.0)"
+          custom: "Custom version (default 0.20.0)"
       hermes_agent_version_custom:
         name: Hermes Agent Version (custom)
-        description: npm dist-tag or semver when preset is custom (default 0.19.0).
+        description: npm dist-tag or semver when preset is custom (default 0.20.0).
 
       fallback_providers:
         name: Fallback Providers

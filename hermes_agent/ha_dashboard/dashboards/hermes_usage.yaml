@@ -407,7 +407,11 @@ views:
                   **Assist / voice** — set `enable_openai_api: true`, then point
                   [Extended OpenAI
                   Conversation](https://github.com/jekalmin/extended_openai_conversation)
-                  at `http://<LAN-IP>:8642/v1` with the gateway token.
+                  at `http://<LAN-IP>:8642/v1` with the gateway token. Wake word
+                  and mic live on Voice PE / ESPHome satellites — not in this
+                  add-on container. For spoken announcements from Hermes, use the
+                  **Hermes voice announce** blueprint with
+                  `outbound_events` or the `ha-speak` webhook route.
                 card_mod:
                   style: |
                     ha-card {
@@ -423,6 +427,41 @@ views:
                       border-color: rgba(59, 130, 246, 0.30);
                       box-shadow: 0 14px 34px rgba(0,0,0,0.24);
                     }
+              - type: heading
+                heading: Voice
+                heading_style: subtitle
+              - square: false
+                type: grid
+                columns: 2
+                cards:
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_stt_provider
+                    name: STT
+                    icon: mdi:microphone
+                    layout: horizontal
+                    primary_info: name
+                    secondary_info: state
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_tts_provider
+                    name: TTS
+                    icon: mdi:speaker-message
+                    layout: horizontal
+                    primary_info: name
+                    secondary_info: state
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.hermes_max_turns
+                    name: Max turns
+                    icon: mdi:counter
+                    layout: horizontal
+                    primary_info: name
+                    secondary_info: state
+                  - type: custom:mushroom-entity-card
+                    entity: binary_sensor.hermes_outbound_events_enabled
+                    name: Outbound events
+                    icon: mdi:webhook
+                    layout: horizontal
+                    primary_info: name
+                    secondary_info: state
             grid_options:
               columns: full
               rows: auto

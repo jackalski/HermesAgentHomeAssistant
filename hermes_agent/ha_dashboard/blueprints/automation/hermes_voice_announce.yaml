@@ -1,0 +1,97 @@
+blueprint:
+  name: Hermes voice announce
+  description: >
+    Speak Hermes outbound lifecycle / ha-speak webhook payloads through a
+    Home Assistant TTS engine and media player (Voice PE, Assist satellite,
+    or any media_player that supports tts.speak).
+  domain: automation
+  source_url: https://github.com/jackalski/HermesAgentHomeAssistant
+  input:
+    webhook_id:
+      name: Webhook ID
+      description: >
+        Must match outbound_events.ha_webhook_id (or the id you configured for
+        a custom HA webhook that receives Hermes speak payloads).
+      default: hermes_voice_announce
+      selector:
+        text:
+
+    tts_entity:
+      name: TTS entity
+      description: Home Assistant TTS engine (e.g. tts.piper, tts.home_assistant_cloud).
+      selector:
+        entity:
+          domain: tts
+
+    media_player:
+      name: Media player / satellite
+      description: Target speaker (assist_satellite, media_player, etc.).
+      selector:
+        entity:
+          domain:
+            - media_player
+            - assist_satellite
+
+    quiet_hours_start:
+      name: Quiet hours start
+      description: Optional — skip announcements after this time (HH:MM). Leave empty to disable.
+      default: ""
+      selector:
+        text:
+
+    quiet_hours_end:
+      name: Quiet hours end
+      description: Optional — resume announcements after this time (HH:MM). Leave empty to disable.
+      default: ""
+      selector:
+        text:
+
+    message_template:
+      name: Message template
+      description: >
+        Jinja for the spoken line. Default uses payload.message, falling back
+        to a short summary of the event type.
+      default: "{{ trigger.json.message | default(trigger.json.event | default('Hermes notification')) }}"
+      selector:
+        text:
+          multiline: true
+
+trigger:
+  - platform: webhook
+    webhook_id: !input webhook_id
+    allowed_methods:
+      - POST
+    local_only: true
+
+condition: []
+
+action:
+  - variables:
+      quiet_start: !input quiet_hours_start
+      quiet_end: !input quiet_hours_end
+      announce_text: !input message_template
+  - condition: template
+    value_template: >
+      {% set start = quiet_start | trim %}
+      {% set end = quiet_end | trim %}
+      {% if not start or not end %}
+        true
+      {% else %}
+        {% set now_t = now().strftime('%H:%M') %}
+        {% if start < end %}
+          {{ not (start <= now_t < end) }}
+        {% else %}
+          {{ not (now_t >= start or now_t < end) }}
+        {% endif %}
+      {% endif %}
+  - condition: template
+    value_template: "{{ announce_text is string and announce_text | trim | length > 0 }}"
+  - service: tts.speak
+    target:
+      entity_id: !input tts_entity
+    data:
+      media_player_entity_id: !input media_player
+      message: "{{ announce_text }}"
+
+mode: queued
+max: 5

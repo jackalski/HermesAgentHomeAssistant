@@ -1,53 +1,46 @@
 configuration:
   timezone:
     name: Zona horaria
-    description: "Zona horaria IANA (p. ej. America/New_York), o auto para detectar desde Home Assistant Core (reserva Etc/UTC)."
-
+    description: Zona horaria IANA (p. ej. America/New_York), o auto para detectar desde Home Assistant Core (reserva Etc/UTC).
   addon_log_level:
     name: Nivel de log del complemento
     description: Verbosidad de los logs de inicio del contenedor del complemento (colores y emojis cuando el terminal de logs es interactivo).
     options:
-      error: "Solo errores"
-      warn: "Advertencias y errores"
-      info: "Info (predeterminado)"
-      debug: "Debug (detallado)"
-
+      error: Solo errores
+      warn: Advertencias y errores
+      info: Info (predeterminado)
+      debug: Debug (detallado)
   setup_profile:
     name: Perfil de configuración
-    description: "Preset de primer arranque. home_assistant habilita LAN HTTPS, MCP automático con token y bootstrap de model/browser/timezone. general usa solo acceso local. advanced usa solo opciones individuales."
+    description: Preset de primer arranque. home_assistant habilita LAN HTTPS, MCP automático con token y bootstrap de model/browser/timezone. general usa solo acceso local. advanced usa solo opciones individuales.
     options:
-      home_assistant: "Home Assistant (recomendado)"
-      general: "Asistente general"
-      advanced: "Avanzado (opciones manuales)"
-
+      home_assistant: Home Assistant (recomendado)
+      general: Asistente general
+      advanced: Avanzado (opciones manuales)
   default_provider:
     name: Proveedor predeterminado
-    description: "Proveedor LLM principal para el primer arranque. Nous Portal usa OAuth (`hermes setup --portal` o `hermes auth add nous` en terminal). Ollama corresponde a Ollama Cloud (`ollama-cloud`)."
+    description: Proveedor LLM principal para el primer arranque. Nous Portal usa OAuth (`hermes setup --portal` o `hermes auth add nous` en terminal). Ollama corresponde a Ollama Cloud (`ollama-cloud`).
     options:
-      nous: "Nous Portal"
-      openrouter: "OpenRouter"
-      google: "Google (clave API Gemini)"
-      anthropic: "Anthropic"
-      ollama: "Ollama Cloud"
-      minimax: "MiniMax"
-      xai: "xAI (Grok)"
-      openai: "OpenAI"
-      lm_studio: "LM Studio (local)"
-
+      nous: Nous Portal
+      openrouter: OpenRouter
+      google: Google (clave API Gemini)
+      anthropic: Anthropic
+      ollama: Ollama Cloud
+      minimax: MiniMax
+      xai: xAI (Grok)
+      openai: OpenAI
+      lm_studio: LM Studio (local)
   default_model_preset:
     name: Preajuste de modelo
-    description: "Usa Custom y define el ID del modelo en Modelo predeterminado."
+    description: Usa Custom y define el ID del modelo en Modelo predeterminado.
     options:
-      custom: "ID de modelo personalizado"
-
+      custom: ID de modelo personalizado
   default_model:
     name: Modelo predeterminado
-    description: "ID del modelo para el proveedor seleccionado (p. ej. google/gemini-2.5-flash para OpenRouter, claude-sonnet-4-6 para Anthropic, gpt-oss:120b para Ollama Cloud). Bootstrap solo en el primer arranque si no hay modelo configurado."
-
+    description: ID del modelo para el proveedor seleccionado (p. ej. google/gemini-2.5-flash para OpenRouter, claude-sonnet-4-6 para Anthropic, gpt-oss:120b para Ollama Cloud). Bootstrap solo en el primer arranque si no hay modelo configurado.
   lm_studio_base_url:
     name: URL base de LM Studio
-    description: "URL base compatible con OpenAI cuando default_provider=lm_studio (p. ej. http://192.168.1.10:1234/v1)."
-
+    description: URL base compatible con OpenAI cuando default_provider=lm_studio (p. ej. http://192.168.1.10:1234/v1).
   provider_api_keys:
     name: Claves API de proveedores
     description: Tokens opcionales de proveedores y herramientas sincronizados en /config/.hermes/.env al reiniciar. Los proveedores OAuth/device-code aún requieren `hermes auth` en el terminal.
@@ -85,109 +78,212 @@ configuration:
       searxng_url:
         name: URL de SearXNG
         description: Sincronizada como SEARXNG_URL.
-
+      elevenlabs_api_key:
+        name: ElevenLabs API Key
+        description: Synced as ELEVENLABS_API_KEY (premium TTS / STT).
+      groq_api_key:
+        name: Groq API Key
+        description: Synced as GROQ_API_KEY (Groq Whisper STT).
+      deepinfra_api_key:
+        name: DeepInfra API Key
+        description: Synced as DEEPINFRA_API_KEY (optional STT/TTS provider).
   home_assistant:
     name: Integración con Home Assistant
     description: Conecta Hermes a su instancia de Home Assistant para MCP, scripts y autodetección. Cada campo tiene un test en la interfaz web (Pruebas de conexión).
     fields:
       hass_url:
         name: URL de Home Assistant
-        description: "Déjela vacía para autodetección en HAOS (recomendado). Pruebas de conexión → Test URL."
+        description: Déjela vacía para autodetección en HAOS (recomendado). Pruebas de conexión → Test URL.
       homeassistant_token:
         name: Token de Home Assistant
-        description: "Token de larga duración para MCP y herramientas de HA. Opcional cuando prefer_supervisor_token está ACTIVADO (usa SUPERVISOR_TOKEN). Enmascarado tras guardar; los tokens de usuario persisten en /config/secrets/homeassistant.token."
+        description: Token de larga duración para MCP y herramientas de HA. Opcional cuando prefer_supervisor_token está ACTIVADO (usa SUPERVISOR_TOKEN). Enmascarado tras guardar; los tokens de usuario persisten en /config/secrets/homeassistant.token.
       prefer_supervisor_token:
         name: Preferir token del Supervisor
-        description: "Cuando está ACTIVADO y no hay token de larga duración, usa SUPERVISOR_TOKEN (requiere homeassistant_api). No escribe el token del supervisor en secrets."
+        description: Cuando está ACTIVADO y no hay token de larga duración, usa SUPERVISOR_TOKEN (requiere homeassistant_api). No escribe el token del supervisor en secrets.
       auto_configure_mcp:
         name: Configurar MCP automáticamente para Home Assistant
-        description: "Cuando está ACTIVADO y el token está configurado, registra Home Assistant en MCP al iniciar. Tras reiniciar: Pruebas de conexión → Test MCP."
+        description: 'Cuando está ACTIVADO y el token está configurado, registra Home Assistant en MCP al iniciar. Tras reiniciar: Pruebas de conexión → Test MCP.'
       enable_native_ha_platform:
         name: Activar plataforma nativa HA del Gateway
-        description: "Opt-in: rellena platforms.homeassistant con filtros de eventos seguros (binary_sensor, alarm, climate). HASS_TOKEN sigue habilitando las herramientas de dispositivos HA de forma independiente. Predeterminado DESACTIVADO — active para eventos state_changed reactivos."
+        description: 'Opt-in: rellena platforms.homeassistant con filtros de eventos seguros (binary_sensor, alarm, climate). HASS_TOKEN sigue habilitando las herramientas de dispositivos HA de forma independiente. Predeterminado DESACTIVADO — active para eventos state_changed reactivos.'
       ha_system_prompt_hint:
         name: Sugerencia de system prompt de HA
         description: Contexto corto opcional almacenado con el bloque de plataforma nativa HA (solo se aplica cuando se ejecuta el bootstrap de plataforma nativa).
-
+  voice_speech:
+    name: Voice & Speech
+    description: Hermes STT/TTS for gateway voice notes and the text_to_speech tool. Wake words and microphones stay on HA Voice satellites — this add-on has no audio device.
+    fields:
+      stt_enabled:
+        name: Enable STT
+        description: Auto-transcribe inbound voice messages on messaging platforms (stt.enabled).
+      stt_provider:
+        name: STT Provider
+        description: local (faster-whisper), groq, openai, mistral, xai, elevenlabs, or deepinfra.
+        options:
+          local: Local (faster-whisper)
+          groq: Groq
+          openai: OpenAI
+          mistral: Mistral
+          xai: xAI
+          elevenlabs: ElevenLabs
+          deepinfra: DeepInfra
+      stt_language:
+        name: STT Language
+        description: ISO language code (e.g. en, pl, de). Use auto to detect from Home Assistant Core language (or provider auto-detect).
+      stt_local_model:
+        name: Local STT Model
+        description: faster-whisper model size when STT provider is local.
+        options:
+          tiny: tiny
+          base: base (default)
+          small: small
+          medium: medium
+          large-v3: large-v3
+      stt_echo_transcripts:
+        name: Echo Transcripts
+        description: Post raw transcripts back to chat as voice-note captions.
+      tts_provider:
+        name: TTS Provider
+        description: edge (free default), piper, kittentts, openai, elevenlabs, gemini, xai, minimax, mistral, or neutts.
+        options:
+          edge: Edge TTS (default)
+          piper: Piper
+          kittentts: KittenTTS
+          openai: OpenAI
+          elevenlabs: ElevenLabs
+          gemini: Gemini
+          xai: xAI
+          minimax: MiniMax
+          mistral: Mistral
+          neutts: NeuTTS
+      tts_voice:
+        name: TTS Voice
+        description: Provider-specific voice id (e.g. en-US-AriaNeural for Edge, en_US-lessac-medium for Piper).
+      tts_speed:
+        name: TTS Speed
+        description: Global speech speed multiplier (0.5–2.0).
+  ha_voice_bridge:
+    name: HA Voice Bridge
+    description: Wire Hermes to Home Assistant Assist satellites — Assist inbound (brain) and spoken announcements outbound.
+    fields:
+      seed_ha_speak_route:
+        name: Seed ha-speak Webhook Route
+        description: When webhooks are enabled, seed route ha-speak (deliver_only → homeassistant) for zero-LLM spoken announcements.
+      seed_ha_tts_command_script:
+        name: Seed HA TTS Command Script
+        description: Copy ha-tts-command.py into /config/.hermes/scripts/ so Hermes can speak via HA Piper / Cloud TTS.
   agent_behavior:
     name: Comportamiento del agente
     description: Bootstrap de primer arranque para aprobaciones y reasoning de Hermes (escribe claves solo si faltan en /config/.hermes/config.yaml).
     fields:
       approval_mode:
         name: Modo de aprobación
-        description: "Aprobaciones de comandos peligrosos. smart (recomendado para HA headless) usa un LLM auxiliar; manual siempre pregunta; off es YOLO."
+        description: Aprobaciones de comandos peligrosos. smart (recomendado para HA headless) usa un LLM auxiliar; manual siempre pregunta; off es YOLO.
         options:
-          smart: "Smart (predeterminado)"
-          manual: "Manual"
-          off: "Desactivado (yolo)"
+          smart: Smart (predeterminado)
+          manual: Manual
+          false: Desactivado (yolo)
       reasoning_effort:
         name: Esfuerzo de reasoning
         description: Esfuerzo de pensamiento predeterminado para modelos que lo admiten (none…ultra).
         options:
-          none: "none"
-          minimal: "minimal"
-          low: "low"
-          medium: "medium (predeterminado)"
-          high: "high"
-          xhigh: "xhigh"
-          max: "max"
-          ultra: "ultra"
+          none: none
+          minimal: minimal
+          low: low
+          medium: medium (predeterminado)
+          high: high
+          xhigh: xhigh
+          max: max
+          ultra: ultra
       show_reasoning:
         name: Mostrar reasoning
         description: Transmitir trazas de pensamiento del modelo (display.show_reasoning). Recomendado ACTIVADO.
-
-
+      max_turns:
+        name: Max Turns
+        description: Max tool iterations per turn (agent.max_turns). Upstream default is 500; 60 is safer for Assist / home use.
+      smart_policy:
+        name: Smart Approval Policy
+        description: Optional extra rules appended to the smart-approval reviewer (approvals.smart_policy).
+      denial_breaker_threshold:
+        name: Denial Breaker Threshold
+        description: Stop after N consecutive smart-approval denials (0 disables). Default 3.
+      deny_patterns:
+        name: Deny Patterns
+        description: Glob patterns that always block terminal commands (approvals.deny). Seeded with HA-safe defaults when missing.
+  context_compression:
+    name: Context Compression
+    description: Hermes conversation compression / pruning (writes keys only if missing).
+    fields:
+      threshold_tokens:
+        name: Absolute Token Threshold
+        description: Compress when context exceeds this many tokens (0 = use ratio threshold only).
+      proactive_prune_tokens:
+        name: Proactive Prune Tokens
+        description: Prune oversized tool results without an LLM when re-sent history exceeds this (0 = off; try 48000).
+      min_tail_user_messages:
+        name: Min Tail User Messages
+        description: Guaranteed number of recent user messages to keep after compression.
+      idle_compact_after_seconds:
+        name: Idle Compact After Seconds
+        description: Opt-in idle compaction delay (0 = disabled).
   webhooks:
     name: Webhooks
-    description: "Adaptador webhook opcional de Hermes (red del host). Direct-delivery puede enviar notificaciones HA sin LLM."
+    description: Adaptador webhook opcional de Hermes (red del host). Direct-delivery puede enviar notificaciones HA sin LLM.
     fields:
       enable_webhooks:
         name: Activar webhooks
-        description: "Si está ACTIVADO, configura WEBHOOK_* en .env y rellena platforms.webhook (puerto 8644). Secreto HMAC en /config/secrets/webhook.secret."
+        description: Si está ACTIVADO, configura WEBHOOK_* en .env y rellena platforms.webhook (puerto 8644). Secreto HMAC en /config/secrets/webhook.secret.
       webhook_port:
         name: Puerto de webhooks
-        description: "Puerto HTTP para POST /webhooks/<route> (red del host). Predeterminado 8644."
+        description: Puerto HTTP para POST /webhooks/<route> (red del host). Predeterminado 8644.
       seed_ha_direct_delivery_route:
         name: Sembrar ruta HA direct-delivery
-        description: "Si está ACTIVADO y los webhooks son nuevos, siembra la ruta ha-alert (deliver_only → homeassistant). Campo {message}."
-
+        description: Si está ACTIVADO y los webhooks son nuevos, siembra la ruta ha-alert (deliver_only → homeassistant). Campo {message}.
+  outbound_events:
+    name: Outbound Events
+    description: Push signed Hermes lifecycle events to a Home Assistant webhook (requires Hermes that supports hooks.outbound).
+    fields:
+      enable_outbound_events:
+        name: Enable Outbound Events
+        description: When ON and ha_webhook_id is set, seed hooks.outbound (capability-probed). HMAC secret at /config/secrets/outbound_webhook.secret.
+      ha_webhook_id:
+        name: HA Webhook ID
+        description: Home Assistant webhook id (Settings → Automations → Webhook). Pair with the Hermes voice announce blueprint.
+      events:
+        name: Event Types
+        description: Lifecycle event names to forward (default turn.completed).
   backup:
     name: Copia de seguridad
-    description: "Escribe copias de Hermes en /share/hermes/backups (visible en el share de HAOS)."
+    description: Escribe copias de Hermes en /share/hermes/backups (visible en el share de HAOS).
     fields:
       auto_backup_on_start:
         name: Copia automática al iniciar
-        description: "Si está ACTIVADO, copia rápida a /share/hermes/backups en cada arranque. Manual: hermes-backup-share."
-
-
+        description: 'Si está ACTIVADO, copia rápida a /share/hermes/backups en cada arranque. Manual: hermes-backup-share.'
   ntfy:
     name: ntfy
-    description: "Plataforma ntfy opcional (push/cron). Predeterminado DESACTIVADO."
+    description: Plataforma ntfy opcional (push/cron). Predeterminado DESACTIVADO.
     fields:
       enable_ntfy:
         name: Activar ntfy
-        description: "Si está ACTIVADO y hay topic, sincroniza NTFY_* en /config/.hermes/.env."
+        description: Si está ACTIVADO y hay topic, sincroniza NTFY_* en /config/.hermes/.env.
       ntfy_topic:
         name: Tema ntfy
         description: Nombre del tema para publish/subscribe.
       ntfy_server_url:
         name: URL del servidor ntfy
-        description: "Predeterminado https://ntfy.sh — use su servidor propio."
+        description: Predeterminado https://ntfy.sh — use su servidor propio.
       ntfy_token:
         name: Token ntfy
-        description: "Bearer opcional o user:pass. Enmascarado; en /config/secrets/ntfy.token."
+        description: Bearer opcional o user:pass. Enmascarado; en /config/secrets/ntfy.token.
       ntfy_publish_only:
         name: Solo publicación
-        description: "Si está ACTIVADO, solo push (sin chat entrante). Recomendado para alertas HA."
-
+        description: Si está ACTIVADO, solo push (sin chat entrante). Recomendado para alertas HA.
   enable_terminal:
     name: Activar terminal web
     description: Activar terminal web en Ingress. Pruebas de conexión → Test Terminal.
-
   terminal_port:
     name: Puerto del terminal
     description: Puerto del terminal web (predeterminado 7681). Pruebas de conexión → Test Terminal.
-
   web_interface:
     name: Hermes Web UI
     description: Interfaz Hermes (hermes dashboard). HTTPS externo en gateway_port. Cada campo tiene un test en Pruebas de conexión.
@@ -198,20 +294,19 @@ configuration:
       auto_start_with_integration:
         name: Inicio automático con el complemento
         description: Inicia hermes dashboard al arrancar. Requerido para Test Dashboard.
-
   gateway_access:
     name: Acceso al Gateway
     description: Acceso de red y API Assist. Cada campo relevante tiene un test en Pruebas de conexión.
     fields:
       access_mode:
         name: Modo de acceso
-        description: "Simplifica la configuración de acceso seguro. Anula bind/auth cuando no es Personalizado."
+        description: Simplifica la configuración de acceso seguro. Anula bind/auth cuando no es Personalizado.
         options:
-          custom: "Personalizado (configuración individual)"
-          local_only: "Solo local (loopback + token, solo Ingress)"
-          lan_https: "LAN HTTPS (proxy HTTPS integrado — recomendado para teléfonos)"
-          lan_reverse_proxy: "LAN Proxy inverso (proxy externo con auth trusted-proxy)"
-          tailnet_https: "Tailscale HTTPS (Tailscale + token)"
+          custom: Personalizado (configuración individual)
+          local_only: Solo local (loopback + token, solo Ingress)
+          lan_https: LAN HTTPS (proxy HTTPS integrado — recomendado para teléfonos)
+          lan_reverse_proxy: LAN Proxy inverso (proxy externo con auth trusted-proxy)
+          tailnet_https: Tailscale HTTPS (Tailscale + token)
       gateway_port:
         name: Puerto del Gateway
         description: Puerto HTTPS de Hermes Web UI (18789). Pruebas de conexión → Test Web UI HTTPS.
@@ -220,54 +315,53 @@ configuration:
         description: URL base pública para abrir Hermes Web UI en una nueva pestaña (no integrada).
       enable_openai_api:
         name: Activar API OpenAI
-        description: "Activa la API Assist. Tras reiniciar: Pruebas de conexión → Test Assist API."
+        description: 'Activa la API Assist. Tras reiniciar: Pruebas de conexión → Test Assist API.'
       gateway_mode:
         name: Modo del Gateway
         description: Local (Test Gateway) o remoto (Test Remote).
         options:
-          local: "Local (recomendado)"
-          remote: "Remoto"
+          local: Local (recomendado)
+          remote: Remoto
       gateway_remote_url:
         name: URL del Gateway Remoto
         description: URL WebSocket en modo remoto. Pruebas de conexión → Test Remote.
       gateway_bind_mode:
         name: Modo de enlace del Gateway
-        description: "Enlace loopback, LAN o Tailscale. Solo tiene efecto cuando el Modo de acceso es Personalizado — otros preajustes lo configuran automáticamente e ignoran este valor."
+        description: Enlace loopback, LAN o Tailscale. Solo tiene efecto cuando el Modo de acceso es Personalizado — otros preajustes lo configuran automáticamente e ignoran este valor.
         options:
-          loopback: "Loopback (solo 127.0.0.1, más seguro)"
-          lan: "LAN (todas las interfaces)"
-          tailnet: "Tailnet (solo Tailscale)"
+          loopback: Loopback (solo 127.0.0.1, más seguro)
+          lan: LAN (todas las interfaces)
+          tailnet: Tailnet (solo Tailscale)
       gateway_auth_mode:
         name: Modo de autenticación del Gateway
-        description: "Token (predeterminado) o trusted-proxy para proxys inversos. Solo tiene efecto cuando el Modo de acceso es Personalizado — otros preajustes lo configuran automáticamente e ignoran este valor."
+        description: Token (predeterminado) o trusted-proxy para proxys inversos. Solo tiene efecto cuando el Modo de acceso es Personalizado — otros preajustes lo configuran automáticamente e ignoran este valor.
         options:
-          token: "Token (predeterminado)"
-          trusted-proxy: "Proxy de confianza (para proxys inversos)"
+          token: Token (predeterminado)
+          trusted-proxy: Proxy de confianza (para proxys inversos)
       gateway_trusted_proxies:
         name: Proxys de confianza del Gateway
-        description: "Lista de IP/CIDR de reverse proxy de confianza para gateway_auth_mode trusted-proxy (una fila por proxy). Requerido con access_mode lan_reverse_proxy o proxy externo (NPM, Caddy, Traefik). Si está vacío en lan_reverse_proxy, el inicio aplica valores por defecto (127.0.0.1, 172.30.0.0/16, 10.0.0.0/8). El proxy debe enviar X-Forwarded-User."
+        description: Lista de IP/CIDR de reverse proxy de confianza para gateway_auth_mode trusted-proxy (una fila por proxy). Requerido con access_mode lan_reverse_proxy o proxy externo (NPM, Caddy, Traefik). Si está vacío en lan_reverse_proxy, el inicio aplica valores por defecto (127.0.0.1, 172.30.0.0/16, 10.0.0.0/8). El proxy debe enviar X-Forwarded-User.
         fields:
           value:
             name: IP o CIDR del proxy
-            description: "IPv4, IPv4/CIDR o IPv6/CIDR del origen del proxy. Ejemplos: 127.0.0.1, 192.168.88.0/24, 172.30.0.0/16."
+            description: 'IPv4, IPv4/CIDR o IPv6/CIDR del origen del proxy. Ejemplos: 127.0.0.1, 192.168.88.0/24, 172.30.0.0/16.'
       gateway_additional_allowed_origins:
         name: Orígenes permitidos adicionales
-        description: "Orígenes de navegador adicionales para la Control UI de Hermes (una fila por origen). Se combinan con los valores predeterminados en gateway.controlUi.allowedOrigins. En lan_https, los hostnames también se añaden al SAN del certificado TLS."
+        description: Orígenes de navegador adicionales para la Control UI de Hermes (una fila por origen). Se combinan con los valores predeterminados en gateway.controlUi.allowedOrigins. En lan_https, los hostnames también se añaden al SAN del certificado TLS.
         fields:
           value:
             name: URL de origen
-            description: "Origen completo con esquema y host (incluya el puerto si no es el predeterminado). Ejemplos: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost."
+            description: 'Origen completo con esquema y host (incluya el puerto si no es el predeterminado). Ejemplos: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost.'
       controlui_disable_device_auth:
         name: Desactivar emparejamiento por dispositivo en Control UI (lan_https)
-        description: "Recomendado ACTIVADO para LAN doméstica — omite aprobación por dispositivo (evita error 1008)."
-
+        description: Recomendado ACTIVADO para LAN doméstica — omite aprobación por dispositivo (evita error 1008).
   mqtt_settings:
     name: Sensores de estado MQTT
     description: Conexión al broker y sensores MQTT. Cada campo del broker tiene un test en Pruebas de conexión.
     fields:
       broker_host:
         name: Host del broker MQTT
-        description: "IP o nombre de host del broker. Vacío = autodetectar Mosquitto. Pruebas de conexión → Test Broker."
+        description: IP o nombre de host del broker. Vacío = autodetectar Mosquitto. Pruebas de conexión → Test Broker.
       broker_port:
         name: Puerto del broker MQTT
         description: Puerto del broker MQTT (1883). Incluido en Test Broker.
@@ -285,14 +379,13 @@ configuration:
         description: Crear entidades HA una vez por versión del complemento (marcador /config/.hermes/.mqtt_discovery_published). Desactivar para usar solo /status.json.
       enable_control_entities:
         name: Activar entidades de control MQTT
-        description: "Desactivado por defecto. Cuando está activado, publica botones (reiniciar gateway, copia de seguridad, limpieza, actualizar) y selectores (modo de aprobación, esfuerzo de razonamiento) vía MQTT. Cualquiera con acceso de escritura al broker puede activarlos — solo habilitar en un Mosquitto de confianza."
+        description: Desactivado por defecto. Cuando está activado, publica botones (reiniciar gateway, copia de seguridad, limpieza, actualizar) y selectores (modo de aprobación, esfuerzo de razonamiento) vía MQTT. Cualquiera con acceso de escritura al broker puede activarlos — solo habilitar en un Mosquitto de confianza.
       status_poll_interval_seconds:
         name: Intervalo de estado (segundos)
         description: Intervalo de actualización para sensores y /share/hermes/status.json (30-300).
       state_prefix:
         name: Prefijo de topics MQTT
-        description: "Prefijo para topics de estado (predeterminado hermes). Ejemplo: hermes/status/gateway_running."
-
+        description: 'Prefijo para topics de estado (predeterminado hermes). Ejemplo: hermes/status/gateway_running.'
   router_ssh:
     name: SSH del router
     description: Acceso SSH opcional a un router o dispositivo de red accesible desde la LAN del host HA.
@@ -306,7 +399,6 @@ configuration:
       key_path:
         name: Ruta de clave SSH del router
         description: Ruta a la clave privada en almacenamiento persistente (predeterminado /config/keys/router_ssh).
-
   tools_bootstrap:
     name: Bootstrap de herramientas
     description: Verificar e instalar automáticamente dependencias opcionales de herramientas Hermes al inicio.
@@ -325,8 +417,13 @@ configuration:
         description: Inicializar el directorio de Skills Hub al inicio (como `hermes skills list` en el primer arranque).
       seed_example_scripts:
         name: Sembrar scripts de ejemplo
-        description: "Copia disk-alert.sh y morning-heartbeat.sh a /config/.hermes/scripts/ si faltan (para cron no_agent)."
-
+        description: Copia disk-alert.sh y morning-heartbeat.sh a /config/.hermes/scripts/ si faltan (para cron no_agent).
+      tool_a2a_enabled:
+        name: Enable A2A Plugin
+        description: Opt-in Agent-to-Agent (A2A v1.0) plugin when the installed Hermes supports it (capability-probed).
+      tool_office_skills_enabled:
+        name: Enable Office Skills Bootstrap
+        description: Attempt to install bundled office skills (docx/xlsx/pdf/powerpoint) when available.
   advanced_settings:
     name: Configuración avanzada
     description: Proxy, DNS, logs de nginx, variables de entorno del gateway, versión de Hermes y limpieza de bloqueos de sesión.
@@ -341,8 +438,8 @@ configuration:
         name: Nivel de log Nginx
         description: Verbosidad del log de acceso del proxy HTTPS integrado.
         options:
-          minimal: "Mínimo (suprimir ruido de polling HA)"
-          full: "Completo (registrar todas las solicitudes)"
+          minimal: Mínimo (suprimir ruido de polling HA)
+          full: Completo (registrar todas las solicitudes)
       gateway_env_vars:
         name: Variables de entorno del Gateway
         description: Variables de entorno adicionales para el proceso del gateway (máx. 50 entradas).
@@ -350,21 +447,20 @@ configuration:
         name: Versión de Hermes Agent
         description: Paquete npm para la CLI `hermes` — latest o versión personalizada.
         options:
-          latest: "Latest (npm @latest)"
-          custom: "Versión personalizada (predeterminado 0.19.0)"
+          latest: Latest (npm @latest)
+          custom: Versión personalizada (predeterminado 0.20.0)
       hermes_agent_version_custom:
         name: Versión de Hermes Agent (personalizada)
-        description: dist-tag npm o semver cuando el preajuste es personalizado (predeterminado 0.19.0).
-
+        description: dist-tag npm o semver cuando el preajuste es personalizado (predeterminado 0.20.0).
       fallback_providers:
         name: Proveedores de respaldo
-        description: "Bootstrap de fallback_providers si faltan. Entradas como openrouter u openrouter/google/gemini-2.5-flash. Vacío = omitir."
+        description: Bootstrap de fallback_providers si faltan. Entradas como openrouter u openrouter/google/gemini-2.5-flash. Vacío = omitir.
       nous_tool_gateway:
         name: Nous Tool Gateway
-        description: "Si está ACTIVADO, siembra use_gateway: true en web/image_gen/tts/browser (requiere suscripción Nous Portal)."
+        description: 'Si está ACTIVADO, siembra use_gateway: true en web/image_gen/tts/browser (requiere suscripción Nous Portal).'
       gateway_drain_seconds:
         name: Segundos de drain del gateway
-        description: "Segundos de espera del drain al detener el complemento (0–120). Predeterminado 15."
+        description: Segundos de espera del drain al detener el complemento (0–120). Predeterminado 15.
       clean_session_locks_on_start:
         name: Limpiar bloqueos de sesión al iniciar
         description: Eliminar archivos de bloqueo de sesión obsoletos cuando el complemento inicia.

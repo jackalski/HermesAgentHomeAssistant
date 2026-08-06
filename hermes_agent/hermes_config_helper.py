@@ -7,6 +7,7 @@ Safely reads/writes hermes.json without corrupting it.
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -190,6 +191,9 @@ ADDON_API_KEY_ENV_MAP = {
     "XAI_API_KEY": "xai_api_key",
     "FIRECRAWL_API_KEY": "firecrawl_api_key",
     "SEARXNG_URL": "searxng_url",
+    "ELEVENLABS_API_KEY": "elevenlabs_api_key",
+    "GROQ_API_KEY": "groq_api_key",
+    "DEEPINFRA_API_KEY": "deepinfra_api_key",
 }
 
 
@@ -858,8 +862,13 @@ def set_reasoning_effort(reasoning_effort: str) -> bool:
     return False
 
 
-def bootstrap_approvals_if_missing(approval_mode: str):
-    """Set approvals.mode only when the key is absent (do not clobber user edits)."""
+def bootstrap_approvals_if_missing(
+    approval_mode: str,
+    smart_policy: str = "",
+    denial_breaker_threshold=None,
+    deny_patterns=None,
+):
+    """Bootstrap approvals.* keys only when absent (do not clobber user edits)."""
     mode = (approval_mode or "smart").strip().lower() or "smart"
     if mode not in _APPROVAL_MODES:
         print(f"ERROR: Invalid approval_mode: {approval_mode!r}", file=sys.stderr)
@@ -871,16 +880,48 @@ def bootstrap_approvals_if_missing(approval_mode: str):
     approvals = cfg.get("approvals")
     if not isinstance(approvals, dict):
         approvals = {}
-    if approvals.get("mode"):
-        return True
 
-    approvals["mode"] = mode
+    changed = False
+    if not approvals.get("mode"):
+        approvals["mode"] = mode
+        changed = True
     # Headless gateway/cron: deny dangerous commands when no UI can approve.
     if "cron_mode" not in approvals:
         approvals["cron_mode"] = "deny"
+        changed = True
+
+    policy = (smart_policy or "").strip()
+    if policy and "smart_policy" not in approvals:
+        approvals["smart_policy"] = policy
+        changed = True
+
+    if denial_breaker_threshold is not None and "denial_breaker_threshold" not in approvals:
+        try:
+            thr = int(denial_breaker_threshold)
+        except (TypeError, ValueError):
+            thr = 3
+        if thr < 0:
+            thr = 0
+        if thr > 10:
+            thr = 10
+        approvals["denial_breaker_threshold"] = thr
+        changed = True
+
+    if isinstance(deny_patterns, list) and deny_patterns and "deny" not in approvals:
+        cleaned = []
+        for item in deny_patterns:
+            text = str(item or "").strip()
+            if text:
+                cleaned.append(text)
+        if cleaned:
+            approvals["deny"] = cleaned
+            changed = True
+
+    if not changed:
+        return True
     cfg["approvals"] = approvals
     if write_yaml_config(cfg):
-        print(f"INFO: Bootstrapped approvals.mode={mode} in {YAML_CONFIG_PATH}")
+        print(f"INFO: Bootstrapped approvals (mode={approvals.get('mode')}) in {YAML_CONFIG_PATH}")
         return True
     return False
 
@@ -922,6 +963,368 @@ def bootstrap_reasoning_if_missing(reasoning_effort: str, show_reasoning: bool):
         )
         return True
     return False
+
+
+def bootstrap_max_turns_if_missing(max_turns) -> bool:
+    """Seed agent.max_turns when missing (Assist-safe default is typically < upstream 500)."""
+    try:
+        turns = int(max_turns)
+    except (TypeError, ValueError):
+        turns = 60
+    if turns < 10:
+        turns = 10
+    if turns > 500:
+        turns = 500
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    agent = cfg.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
+    if "max_turns" in agent:
+        return True
+    agent["max_turns"] = turns
+    cfg["agent"] = agent
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped agent.max_turns={turns} in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+_STT_PROVIDERS = frozenset(
+    {"local", "groq", "openai", "mistral", "xai", "elevenlabs", "deepinfra"}
+)
+_STT_LOCAL_MODELS = frozenset({"tiny", "base", "small", "medium", "large-v3"})
+_TTS_PROVIDERS = frozenset(
+    {
+        "edge",
+        "piper",
+        "kittentts",
+        "openai",
+        "elevenlabs",
+        "gemini",
+        "xai",
+        "minimax",
+        "mistral",
+        "neutts",
+    }
+)
+
+
+def bootstrap_voice_speech_if_missing(
+    stt_enabled: bool = True,
+    stt_provider: str = "local",
+    stt_language: str = "auto",
+    stt_local_model: str = "base",
+    stt_echo_transcripts: bool = True,
+    tts_provider: str = "edge",
+    tts_voice: str = "en-US-AriaNeural",
+    tts_speed: float = 1.0,
+) -> bool:
+    """Bootstrap stt.* and tts.* when keys are missing (do not clobber user edits)."""
+    stt_prov = (stt_provider or "local").strip().lower() or "local"
+    if stt_prov not in _STT_PROVIDERS:
+        print(f"WARN: Invalid stt_provider {stt_provider!r}; using local", file=sys.stderr)
+        stt_prov = "local"
+    tts_prov = (tts_provider or "edge").strip().lower() or "edge"
+    if tts_prov not in _TTS_PROVIDERS:
+        print(f"WARN: Invalid tts_provider {tts_provider!r}; using edge", file=sys.stderr)
+        tts_prov = "edge"
+    local_model = (stt_local_model or "base").strip().lower() or "base"
+    if local_model not in _STT_LOCAL_MODELS:
+        local_model = "base"
+
+    lang_raw = (stt_language or "auto").strip()
+    # "auto" → empty language hint (provider auto-detect / HERMES_LOCAL_STT_LANGUAGE).
+    lang = "" if lang_raw.lower() in ("", "auto", "detect") else lang_raw
+
+    try:
+        speed = float(tts_speed)
+    except (TypeError, ValueError):
+        speed = 1.0
+    if speed < 0.5:
+        speed = 0.5
+    if speed > 2.0:
+        speed = 2.0
+
+    voice = (tts_voice or "").strip() or "en-US-AriaNeural"
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+
+    changed = False
+    stt = cfg.get("stt")
+    if not isinstance(stt, dict):
+        stt = {}
+    if "enabled" not in stt:
+        stt["enabled"] = bool(stt_enabled)
+        changed = True
+    if "provider" not in stt:
+        stt["provider"] = stt_prov
+        changed = True
+    if "language" not in stt:
+        stt["language"] = lang
+        changed = True
+    if "echo_transcripts" not in stt:
+        stt["echo_transcripts"] = bool(stt_echo_transcripts)
+        changed = True
+    local = stt.get("local")
+    if not isinstance(local, dict):
+        local = {}
+    if "model" not in local:
+        local["model"] = local_model
+        stt["local"] = local
+        changed = True
+    if changed:
+        cfg["stt"] = stt
+
+    tts = cfg.get("tts")
+    if not isinstance(tts, dict):
+        tts = {}
+    tts_changed = False
+    if "provider" not in tts:
+        tts["provider"] = tts_prov
+        tts_changed = True
+    if "speed" not in tts:
+        tts["speed"] = speed
+        tts_changed = True
+
+    # Route voice string into the provider-specific key when that block is missing.
+    voice_key_by_provider = {
+        "edge": ("edge", "voice"),
+        "piper": ("piper", "voice"),
+        "openai": ("openai", "voice"),
+        "elevenlabs": ("elevenlabs", "voice_id"),
+        "kittentts": ("kittentts", "voice"),
+        "gemini": ("gemini", "voice"),
+        "xai": ("xai", "voice_id"),
+        "minimax": ("minimax", "voice"),
+        "mistral": ("mistral", "voice_id"),
+        "neutts": ("neutts", "voice"),
+    }
+    block_name, field_name = voice_key_by_provider.get(tts_prov, ("edge", "voice"))
+    block = tts.get(block_name)
+    if not isinstance(block, dict):
+        block = {}
+    if field_name not in block:
+        block[field_name] = voice
+        tts[block_name] = block
+        tts_changed = True
+
+    if tts_changed:
+        cfg["tts"] = tts
+        changed = True
+
+    if not changed:
+        return True
+    if write_yaml_config(cfg):
+        print(
+            f"INFO: Bootstrapped voice_speech (stt.provider={stt.get('provider')}, "
+            f"tts.provider={tts.get('provider')}) in {YAML_CONFIG_PATH}"
+        )
+        return True
+    return False
+
+
+def bootstrap_compression_if_missing(
+    threshold_tokens: int = 0,
+    proactive_prune_tokens: int = 0,
+    min_tail_user_messages: int = 4,
+    idle_compact_after_seconds: int = 0,
+) -> bool:
+    """Bootstrap compression.* when keys are missing."""
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    compression = cfg.get("compression")
+    if not isinstance(compression, dict):
+        compression = {}
+
+    changed = False
+
+    def _as_nonneg_int(value, default=0):
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            n = default
+        return max(0, n)
+
+    thr = _as_nonneg_int(threshold_tokens, 0)
+    prune = _as_nonneg_int(proactive_prune_tokens, 0)
+    tail = _as_nonneg_int(min_tail_user_messages, 4)
+    idle = _as_nonneg_int(idle_compact_after_seconds, 0)
+
+    # 0 means "leave unset / disabled" for absolute token knobs.
+    if thr > 0 and "threshold_tokens" not in compression:
+        compression["threshold_tokens"] = thr
+        changed = True
+    if prune > 0 and "proactive_prune_tokens" not in compression:
+        compression["proactive_prune_tokens"] = prune
+        changed = True
+    if "min_tail_user_messages" not in compression:
+        compression["min_tail_user_messages"] = tail
+        changed = True
+    if idle > 0 and "idle_compact_after_seconds" not in compression:
+        compression["idle_compact_after_seconds"] = idle
+        changed = True
+
+    if not changed:
+        return True
+    cfg["compression"] = compression
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped compression settings in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+def hermes_config_key_supported(dotted_key: str) -> bool:
+    """Probe whether `hermes config get <key>` recognizes a key (capability gate)."""
+    key = (dotted_key or "").strip()
+    if not key:
+        return False
+    try:
+        result = subprocess.run(
+            ["hermes", "config", "get", key],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"WARN: Capability probe for {key!r} failed: {e}", file=sys.stderr)
+        return False
+    combined = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+    # Hermes typically prints unknown/invalid for missing keys; treat exit!=0 as unsupported.
+    if result.returncode != 0:
+        return False
+    for marker in ("unknown", "not found", "invalid", "no such", "does not exist"):
+        if marker in combined:
+            return False
+    return True
+
+
+def bootstrap_outbound_events_if_enabled(
+    enabled: bool,
+    ha_url: str,
+    ha_webhook_id: str,
+    events,
+    secret: str,
+) -> bool:
+    """Seed hooks.outbound when the running Hermes supports it (capability probe)."""
+    if not enabled:
+        return True
+    webhook_id = (ha_webhook_id or "").strip()
+    if not webhook_id:
+        print("WARN: enable_outbound_events=true but ha_webhook_id is empty; skipping")
+        return True
+    base = (ha_url or "").strip().rstrip("/")
+    if not base:
+        print("WARN: enable_outbound_events=true but Home Assistant URL is empty; skipping")
+        return True
+
+    if not hermes_config_key_supported("hooks.outbound"):
+        print(
+            "WARN: Hermes does not expose hooks.outbound yet; "
+            "skipping outbound_events bootstrap (upgrade hermes-agent when available)"
+        )
+        return True
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    hooks = cfg.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+    if isinstance(hooks.get("outbound"), list) and hooks.get("outbound"):
+        return True
+
+    event_list = []
+    if isinstance(events, list):
+        for item in events:
+            text = str(item or "").strip()
+            if text:
+                event_list.append(text)
+    if not event_list:
+        event_list = ["turn.completed"]
+
+    target = f"{base}/api/webhook/{webhook_id}"
+    hooks["outbound"] = [
+        {
+            "url": target,
+            "events": event_list,
+            "secret": secret or "",
+        }
+    ]
+    cfg["hooks"] = hooks
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped hooks.outbound → webhook id={webhook_id!r}")
+        return True
+    return False
+
+
+def bootstrap_a2a_if_enabled(enabled: bool) -> bool:
+    """Enable A2A plugin when Hermes supports plugins.a2a (capability probe)."""
+    if not enabled:
+        return True
+    if not hermes_config_key_supported("plugins.a2a"):
+        # Fall back to toolsets-style enablement if present.
+        if not hermes_config_key_supported("toolsets"):
+            print(
+                "WARN: Hermes A2A config key not recognized; "
+                "skipping tool_a2a_enabled bootstrap"
+            )
+            return True
+        cfg = read_yaml_config()
+        if cfg is None:
+            return False
+        toolsets = cfg.get("toolsets")
+        if not isinstance(toolsets, list):
+            toolsets = []
+        if "a2a" in toolsets:
+            return True
+        toolsets.append("a2a")
+        cfg["toolsets"] = toolsets
+        if write_yaml_config(cfg):
+            print(f"INFO: Bootstrapped toolsets+=a2a in {YAML_CONFIG_PATH}")
+            return True
+        return False
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    plugins = cfg.get("plugins")
+    if not isinstance(plugins, dict):
+        plugins = {}
+    a2a = plugins.get("a2a")
+    if not isinstance(a2a, dict):
+        a2a = {}
+    if a2a.get("enabled") is True:
+        return True
+    a2a["enabled"] = True
+    plugins["a2a"] = a2a
+    cfg["plugins"] = plugins
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped plugins.a2a.enabled=true in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
+def bootstrap_office_skills_hint_if_enabled(enabled: bool) -> bool:
+    """Mark office skills preference; actual install is handled by run.sh when available."""
+    if not enabled:
+        return True
+    marker = HERMES_STATE_DIR / ".office_skills_requested"
+    try:
+        HERMES_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        if not marker.exists():
+            marker.write_text("1\n", encoding="utf-8")
+            print(f"INFO: Marked office skills requested at {marker}")
+    except OSError as e:
+        print(f"WARN: Could not write office skills marker: {e}", file=sys.stderr)
+        return False
+    return True
 
 
 def bootstrap_ha_platform_if_enabled(
@@ -1061,8 +1464,9 @@ def bootstrap_webhooks_if_enabled(
     port: int,
     secret: str,
     seed_ha_direct_delivery: bool,
+    seed_ha_speak_route: bool = False,
 ):
-    """Enable platforms.webhook + optional HA direct-delivery example route (no overwrite)."""
+    """Enable platforms.webhook + optional HA direct-delivery example routes (no overwrite)."""
     if not enabled:
         return True
 
@@ -1077,10 +1481,14 @@ def bootstrap_webhooks_if_enabled(
     if not isinstance(webhook, dict):
         webhook = {}
 
-    # Do not clobber a user-tuned webhook block that already has routes.
+    # Do not clobber a user-tuned webhook block that already has routes —
+    # but still allow adding ha-speak if missing when requested.
     extra = webhook.get("extra")
-    if isinstance(extra, dict) and isinstance(extra.get("routes"), dict) and extra.get("routes"):
-        return True
+    existing_routes = (
+        isinstance(extra, dict)
+        and isinstance(extra.get("routes"), dict)
+        and bool(extra.get("routes"))
+    )
 
     if not isinstance(extra, dict):
         extra = {}
@@ -1091,13 +1499,16 @@ def bootstrap_webhooks_if_enabled(
     if port_i < 1024 or port_i > 65535:
         port_i = 8644
 
-    extra["port"] = port_i
-    if secret and not extra.get("secret"):
-        extra["secret"] = secret
+    if not existing_routes:
+        extra["port"] = port_i
+        if secret and not extra.get("secret"):
+            extra["secret"] = secret
 
     routes = extra.get("routes")
     if not isinstance(routes, dict):
         routes = {}
+
+    route_added = False
     if seed_ha_direct_delivery and "ha-alert" not in routes:
         routes["ha-alert"] = {
             "secret": secret or "INSECURE_NO_AUTH",
@@ -1105,6 +1516,19 @@ def bootstrap_webhooks_if_enabled(
             "deliver_only": True,
             "prompt": "{message}",
         }
+        route_added = True
+    if seed_ha_speak_route and "ha-speak" not in routes:
+        routes["ha-speak"] = {
+            "secret": secret or "INSECURE_NO_AUTH",
+            "deliver": "homeassistant",
+            "deliver_only": True,
+            "prompt": "{message}",
+        }
+        route_added = True
+
+    if existing_routes and not route_added:
+        return True
+
     extra["routes"] = routes
     webhook["enabled"] = True
     webhook["extra"] = extra
@@ -1145,9 +1569,13 @@ def sync_ntfy_env(
     return ok
 
 
-def seed_example_scripts_if_enabled(enabled: bool, source_dir: str = "/opt/hermes-example-scripts"):
+def seed_example_scripts_if_enabled(
+    enabled: bool,
+    source_dir: str = "/opt/hermes-example-scripts",
+    seed_ha_tts_command: bool = False,
+):
     """Copy bundled example no_agent scripts into HERMES_HOME/scripts when missing."""
-    if not enabled:
+    if not enabled and not seed_ha_tts_command:
         return True
     src = Path(source_dir)
     if not src.is_dir():
@@ -1167,6 +1595,11 @@ def seed_example_scripts_if_enabled(enabled: bool, source_dir: str = "/opt/herme
     copied = []
     for path in sorted(src.glob("*")):
         if not path.is_file():
+            continue
+        # ha-tts-command.py is opt-in via seed_ha_tts_command (or full seed_example_scripts).
+        if path.name == "ha-tts-command.py" and not (enabled or seed_ha_tts_command):
+            continue
+        if path.name != "ha-tts-command.py" and not enabled:
             continue
         target = dest / path.name
         if target.exists():
@@ -1246,6 +1679,11 @@ def bootstrap_first_run(payload: dict):
         "true",
         "yes",
     )
+    seed_ha_speak_route = str(payload.get("seed_ha_speak_route", "true")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     try:
         webhook_port = int(payload.get("webhook_port", 8644) or 8644)
     except (TypeError, ValueError):
@@ -1262,6 +1700,78 @@ def bootstrap_first_run(payload: dict):
         "true",
         "yes",
     )
+    seed_ha_tts_command_script = str(payload.get("seed_ha_tts_command_script", "true")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+    # Voice / speech
+    stt_enabled = str(payload.get("stt_enabled", "true")).lower() in ("1", "true", "yes")
+    stt_provider = str(payload.get("stt_provider", "local") or "local")
+    stt_language = str(payload.get("stt_language", "auto") or "auto")
+    stt_local_model = str(payload.get("stt_local_model", "base") or "base")
+    stt_echo_transcripts = str(payload.get("stt_echo_transcripts", "true")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    tts_provider = str(payload.get("tts_provider", "edge") or "edge")
+    tts_voice = str(payload.get("tts_voice", "en-US-AriaNeural") or "en-US-AriaNeural")
+    try:
+        tts_speed = float(payload.get("tts_speed", 1.0) or 1.0)
+    except (TypeError, ValueError):
+        tts_speed = 1.0
+
+    # Agent behavior extensions
+    try:
+        max_turns = int(payload.get("max_turns", 60) or 60)
+    except (TypeError, ValueError):
+        max_turns = 60
+    smart_policy = str(payload.get("smart_policy", "") or "")
+    try:
+        denial_breaker_threshold = int(payload.get("denial_breaker_threshold", 3) or 3)
+    except (TypeError, ValueError):
+        denial_breaker_threshold = 3
+    deny_patterns = payload.get("deny_patterns", [])
+
+    # Compression
+    try:
+        threshold_tokens = int(payload.get("threshold_tokens", 0) or 0)
+    except (TypeError, ValueError):
+        threshold_tokens = 0
+    try:
+        proactive_prune_tokens = int(payload.get("proactive_prune_tokens", 0) or 0)
+    except (TypeError, ValueError):
+        proactive_prune_tokens = 0
+    try:
+        min_tail_user_messages = int(payload.get("min_tail_user_messages", 4) or 4)
+    except (TypeError, ValueError):
+        min_tail_user_messages = 4
+    try:
+        idle_compact_after_seconds = int(payload.get("idle_compact_after_seconds", 0) or 0)
+    except (TypeError, ValueError):
+        idle_compact_after_seconds = 0
+
+    # Outbound events / A2A / office skills
+    enable_outbound_events = str(payload.get("enable_outbound_events", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    ha_webhook_id = str(payload.get("ha_webhook_id", "") or "")
+    outbound_events = payload.get("outbound_events", ["turn.completed"])
+    outbound_secret = str(payload.get("outbound_webhook_secret", "") or "")
+    tool_a2a_enabled = str(payload.get("tool_a2a_enabled", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    tool_office_skills_enabled = str(payload.get("tool_office_skills_enabled", "false")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     if not isinstance(api_keys, dict):
         api_keys = {}
@@ -1272,22 +1782,71 @@ def bootstrap_first_run(payload: dict):
     if ha_url or ha_token:
         ok = sync_homeassistant_env(str(ha_url), str(ha_token)) and ok
     ok = bootstrap_timezone_if_missing(str(timezone)) and ok
-    ok = bootstrap_approvals_if_missing(approval_mode) and ok
+    ok = (
+        bootstrap_approvals_if_missing(
+            approval_mode,
+            smart_policy=smart_policy,
+            denial_breaker_threshold=denial_breaker_threshold,
+            deny_patterns=deny_patterns if isinstance(deny_patterns, list) else [],
+        )
+        and ok
+    )
     ok = bootstrap_reasoning_if_missing(reasoning_effort, show_reasoning) and ok
+    ok = bootstrap_max_turns_if_missing(max_turns) and ok
+    ok = (
+        bootstrap_voice_speech_if_missing(
+            stt_enabled=stt_enabled,
+            stt_provider=stt_provider,
+            stt_language=stt_language,
+            stt_local_model=stt_local_model,
+            stt_echo_transcripts=stt_echo_transcripts,
+            tts_provider=tts_provider,
+            tts_voice=tts_voice,
+            tts_speed=tts_speed,
+        )
+        and ok
+    )
+    ok = (
+        bootstrap_compression_if_missing(
+            threshold_tokens=threshold_tokens,
+            proactive_prune_tokens=proactive_prune_tokens,
+            min_tail_user_messages=min_tail_user_messages,
+            idle_compact_after_seconds=idle_compact_after_seconds,
+        )
+        and ok
+    )
     ok = bootstrap_ha_platform_if_enabled(enable_native_ha_platform, ha_system_prompt_hint) and ok
     ok = bootstrap_fallback_providers_if_missing(fallback_providers) and ok
     ok = bootstrap_nous_tool_gateway_if_enabled(nous_tool_gateway) and ok
     ok = (
         bootstrap_webhooks_if_enabled(
-            enable_webhooks, webhook_port, webhook_secret, seed_ha_direct_delivery
+            enable_webhooks,
+            webhook_port,
+            webhook_secret,
+            seed_ha_direct_delivery,
+            seed_ha_speak_route=seed_ha_speak_route,
         )
         and ok
     )
     ok = (
+        bootstrap_outbound_events_if_enabled(
+            enable_outbound_events,
+            str(ha_url),
+            ha_webhook_id,
+            outbound_events if isinstance(outbound_events, list) else ["turn.completed"],
+            outbound_secret,
+        )
+        and ok
+    )
+    ok = bootstrap_a2a_if_enabled(tool_a2a_enabled) and ok
+    ok = bootstrap_office_skills_hint_if_enabled(tool_office_skills_enabled) and ok
+    ok = (
         sync_ntfy_env(enable_ntfy, ntfy_topic, ntfy_server_url, ntfy_token, ntfy_publish_only)
         and ok
     )
-    ok = seed_example_scripts_if_enabled(seed_example_scripts) and ok
+    ok = seed_example_scripts_if_enabled(
+        seed_example_scripts, seed_ha_tts_command=seed_ha_tts_command_script
+    ) and ok
     ok = bootstrap_browser_if_enabled(browser_enabled) and ok
     ok = bootstrap_web_search_if_missing(firecrawl_key, searxng_url) and ok
     ok = bootstrap_kanban_toolset_if_missing(setup_profile) and ok

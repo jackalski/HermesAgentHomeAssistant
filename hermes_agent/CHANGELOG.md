@@ -2,6 +2,27 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.1.0] - 2026-08-06
+
+### Added
+- **Hermes Agent 0.20.0** pin (`hermes_agent_version_custom` / Dockerfile bake) with Node **26** runtime.
+- **Voice & Speech** panel: bootstrap `stt.*` / `tts.*` (provider, language, local model, voice, speed) plus ElevenLabs / Groq / DeepInfra API keys.
+- **HA Voice Bridge** panel: seed `ha-speak` direct-delivery route and optional `ha-tts-command.py` for HA Piper / Cloud TTS.
+- **Context Compression** panel: `threshold_tokens`, `proactive_prune_tokens`, `min_tail_user_messages`, `idle_compact_after_seconds`.
+- **Outbound Events** panel: capability-probed `hooks.outbound` → HA webhook (HMAC at `/config/secrets/outbound_webhook.secret`).
+- Agent behavior: `max_turns` (default **60**), `smart_policy`, `denial_breaker_threshold`, `deny_patterns`.
+- Tool bootstrap: `tool_a2a_enabled`, `tool_office_skills_enabled` (capability-probed / best-effort).
+- Blueprint **`hermes_voice_announce`**, package scripts **`hermes_announce`** / **`hermes_ask`**, MQTT sensors for STT/TTS/max turns/outbound events, Voice card on the usage dashboard.
+
+### Changed
+- Supported architectures: **amd64** and **aarch64** only (**armv7 dropped** — Node 26 unavailable for armhf).
+- Failed Hermes version reconcile no longer overwrites the managed-version marker; keeps the previous CLI and logs an actionable tip.
+- Startup warns when Node is below 26.
+- Docs: two-direction Assist / voice guide (inbound Assist + outbound announcements).
+
+### Fixed
+- STT language `auto` resolves from Home Assistant Core language when available (reduces wrong-language transcriptions).
+
 ## [0.0.47] - 2026-08-02
 
 ### Fixed

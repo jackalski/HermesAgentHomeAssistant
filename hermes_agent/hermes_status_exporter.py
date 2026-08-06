@@ -67,7 +67,7 @@ def _read_addon_version() -> str:
     Falls back to a pinned constant if the file is unavailable so the exporter
     never crashes. Keep the fallback in sync with config.yaml on release.
     """
-    fallback = "0.0.47"
+    fallback = "0.1.0"
     candidates = (
         Path("/addon_config.yaml"),
         Path(__file__).resolve().parent / "config.yaml",
@@ -1006,6 +1006,18 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
 
     hermes_version = _hermes_agent_version()
 
+    stt_block = cfg.get("stt") if isinstance(cfg.get("stt"), dict) else {}
+    tts_block = cfg.get("tts") if isinstance(cfg.get("tts"), dict) else {}
+    agent_block = cfg.get("agent") if isinstance(cfg.get("agent"), dict) else {}
+    hooks_block = cfg.get("hooks") if isinstance(cfg.get("hooks"), dict) else {}
+    outbound = hooks_block.get("outbound")
+    outbound_enabled = isinstance(outbound, list) and len(outbound) > 0
+    max_turns_val = agent_block.get("max_turns")
+    try:
+        max_turns_out = int(max_turns_val) if max_turns_val is not None else 0
+    except (TypeError, ValueError):
+        max_turns_out = 0
+
     snapshot: dict[str, Any] = {
         "schema_version": 2,
         "updated_at": _utc_now_iso(),
@@ -1026,6 +1038,10 @@ def collect_status_snapshot(payload: dict) -> dict[str, Any]:
         "setup_complete": setup_complete,
         "approval_mode": get_approval_mode(),
         "reasoning_effort": get_reasoning_effort(),
+        "stt_provider": str(stt_block.get("provider") or "unknown"),
+        "tts_provider": str(tts_block.get("provider") or "unknown"),
+        "max_turns": max_turns_out if max_turns_out > 0 else "unknown",
+        "outbound_events_enabled": outbound_enabled,
         "main_provider": main_provider or "unknown",
         "main_model": main_model or "unknown",
         "auxiliary_title_model": aux_model or "unknown",
@@ -1418,6 +1434,7 @@ def publish_mqtt_discovery(
         ("model_configured", "Model Configured", None),
         ("mcp_configured", "MCP Configured", None),
         ("assist_api_enabled", "Assist API Enabled", None),
+        ("outbound_events_enabled", "Outbound Events Enabled", None),
         ("setup_complete", "Setup Complete", None),
     ]
     for name, label, device_class in binaries:
@@ -1463,6 +1480,9 @@ def publish_mqtt_discovery(
         ("setup_profile", "Setup Profile"),
         ("access_mode", "Access Mode"),
         ("gateway_mode", "Gateway Mode"),
+        ("stt_provider", "STT Provider"),
+        ("tts_provider", "TTS Provider"),
+        ("max_turns", "Max Turns"),
     ]
     for key, label in text_sensors:
         cfg = {
@@ -1675,6 +1695,7 @@ def publish_mqtt_state(snapshot: dict[str, Any], publisher: MqttPublisher, prefi
     pub_bool("model_configured", bool(snapshot.get("model_configured")))
     pub_bool("mcp_configured", bool(snapshot.get("mcp_configured")))
     pub_bool("assist_api_enabled", bool(snapshot.get("assist_api_enabled")))
+    pub_bool("outbound_events_enabled", bool(snapshot.get("outbound_events_enabled")))
     pub_bool("setup_complete", bool(snapshot.get("setup_complete")))
 
     providers = snapshot.get("providers", {})
@@ -1694,6 +1715,9 @@ def publish_mqtt_state(snapshot: dict[str, Any], publisher: MqttPublisher, prefi
         "last_error",
         "approval_mode",
         "reasoning_effort",
+        "stt_provider",
+        "tts_provider",
+        "max_turns",
     ):
         publisher.publish(f"{base}/status/{key}", str(snapshot.get(key, "unknown")))
 
