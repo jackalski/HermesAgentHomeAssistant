@@ -145,7 +145,7 @@ hermes_install_from_source() {
     return 1
   fi
 
-  if ! uv pip install --system --break-system-packages --no-cache "${src_dir}[all]"; then
+  if ! uv pip install --system --break-system-packages --no-cache -e "${src_dir}[all]"; then
     log_error "Failed to install Hermes Agent from GitHub tag ${tag}."
     rm -rf "$src_dir"
     return 1
@@ -159,7 +159,8 @@ hermes_install_from_source() {
     log_warn "Source tree for ${tag} has no skills/ directory."
   fi
 
-  rm -rf "$src_dir"
+  # Keep ${src_dir}: upstream forbids non-editable wheels, so the install is
+  # editable and must retain the GitHub checkout on disk.
 
   if ! command -v hermes >/dev/null 2>&1; then
     log_error "Failed to install Hermes Agent from GitHub tag ${tag}."
