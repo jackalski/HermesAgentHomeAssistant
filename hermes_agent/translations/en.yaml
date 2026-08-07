@@ -469,14 +469,14 @@ configuration:
         name: Gateway Environment Variables
         description: Extra env vars passed to the gateway process (max 50 entries).
       hermes_agent_version_preset:
-        name: Hermes Agent Version
-        description: npm package for the `hermes` CLI — latest or custom pin.
+        name: Hermes Agent version source
+        description: Latest GitHub release, or a custom pinned tag.
         options:
-          latest: "Latest (npm @latest)"
-          custom: "Custom version (default 0.20.0)"
+          latest: "Latest GitHub release"
+          custom: "Custom tag (default v2026.8.3)"
       hermes_agent_version_custom:
         name: Hermes Agent Version (custom)
-        description: npm dist-tag or semver when preset is custom (default 0.20.0).
+        description: GitHub release tag (e.g. v2026.8.3) or Hermes version (e.g. 0.20.0).
 
       fallback_providers:
         name: Fallback Providers

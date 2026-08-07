@@ -17,6 +17,19 @@ else
   log_debug() { :; }
 fi
 
+# Hermes GitHub-source install helpers (tag map, download, uv install).
+HERMES_SOURCE_LIB="/usr/local/lib/hermes_source.sh"
+if [ ! -f "$HERMES_SOURCE_LIB" ] && [ -f "$(dirname "$0")/hermes_source.sh" ]; then
+  HERMES_SOURCE_LIB="$(dirname "$0")/hermes_source.sh"
+fi
+if [ -f "$HERMES_SOURCE_LIB" ]; then
+  # shellcheck disable=SC1091
+  . "$HERMES_SOURCE_LIB"
+else
+  log_error "Missing hermes_source.sh (${HERMES_SOURCE_LIB})."
+  exit 1
+fi
+
 # Ensure Homebrew and brew-installed binaries are in PATH
 # This is needed for Hermes Agent skills that depend on CLI tools (gemini, aider, etc.)
 export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
@@ -212,8 +225,8 @@ GROQ_API_KEY_OPT="$(read_provider_option groq_api_key)"
 DEEPINFRA_API_KEY_OPT="$(read_provider_option deepinfra_api_key)"
 HERMES_AGENT_VERSION_PRESET="$(read_nested_option advanced_settings hermes_agent_version_preset)"
 HERMES_AGENT_VERSION_CUSTOM="$(read_nested_option advanced_settings hermes_agent_version_custom)"
-ADDON_HERMES_DEFAULT_VERSION="0.20.0"
-IMAGE_BAKED_HERMES_SPEC="${ADDON_HERMES_DEFAULT_VERSION}"
+HERMES_DEFAULT_TAG="v2026.8.3"
+IMAGE_BAKED_HERMES_TAG="$(tr -d '\r\n' < /opt/hermes-agent/.baked-tag 2>/dev/null || echo "$HERMES_DEFAULT_TAG")"
 GW_ENV_VARS_TYPE=$(jq -r 'if (.advanced_settings.gateway_env_vars // .gateway_env_vars) == null then "null" else ((.advanced_settings.gateway_env_vars // .gateway_env_vars) | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.advanced_settings.gateway_env_vars // .gateway_env_vars // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_JSON=$(jq -c '.advanced_settings.gateway_env_vars // []' "$OPTIONS_FILE")
@@ -256,7 +269,7 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 [ -z "$NTFY_PUBLISH_ONLY" ] && NTFY_PUBLISH_ONLY="true"
 [ -z "$LM_STUDIO_BASE_URL" ] && LM_STUDIO_BASE_URL="http://127.0.0.1:1234/v1"
 [ -z "$HERMES_AGENT_VERSION_PRESET" ] && HERMES_AGENT_VERSION_PRESET="custom"
-[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="0.20.0"
+[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="v2026.8.3"
 [ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
 [ -z "$PUBLISH_MQTT_DISCOVERY" ] && PUBLISH_MQTT_DISCOVERY="true"
 [ -z "$ENABLE_CONTROL_ENTITIES" ] && ENABLE_CONTROL_ENTITIES="false"
@@ -642,73 +655,60 @@ if [ -n "$MQTT_BROKER_PASSWORD" ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Hermes Agent npm version reconcile (must run BEFORE redirecting npm prefix to /config)
+# Hermes Agent GitHub-tag reconcile (must run BEFORE redirecting npm prefix to /config)
 # ------------------------------------------------------------------------------
-resolve_hermes_agent_npm_spec() {
-  local preset
+resolve_hermes_source_tag() {
+  local preset mapped latest
   preset="$(echo "${HERMES_AGENT_VERSION_PRESET:-custom}" | tr '[:upper:]' '[:lower:]')"
   case "$preset" in
     latest)
-      echo "latest"
+      latest="$(hermes_resolve_latest_tag 2>/dev/null || true)"
+      if [ -n "$latest" ]; then
+        printf '%s\n' "$latest"
+        return 0
+      fi
+      log_warn "Could not query the latest Hermes release; using baked tag ${IMAGE_BAKED_HERMES_TAG}." >&2
+      printf '%s\n' "$IMAGE_BAKED_HERMES_TAG"
       ;;
     custom)
-      if [ -n "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
-        echo "$HERMES_AGENT_VERSION_CUSTOM"
-      else
-        log_warn "hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using ${ADDON_HERMES_DEFAULT_VERSION}." >&2
-        echo "$ADDON_HERMES_DEFAULT_VERSION"
+      if [ -z "${HERMES_AGENT_VERSION_CUSTOM:-}" ]; then
+        log_warn "hermes_agent_version_preset=custom but hermes_agent_version_custom is empty; using baked tag ${IMAGE_BAKED_HERMES_TAG}." >&2
+        printf '%s\n' "$IMAGE_BAKED_HERMES_TAG"
+        return 0
       fi
+      mapped="$(hermes_map_version_to_tag "$HERMES_AGENT_VERSION_CUSTOM" 2>/dev/null || true)"
+      if [ -n "$mapped" ]; then
+        printf '%s\n' "$mapped"
+        return 0
+      fi
+      log_warn "Unknown Hermes version '${HERMES_AGENT_VERSION_CUSTOM}'; using baked tag ${IMAGE_BAKED_HERMES_TAG}." >&2
+      printf '%s\n' "$IMAGE_BAKED_HERMES_TAG"
       ;;
     *)
-      # Legacy pinned presets (e.g. 0.15.2) still in saved options.json
-      echo "$preset"
+      # Legacy pinned presets (e.g. 0.15.2) or unknown values → baked tag.
+      mapped="$(hermes_map_version_to_tag "$preset" 2>/dev/null || true)"
+      if [ -n "$mapped" ]; then
+        printf '%s\n' "$mapped"
+        return 0
+      fi
+      printf '%s\n' "$IMAGE_BAKED_HERMES_TAG"
       ;;
   esac
 }
 
-# Install hermes-agent to the image-global npm prefix (matches Dockerfile layout).
-# Never use /config/.node_global — postinstall pip fails with PEP 668 on Debian.
-install_hermes_agent_npm() {
-  local spec="$1"
-  local image_npm_prefix="/usr/local"
-  local line
-  local step=0
-
-  rm -rf "/config/.node_global/lib/node_modules/hermes-agent" 2>/dev/null || true
-  rm -f "/config/.node_global/bin/hermes" "/config/.node_global/bin/hermes-agent" 2>/dev/null || true
-
-  # Image-baked or prior reconcile leaves /usr/local/bin/hermes; npm EEXIST without this.
-  rm -rf "${image_npm_prefix}/lib/node_modules/hermes-agent" 2>/dev/null || true
-  rm -f "${image_npm_prefix}/bin/hermes" "${image_npm_prefix}/bin/hermes-agent" 2>/dev/null || true
-
-  log_info "Update progress [1/3]: preparing hermes-agent@${spec} install..."
-  # Stream npm output into add-on logs so HA Supervisor "Log" shows update progress.
-  # npm progress bars are TTY-only; --loglevel info emits line-oriented status.
-  set +e
-  HOME=/root \
-    NPM_CONFIG_PREFIX="${image_npm_prefix}" \
-    NPM_CONFIG_USERCONFIG=/root/.npmrc \
-    PIP_BREAK_SYSTEM_PACKAGES=1 \
-    npm install -g "hermes-agent@${spec}" --prefix "${image_npm_prefix}" --loglevel info --no-fund --no-audit 2>&1 \
-    | while IFS= read -r line || [ -n "$line" ]; do
-        step=$((step + 1))
-        # Keep logs readable: skip empty lines; prefix every ~npm status line.
-        [ -z "$line" ] && continue
-        log_info "Update progress [2/3]: ${line}"
-      done
-  local npm_rc=${PIPESTATUS[0]}
-  set -e
-  if [ "${npm_rc}" -eq 0 ]; then
-    log_info "Update progress [3/3]: hermes-agent@${spec} install finished."
+ensure_web_dist_for_tag() {
+  local tag="$1"
+  if [ "$tag" = "$IMAGE_BAKED_HERMES_TAG" ] && [ -f "${HERMES_BAKED_WEB_DIST}/index.html" ]; then
+    export HERMES_WEB_DIST="${HERMES_BAKED_WEB_DIST}"
     return 0
   fi
-  log_error "Update progress [3/3]: hermes-agent@${spec} install failed (exit ${npm_rc})."
-  return 1
+  log_warn "Dashboard SPA is not prebuilt for ${tag}; first dashboard launch will build it (slow)."
+  return 0
 }
 
 reconcile_hermes_agent_version() {
-  local spec marker installed_marker
-  spec="$(resolve_hermes_agent_npm_spec)"
+  local tag marker installed_marker
+  tag="$(resolve_hermes_source_tag)"
   marker="/config/.hermes/.addon-managed-hermes-version"
   installed_marker=""
   if [ -f "$marker" ]; then
@@ -716,42 +716,36 @@ reconcile_hermes_agent_version() {
   fi
 
   if command -v hermes >/dev/null 2>&1; then
-    if [ "$installed_marker" = "$spec" ]; then
-      log_info "Hermes Agent npm spec '${spec}' already installed."
+    if [ "$installed_marker" = "$tag" ]; then
+      log_info "Hermes Agent ${tag} already installed."
+      ensure_web_dist_for_tag "$tag"
       return 0
     fi
-    if [ "$installed_marker" = "__image_baked__" ] && [ "$spec" = "latest" ]; then
-      log_info "Using image-baked hermes CLI (preset: latest)."
-      printf '%s\n' "$spec" > "$marker"
+    if [ -z "$installed_marker" ] && [ "$tag" = "$IMAGE_BAKED_HERMES_TAG" ]; then
+      log_info "Using image-baked hermes CLI (${IMAGE_BAKED_HERMES_TAG}); seeding version marker."
+      printf '%s\n' "$tag" > "$marker"
       chmod 600 "$marker" 2>/dev/null || true
-      return 0
-    fi
-    if [ -z "$installed_marker" ] && [ "$spec" = "$IMAGE_BAKED_HERMES_SPEC" ]; then
-      log_info "Using image-baked hermes CLI (${IMAGE_BAKED_HERMES_SPEC}); seeding version marker."
-      printf '%s\n' "$spec" > "$marker"
-      chmod 600 "$marker" 2>/dev/null || true
-      return 0
-    fi
-    if [ -z "$installed_marker" ] && [ "$spec" = "latest" ]; then
-      log_info "Using image-baked hermes CLI; seeding version marker (preset: latest)."
-      printf '%s\n' "$spec" > "$marker"
-      chmod 600 "$marker" 2>/dev/null || true
+      ensure_web_dist_for_tag "$tag"
       return 0
     fi
   fi
 
-  log_info "Installing/reconciling hermes-agent@${spec} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
+  log_info "Installing/reconciling Hermes Agent ${tag} (add-on preset: ${HERMES_AGENT_VERSION_PRESET})..."
   log_info "This may take several minutes on HAOS — watch add-on logs for Update progress lines."
-  if install_hermes_agent_npm "$spec"; then
-    printf '%s\n' "$spec" > "$marker"
+  log_info "Update progress [1/3]: preparing GitHub source install for ${tag}..."
+  log_info "Update progress [2/3]: downloading and installing ${tag} via uv..."
+  if hermes_install_from_source "$tag"; then
+    log_info "Update progress [3/3]: Hermes Agent ${tag} install finished."
+    printf '%s\n' "$tag" > "$marker"
     chmod 600 "$marker" 2>/dev/null || true
+    ensure_web_dist_for_tag "$tag"
     log_info "Hermes Agent installed ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
     return 0
   fi
 
-  log_error "Failed to install hermes-agent@${spec}."
-  log_warn "The requested version may not be published on npm/PyPI yet, or the network is unreachable."
-  log_warn "Tip: set advanced_settings.hermes_agent_version_custom to a published tag (e.g. 0.19.0) and restart."
+  log_error "Update progress [3/3]: Failed to install Hermes Agent from GitHub tag ${tag}."
+  log_warn "The requested tag may not exist, or the network is unreachable."
+  log_warn "Tip: set advanced_settings.hermes_agent_version_custom to a known tag (e.g. v2026.7.20) and restart."
   if command -v hermes >/dev/null 2>&1; then
     log_warn "Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
     # Do NOT overwrite the marker with the failed target — keep the last known-good marker
@@ -767,11 +761,11 @@ warn_if_node_too_old() {
   ver="$(node -v 2>/dev/null || true)"
   major="$(echo "$ver" | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')"
   if [ -z "$major" ]; then
-    log_warn "Node.js not found on PATH; Hermes 0.20.0 requires Node 26+."
+    log_warn "Node.js not found on PATH; Hermes 0.20+ requires Node 26+."
     return 0
   fi
   if [ "$major" -lt 26 ]; then
-    log_warn "Node ${ver} is below the Hermes 0.20.0 requirement (Node 26+)."
+    log_warn "Node ${ver} is below the Hermes 0.20+ requirement (Node 26+)."
     log_warn "Rebuild/update this add-on image (Node is baked at build time). Persistent /config/.node_global cannot raise the system Node major."
   fi
 }
@@ -791,28 +785,17 @@ if ! command -v hermes >/dev/null 2>&1; then
   exit 1
 fi
 
-# Resolve image-global hermes-agent package root (npm root -g can disagree with install prefix).
-resolve_image_hermes_node_modules() {
-  local candidate hermes_bin prefix_root
-  for candidate in \
-    "/usr/local/lib/node_modules" \
-    "$(HOME=/root NPM_CONFIG_PREFIX=/usr/local npm root -g 2>/dev/null)" \
-    "$(HOME=/root npm root -g 2>/dev/null)" \
-    "/usr/lib/node_modules"; do
-    [ -n "$candidate" ] || continue
-    if [ -d "${candidate}/hermes-agent" ]; then
-      echo "$candidate"
-      return 0
-    fi
-  done
-  hermes_bin="$(command -v hermes 2>/dev/null || true)"
-  if [ -n "$hermes_bin" ]; then
-    prefix_root="$(cd "$(dirname "$hermes_bin")/.." 2>/dev/null && pwd || true)"
-    candidate="${prefix_root}/lib/node_modules"
-    if [ -n "$prefix_root" ] && [ -d "${candidate}/hermes-agent" ]; then
-      echo "$candidate"
-      return 0
-    fi
+# Prefer image-baked skills; fall back to legacy npm layout for in-place upgrades.
+resolve_image_skills_dir() {
+  local candidate
+  if [ -d "${HERMES_IMAGE_SKILLS_DIR:-/opt/hermes-agent/skills}" ]; then
+    echo "${HERMES_IMAGE_SKILLS_DIR:-/opt/hermes-agent/skills}"
+    return 0
+  fi
+  candidate="$(HOME=/root NPM_CONFIG_PREFIX=/usr/local npm root -g 2>/dev/null || true)/hermes-agent/skills"
+  if [ -d "$candidate" ]; then
+    echo "$candidate"
+    return 0
   fi
   return 1
 }
@@ -822,11 +805,7 @@ resolve_image_hermes_node_modules() {
 # On each startup, copy new/updated built-in skills so they survive rebuilds.
 # We sync them to /config/.hermes/skills and symlink back.
 # ------------------------------------------------------------------------------
-IMAGE_NPM_MODULES="$(resolve_image_hermes_node_modules 2>/dev/null || true)"
-IMAGE_SKILLS_DIR=""
-if [ -n "$IMAGE_NPM_MODULES" ]; then
-  IMAGE_SKILLS_DIR="${IMAGE_NPM_MODULES}/hermes-agent/skills"
-fi
+IMAGE_SKILLS_DIR="$(resolve_image_skills_dir 2>/dev/null || true)"
 PERSISTENT_SKILLS_DIR="/config/.hermes/skills"
 
 if [ -n "$IMAGE_SKILLS_DIR" ] && [ -d "$IMAGE_SKILLS_DIR" ] && [ ! -L "$IMAGE_SKILLS_DIR" ]; then
@@ -1064,6 +1043,10 @@ run_hermes_gateway() {
 
 resolve_hermes_web_dist() {
   local web_dist=""
+  if [ -f "${HERMES_BAKED_WEB_DIST:-/opt/hermes-agent/web_dist}/index.html" ]; then
+    echo "${HERMES_BAKED_WEB_DIST:-/opt/hermes-agent/web_dist}"
+    return 0
+  fi
   web_dist="$(python3 - <<'PY' 2>/dev/null || true
 import pathlib
 try:
@@ -2086,9 +2069,9 @@ fi
 
 # ------------------------------------------------------------------------------
 # Proxy shim for undici/Hermes startup
-# Keep official Hermes Agent npm release while enabling HTTP(S)_PROXY support.
+# Keep Hermes Agent CLI while enabling HTTP(S)_PROXY support.
 # ------------------------------------------------------------------------------
-HERMES_GLOBAL_NODE_MODULES="$(resolve_image_hermes_node_modules 2>/dev/null || HOME=/root NPM_CONFIG_PREFIX=/usr/local npm root -g 2>/dev/null || true)"
+HERMES_GLOBAL_NODE_MODULES="$(HOME=/root NPM_CONFIG_PREFIX=/usr/local npm root -g 2>/dev/null || true)"
 if [ -f /usr/local/lib/hermes-proxy-shim.cjs ]; then
   if [ -n "${NODE_OPTIONS:-}" ]; then
     export NODE_OPTIONS="--require /usr/local/lib/hermes-proxy-shim.cjs ${NODE_OPTIONS}"

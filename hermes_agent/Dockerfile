@@ -1,9 +1,33 @@
 # Base image is Debian Bookworm (glibc). BUILD_ARCH is supplied by the HA Supervisor build.
 # Replaces deprecated build.yaml (per-arch ghcr.io/home-assistant/*-base-debian:bookworm).
 # Default silences Dockerfile lint (InvalidDefaultArgInFrom); Supervisor always passes BUILD_ARCH.
+ARG HERMES_SOURCE_TAG=v2026.8.3
 ARG BUILD_ARCH=amd64
 ARG BUILD_VERSION
+
+# ------------------------------------------------------------------------------
+# Stage 1: build the Hermes dashboard SPA on the native build platform (fast).
+# Output is copied into the runtime image as /opt/hermes-agent/web_dist.
+# ------------------------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM node:26-bookworm AS webbuild
+ARG HERMES_SOURCE_TAG
+WORKDIR /build
+RUN curl -fsSL "https://github.com/NousResearch/hermes-agent/archive/refs/tags/${HERMES_SOURCE_TAG}.tar.gz" -o src.tar.gz \
+    && tar -xzf src.tar.gz \
+    && mv "hermes-agent-${HERMES_SOURCE_TAG#v}" src \
+    && rm src.tar.gz
+WORKDIR /build/src
+RUN npm ci --no-audit --no-fund
+RUN cd web && npm run build
+RUN test -f /build/src/hermes_cli/web_dist/index.html
+
+# ------------------------------------------------------------------------------
+# Stage 2: Home Assistant add-on runtime image (target arch).
+# ------------------------------------------------------------------------------
 FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-debian:bookworm
+ARG HERMES_SOURCE_TAG
+ARG BUILD_ARCH
+ARG BUILD_VERSION
 
 # System-wide Python/Node tooling (Hermes 0.16+ expects managed uv + MCP SDK on PATH).
 ENV PIP_BREAK_SYSTEM_PACKAGES=1 \
@@ -130,8 +154,9 @@ RUN if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then \
     fi
 USER root
 
-# Install Hermes + companion CLIs with retries — HAOS builds often hit transient
-# DNS (getaddrinfo EAI_AGAIN) against registry.npmjs.org.
+# Companion Node CLIs with retries — HAOS builds often hit transient DNS
+# (getaddrinfo EAI_AGAIN) against registry.npmjs.org. Hermes CLI itself is
+# installed from the official GitHub tag (not the unofficial npm bridge).
 RUN python3 -m pip config set global.break-system-packages true \
     && npm config set fund false \
     && npm config set audit false \
@@ -148,31 +173,36 @@ RUN python3 -m pip config set global.break-system-packages true \
          echo "ERROR: npm install ${pkg} failed after 5 attempts"; \
          return 1; \
        } \
-    && npm_install_retry "hermes-agent@0.20.0" \
     && npm_install_retry "@botiverse/raft@0.0.15" \
     && npm_install_retry "agent-browser@latest"
 
-# Safety net if a Hermes PyPI wheel omits hermes_cli subpackages (upstream #34701 on older releases).
-COPY repair_hermes_wheel.py /repair_hermes_wheel.py
-RUN python3 /repair_hermes_wheel.py
-
-# System-wide Python deps: MCP SDK + gateway/dashboard/tooling (uv preferred, pip fallback).
-# Pin mcp to the 1.x line Hermes 0.20 declares. Unpinned `mcp`
-# resolves to 2.x, which dropped streamablehttp_client; Hermes then reports
-# "mcp.client.streamable_http is not available" for every HTTP MCP server (HA, etc.).
+# Extra Python deps that are NOT exact-pinned by Hermes [all] (uv preferred).
+# Do not list websockets/starlette/fastapi/uvicorn/mcp here — Hermes [all] must win.
 RUN uv pip install --system --break-system-packages --no-cache \
         paho-mqtt \
-        "mcp>=1.26.0,<2" \
-        websockets \
         "python-telegram-bot[webhooks]>=22.7" \
         edge-tts \
         ddgs \
         "discord.py[voice]>=2.7.1" \
         "brotlicffi>=1.2.0.1" \
-        "starlette>=1.0.1" \
-        "fastapi>=0.136.3" \
-        "uvicorn[standard]>=0.49.0" \
         ptyprocess
+
+# Shared source-install helpers + semver→tag map.
+COPY hermes_source.sh /usr/local/lib/hermes_source.sh
+COPY version-tags.tsv /opt/hermes-agent/version-tags.tsv
+
+# Prebuilt dashboard SPA from the webbuild stage.
+COPY --from=webbuild /build/src/hermes_cli/web_dist /opt/hermes-agent/web_dist
+
+# Install Hermes Agent from the official GitHub release tag.
+RUN . /usr/local/lib/hermes_source.sh \
+    && hermes_install_from_source "${HERMES_SOURCE_TAG}" \
+    && printf '%s\n' "${HERMES_SOURCE_TAG}" > /opt/hermes-agent/.baked-tag \
+    && hermes --version
+
+# Safety net if a Hermes PyPI wheel omits hermes_cli subpackages (upstream #34701 on older releases).
+COPY repair_hermes_wheel.py /repair_hermes_wheel.py
+RUN python3 /repair_hermes_wheel.py
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'

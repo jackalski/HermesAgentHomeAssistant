@@ -188,7 +188,7 @@ options:
     nginx_log_level: minimal
     gateway_env_vars: []
     hermes_agent_version_preset: custom
-    hermes_agent_version_custom: "0.20.0"
+    hermes_agent_version_custom: "v2026.8.3"
     # Bootstrap fallback_providers in Hermes config.yaml when the key is missing.
     # Entries: "provider" or "provider/model" (e.g. openrouter or openrouter/google/gemini-2.5-flash).
     fallback_providers: []

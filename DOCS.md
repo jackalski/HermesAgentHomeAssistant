@@ -400,7 +400,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
-| `hermes_agent_version_custom` | `0.20.0` | npm tag/semver when preset is `custom` |
+| `hermes_agent_version_custom` | `v2026.8.3` | GitHub release tag or Hermes version when preset is `custom` |
 
 Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG, ElevenLabs, Groq, DeepInfra). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
 
@@ -434,7 +434,7 @@ Results appear inline on the landing page. Configuration field descriptions refe
 | `/share/hermes/backups/` | `hermes-backup-share` archives |
 | `/share/hermes/ha/` | Importable HA usage package + Lovelace dashboard YAML |
 
-Hermes binary in the image is replaced on update; `/config/` data persists. When the add-on reconciles a different `hermes-agent` npm version, logs show **`Update progress [1/3]`…`[3/3]`** lines — open the add-on **Log** tab to follow long installs on HAOS.
+Hermes binary in the image is replaced on update; `/config/` data persists. When the add-on reconciles a different Hermes GitHub tag, logs show **`Update progress [1/3]`…`[3/3]`** lines — open the add-on **Log** tab to follow long installs on HAOS.
 
 ## Troubleshooting
 
@@ -469,11 +469,11 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | Budget gauge / `sensor.hermes_cost_today` missing | Install package `hermes_usage.yaml` under `packages:` and restart Home Assistant Core. |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
-| `externally-managed-environment` during `hermes-agent` npm install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo 0.19.0 > /config/.hermes/.addon-managed-hermes-version` |
+| `externally-managed-environment` during Hermes install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo v2026.7.20 > /config/.hermes/.addon-managed-hermes-version` |
+| Hermes GitHub tag install fails on restart | Startup keeps the previous CLI and logs a tip. Set `hermes_agent_version_custom` to a known tag (e.g. `v2026.7.20` or `0.19.0`) and restart. |
 | `[raft] raft CLI not found in PATH` in gateway logs | Fixed in **0.0.29+** — add-on installs `@botiverse/raft` globally. Only needed if you use Raft messaging (`RAFT_PROFILE` in `/config/.hermes/.env`); see [Hermes Raft docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/raft). |
 | Mosquitto log spam (`New connection` / `disconnected` every minute) | Fixed in **0.0.19+** — persistent MQTT client + one-shot discovery. Optional: Mosquitto `connection_messages false` in customize |
 | Expected wake word / barge-in inside the add-on | The container has **no microphone** — use HA Voice PE / ESPHome Assist satellites for wake word + STT/TTS. Hermes is the conversation agent via Assist API (`enable_openai_api`). |
-| Hermes 0.20.0 install fails on restart | Package may not be published on npm/PyPI yet — startup keeps the previous CLI and logs a tip. Pin `hermes_agent_version_custom` to a published tag (e.g. `0.19.0`) until 0.20.0 is available. |
 | Node version warning after upgrade | Hermes 0.20 requires **Node 26** (baked in the image). Update/rebuild the add-on; `/config/.node_global` cannot raise the system Node major. |
 
 Gateway token (if CLI redacts secrets):

@@ -5,7 +5,8 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 ## [0.1.0] - 2026-08-06
 
 ### Added
-- **Hermes Agent 0.20.0** pin (`hermes_agent_version_custom` / Dockerfile bake) with Node **26** runtime.
+- **Hermes Agent 0.20.0** from official GitHub tag **`v2026.8.3`** (Dockerfile bake + runtime reconcile) with Node **26** runtime — no longer uses the unofficial npm bridge.
+- Prebuilt Hermes dashboard SPA (`web_dist`) baked in CI; bundled `skills/` tree now ships and syncs to `/config/.hermes/skills`.
 - **Voice & Speech** panel: bootstrap `stt.*` / `tts.*` (provider, language, local model, voice, speed) plus ElevenLabs / Groq / DeepInfra API keys.
 - **HA Voice Bridge** panel: seed `ha-speak` direct-delivery route and optional `ha-tts-command.py` for HA Piper / Cloud TTS.
 - **Context Compression** panel: `threshold_tokens`, `proactive_prune_tokens`, `min_tail_user_messages`, `idle_compact_after_seconds`.

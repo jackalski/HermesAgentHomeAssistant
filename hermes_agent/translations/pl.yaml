@@ -444,14 +444,14 @@ configuration:
         name: Zmienne środowiskowe gateway
         description: Dodatkowe zmienne środowiskowe przekazywane do procesu gateway (maks. 50 wpisów).
       hermes_agent_version_preset:
-        name: Wersja Hermes Agent
-        description: Pakiet npm dla CLI `hermes` — latest lub własna wersja.
+        name: Źródło wersji Hermes Agent
+        description: Najnowsze wydanie GitHub lub własny tag.
         options:
-          latest: Latest (npm @latest)
-          custom: Wersja niestandardowa (domyślnie 0.20.0)
+          latest: Najnowsze wydanie GitHub
+          custom: Własny tag (domyślnie v2026.8.3)
       hermes_agent_version_custom:
         name: Wersja Hermes Agent (niestandardowa)
-        description: dist-tag npm lub semver gdy preset to niestandardowy (domyślnie 0.20.0).
+        description: Tag wydania GitHub (np. v2026.8.3) lub wersja Hermes (np. 0.20.0).
       fallback_providers:
         name: Dostawcy zapasowi
         description: Bootstrap fallback_providers gdy brak. Wpisy jak openrouter lub openrouter/google/gemini-2.5-flash. Puste = pomiń.
