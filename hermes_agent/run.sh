@@ -1423,8 +1423,7 @@ fi
 # ------------------------------------------------------------------------------
 
 if [ -n "$HA_TOKEN" ] && [ "$HA_TOKEN_SOURCE" = "user" ]; then
-  umask 077
-  printf '%s' "$HA_TOKEN" > /config/secrets/homeassistant.token
+  ( umask 077; printf '%s' "$HA_TOKEN" > /config/secrets/homeassistant.token )
 fi
 
 # ntfy token: HA redacts password fields — reuse persisted secret when empty.
@@ -1432,22 +1431,20 @@ if [ -z "$NTFY_TOKEN" ] && [ -f /config/secrets/ntfy.token ]; then
   NTFY_TOKEN="$(tr -d '\r\n' < /config/secrets/ntfy.token)"
 fi
 if [ -n "$NTFY_TOKEN" ]; then
-  umask 077
   mkdir -p /config/secrets
-  printf '%s' "$NTFY_TOKEN" > /config/secrets/ntfy.token
+  ( umask 077; printf '%s' "$NTFY_TOKEN" > /config/secrets/ntfy.token )
 fi
 
 # Webhook HMAC secret (persisted; never logged).
 WEBHOOK_SECRET=""
 if [ "$ENABLE_WEBHOOKS" = "true" ] || [ "$ENABLE_WEBHOOKS" = "1" ]; then
   mkdir -p /config/secrets
-  umask 077
   if [ -f /config/secrets/webhook.secret ]; then
     WEBHOOK_SECRET="$(tr -d '\r\n' < /config/secrets/webhook.secret)"
   fi
   if [ -z "$WEBHOOK_SECRET" ]; then
     WEBHOOK_SECRET="$(openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | xxd -p | head -c 48)"
-    printf '%s' "$WEBHOOK_SECRET" > /config/secrets/webhook.secret
+    ( umask 077; printf '%s' "$WEBHOOK_SECRET" > /config/secrets/webhook.secret )
     log_info "Generated webhook HMAC secret at /config/secrets/webhook.secret"
   fi
 fi
@@ -1456,13 +1453,12 @@ fi
 OUTBOUND_WEBHOOK_SECRET=""
 if [ "$ENABLE_OUTBOUND_EVENTS" = "true" ] || [ "$ENABLE_OUTBOUND_EVENTS" = "1" ]; then
   mkdir -p /config/secrets
-  umask 077
   if [ -f /config/secrets/outbound_webhook.secret ]; then
     OUTBOUND_WEBHOOK_SECRET="$(tr -d '\r\n' < /config/secrets/outbound_webhook.secret)"
   fi
   if [ -z "$OUTBOUND_WEBHOOK_SECRET" ]; then
     OUTBOUND_WEBHOOK_SECRET="$(openssl rand -hex 24 2>/dev/null || head -c 48 /dev/urandom | xxd -p | head -c 48)"
-    printf '%s' "$OUTBOUND_WEBHOOK_SECRET" > /config/secrets/outbound_webhook.secret
+    ( umask 077; printf '%s' "$OUTBOUND_WEBHOOK_SECRET" > /config/secrets/outbound_webhook.secret )
     log_info "Generated outbound webhook HMAC secret at /config/secrets/outbound_webhook.secret"
   fi
 fi
@@ -2272,6 +2268,10 @@ sync_ha_dashboard_share() {
       log_warn "Could not sync HA blueprints to $dest/blueprints"
     fi
   fi
+  # Fix modes if an earlier umask 077 left Share dirs as 0700 (nginx/host copy).
+  chmod 755 /share/hermes "$dest" 2>/dev/null || true
+  find "$dest" -type d -exec chmod 755 {} + 2>/dev/null || true
+  find "$dest" -type f -exec chmod 644 {} + 2>/dev/null || true
   local ver="unknown"
   if [ -f /addon_config.yaml ]; then
     ver="$(grep -E '^version:' /addon_config.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/[\"'\'']//g' | tr -d '[:space:]')"

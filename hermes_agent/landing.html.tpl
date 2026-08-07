@@ -192,16 +192,37 @@
         </div>
         <div id="hacsCardStatus" class="muted" style="margin-top:6px;font-size:12px"></div>
         <div class="row" style="margin-top:10px">
-          <button type="button" class="btn" id="copyDashBtn">Copy dashboard YAML</button>
+          <button type="button" class="btn" data-copy-src="./ha/dashboards/hermes_usage.yaml">Copy dashboard YAML</button>
           <a class="btn secondary" id="downloadDashLink" href="./ha/dashboards/hermes_usage.yaml" download="hermes_usage.yaml">Download YAML</a>
-          <a class="btn secondary" href="./ha/packages/hermes_usage.yaml" download="hermes_usage.yaml">Download package</a>
+          <a class="btn secondary" href="./ha/packages/hermes_usage.yaml" download="hermes_usage_package.yaml">Download package</a>
         </div>
         <div id="copyDashMsg" class="muted" style="margin-top:6px;font-size:12px"></div>
-        <div class="muted" style="margin-top:8px;font-size:12px">
-          Blueprints (budget / gateway offline / disk / voice announce): copy from
-          <code>/share/hermes/ha/blueprints/automation/</code> into
-          <code>config/blueprints/automation/hermes/</code>.
+        <div class="muted" style="font-size:12px;margin-top:14px;font-weight:600;color:#d1d5db">Blueprints</div>
+        <div class="muted" style="margin-top:4px;font-size:12px">
+          Copy into <code>config/blueprints/automation/hermes/</code>, then create automations from them.
           Spoken announcements: enable <code>outbound_events</code> or the <code>ha-speak</code> webhook route.
+        </div>
+        <div style="margin-top:8px;font-size:13px;line-height:1.9">
+          <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+            <span style="min-width:8.5em">Budget alert</span>
+            <button type="button" class="btn secondary" data-copy-src="./ha/blueprints/automation/hermes_budget_alert.yaml">Copy</button>
+            <a class="btn secondary" href="./ha/blueprints/automation/hermes_budget_alert.yaml" download="hermes_budget_alert.yaml">Download</a>
+          </div>
+          <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+            <span style="min-width:8.5em">Gateway offline</span>
+            <button type="button" class="btn secondary" data-copy-src="./ha/blueprints/automation/hermes_gateway_offline.yaml">Copy</button>
+            <a class="btn secondary" href="./ha/blueprints/automation/hermes_gateway_offline.yaml" download="hermes_gateway_offline.yaml">Download</a>
+          </div>
+          <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+            <span style="min-width:8.5em">Disk alert</span>
+            <button type="button" class="btn secondary" data-copy-src="./ha/blueprints/automation/hermes_disk_alert.yaml">Copy</button>
+            <a class="btn secondary" href="./ha/blueprints/automation/hermes_disk_alert.yaml" download="hermes_disk_alert.yaml">Download</a>
+          </div>
+          <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+            <span style="min-width:8.5em">Voice announce</span>
+            <button type="button" class="btn secondary" data-copy-src="./ha/blueprints/automation/hermes_voice_announce.yaml">Copy</button>
+            <a class="btn secondary" href="./ha/blueprints/automation/hermes_voice_announce.yaml" download="hermes_voice_announce.yaml">Download</a>
+          </div>
         </div>
       </div>
     </details>
@@ -562,11 +583,10 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
         </ul>`;
     }
 
-    // ---------- Usage dashboard copy + HACS card hints ----------
+    // ---------- Usage dashboard + blueprint copy + HACS card hints ----------
     (function initDashboardHelpers() {
       const msg = $('copyDashMsg');
       const hacsEl = $('hacsCardStatus');
-      const copyBtn = $('copyDashBtn');
       if (hacsEl) {
         // customElements.get only works when this page loads the cards; on Ingress it
         // usually will not. Still give install guidance and link the YAML.
@@ -574,41 +594,46 @@ SSL tab:  Request a new SSL certificate (Let's Encrypt or custom)</pre>
           'Required HACS frontend cards: <code>mushroom</code>, <code>card-mod</code>, <code>apexcharts-card</code>. ' +
           'Install via HACS → Frontend, then hard-refresh Home Assistant before importing the dashboard.';
       }
-      if (!copyBtn) return;
-      copyBtn.addEventListener('click', async function () {
-        if (msg) msg.textContent = 'Fetching dashboard YAML…';
-        try {
-          const r = await fetch('./ha/dashboards/hermes_usage.yaml', { cache: 'no-store' });
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          const text = await r.text();
-          const secure = window.isSecureContext || location.protocol === 'https:' ||
-            location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-          if (secure && navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
-            if (msg) msg.textContent = 'Copied dashboard YAML to clipboard. Paste into HA → Dashboards → raw editor.';
-          } else {
-            // Fallback: select in a temporary textarea
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-              document.execCommand('copy');
-              if (msg) msg.textContent = 'Copied dashboard YAML to clipboard.';
-            } catch (e) {
-              if (msg) msg.textContent = 'Clipboard unavailable — use the Download YAML button instead.';
+      const copyButtons = document.querySelectorAll('button[data-copy-src]');
+      if (!copyButtons.length) return;
+      copyButtons.forEach(function (copyBtn) {
+        copyBtn.addEventListener('click', async function () {
+          const src = copyBtn.getAttribute('data-copy-src') || '';
+          if (!src) return;
+          if (msg) msg.textContent = 'Fetching ' + src + '…';
+          try {
+            const r = await fetch(src, { cache: 'no-store' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const text = await r.text();
+            const secure = window.isSecureContext || location.protocol === 'https:' ||
+              location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            if (secure && navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(text);
+              if (msg) msg.textContent = 'Copied ' + src + ' to clipboard.';
+            } else {
+              // Fallback: select in a temporary textarea
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed';
+              ta.style.left = '-9999px';
+              document.body.appendChild(ta);
+              ta.select();
+              try {
+                document.execCommand('copy');
+                if (msg) msg.textContent = 'Copied ' + src + ' to clipboard.';
+              } catch (e) {
+                if (msg) msg.textContent = 'Clipboard unavailable — use the Download button next to it instead.';
+              }
+              document.body.removeChild(ta);
             }
-            document.body.removeChild(ta);
+          } catch (err) {
+            if (msg) {
+              msg.textContent =
+                'Could not fetch ' + src + ' (' + err + '). ' +
+                'Use the Download button next to it, or copy from /share/hermes/ha/ on the HA host.';
+            }
           }
-        } catch (err) {
-          if (msg) {
-            msg.textContent =
-              'Could not fetch ./ha/dashboards/hermes_usage.yaml (' + err + '). ' +
-              'Copy from /share/hermes/ha/dashboards/ on the HA host instead.';
-          }
-        }
+        });
       });
     })();
 

@@ -63,9 +63,11 @@ http {
       add_header Cache-Control "no-store";
     }
 
-    # Importable HA package / dashboard / blueprints (read-only)
+    # Importable HA package / dashboard / blueprints (read-only).
+    # Served from the image-local copy rendered into /etc/nginx/html/ha/
+    # (avoids 403 when /share/hermes/ha was created with a leaked umask 077).
     location ^~ /ha/ {
-      alias /share/hermes/ha/;
+      alias /etc/nginx/html/ha/;
       default_type text/plain;
       add_header Cache-Control "no-store";
       autoindex off;

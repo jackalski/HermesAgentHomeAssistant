@@ -13,6 +13,7 @@ Called by run.sh with the following env vars:
 """
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -199,6 +200,19 @@ def main():
         out_file.chmod(0o644)
     except Exception:
         pass
+
+    # Ingress ./ha/* must be readable by nginx workers (www-data). Copy the
+    # baked /ha_dashboard tree next to index.html and force 0755/0644 so a
+    # leaked umask 077 on /share cannot break Copy/Download buttons.
+    src = Path('/ha_dashboard')
+    if src.is_dir():
+        dest = out_dir / 'ha'
+        try:
+            shutil.copytree(src, dest, dirs_exist_ok=True)
+            for p in [dest, *dest.rglob('*')]:
+                p.chmod(0o755 if p.is_dir() else 0o644)
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':

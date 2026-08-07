@@ -223,13 +223,13 @@ Anyone with **broker write access** can trigger these — keep Mosquitto locked 
 
 #### Usage dashboard (Home Assistant)
 
-On each add-on start, importable YAML is copied to **`/share/hermes/ha/`** (also served read-only on Ingress under `./ha/`):
+On each add-on start, importable YAML is copied to **`/share/hermes/ha/`**. The same tree is also served read-only on Ingress under `./ha/` from an **image-local copy** (so Copy/Download buttons work regardless of Share directory permissions):
 
 | Path | Purpose |
 |---|---|
 | `/share/hermes/ha/packages/hermes_usage.yaml` | Template sensors, monthly/daily utility meters, budget helpers |
 | `/share/hermes/ha/dashboards/hermes_usage.yaml` | Lovelace dashboard (**Operations** / **Analysis**) |
-| `/share/hermes/ha/blueprints/automation/` | Budget, gateway-offline, and disk alert blueprints |
+| `/share/hermes/ha/blueprints/automation/` | Budget, gateway-offline, disk, and voice-announce blueprints |
 
 **HACS frontend cards required** (install via HACS → Frontend before importing the dashboard):
 
@@ -251,6 +251,7 @@ Install steps:
 6. Create a dashboard and paste `/share/hermes/ha/dashboards/hermes_usage.yaml` (or merge its `views:`).
    Tip: open the add-on **Ingress** page → Home Assistant → **Copy dashboard YAML**.
 7. Optional: copy blueprints from `/share/hermes/ha/blueprints/automation/` into `config/blueprints/automation/hermes/` and create automations from them.
+   Tip: on the Ingress page use each blueprint’s **Copy** / **Download** buttons (same as the dashboard YAML).
 8. Set `input_number.hermes_monthly_budget_usd` on the Operations view (or Developer Tools) for the budget gauge.
 
 If cards show as `Custom element doesn't exist` / unknown `custom:…` type, the HACS cards are missing or the browser cache needs a hard refresh.

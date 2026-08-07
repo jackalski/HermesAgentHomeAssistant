@@ -2,6 +2,14 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.1.2] - 2026-08-07
+
+### Fixed
+- **Ingress `./ha/` HTTP 403**: a leaked `umask 077` made `/share/hermes/ha` directories `0700`, so nginx workers could not read them — **Copy dashboard YAML**, **Download YAML**, and **Download package** all failed. Ingress now serves `./ha/` from an image-local copy under `/etc/nginx/html/ha/`, secret writes keep `umask 077` only in a subshell, and the Share tree is normalized to `0755`/`0644` on sync.
+
+### Added
+- Ingress **Copy** / **Download** buttons for the four automation blueprints (budget, gateway offline, disk, voice announce).
+
 ## [0.1.1] - 2026-08-07
 
 ### Changed
