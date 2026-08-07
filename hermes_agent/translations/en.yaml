@@ -372,7 +372,7 @@ configuration:
         fields:
           value:
             name: Origin URL
-            description: "Full origin with scheme and host (include port when non-default). Examples: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost."
+            description: "Full origin with scheme and host (include port when non-default). Examples: https://ha.example.com:8443, https://homeassistant.local, https://homeassistant.local:8123, capacitor://localhost."
       controlui_disable_device_auth:
         name: Disable Control UI Device Pairing (lan_https)
         description: "Recommended ON for home LAN — skips per-device approval (avoids error 1008)."

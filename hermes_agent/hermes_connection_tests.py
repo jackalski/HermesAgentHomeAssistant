@@ -138,13 +138,27 @@ def _ha_token(options: dict[str, Any]) -> str:
     return token
 
 
+def _default_ha_port() -> str:
+    # HAOS 2026.8+ defaults to 80; Container / non-supervisor stays on 8123.
+    return "80" if os.environ.get("SUPERVISOR_TOKEN") else "8123"
+
+
+def _format_ha_base_url(host: str, port: str) -> str:
+    host = (host or "").strip() or "127.0.0.1"
+    port = (port or "").strip() or _default_ha_port()
+    if port == "80":
+        return f"http://{host}"
+    return f"http://{host}:{port}"
+
+
 def _bashio_ha_service() -> tuple[str, str]:
+    default_port = _default_ha_port()
     if not Path("/etc/bashio.sh").is_file():
-        return "", "8123"
+        return "", default_port
     script = (
         ". /etc/bashio.sh\n"
         "host=\"$(bashio::services homeassistant host 2>/dev/null || true)\"\n"
-        "port=\"$(bashio::services homeassistant port 2>/dev/null || echo 8123)\"\n"
+        f"port=\"$(bashio::services homeassistant port 2>/dev/null || echo {default_port})\"\n"
         "printf '%s\\n' \"$host\"\n"
         "printf '%s\\n' \"$port\"\n"
     )
@@ -158,14 +172,14 @@ def _bashio_ha_service() -> tuple[str, str]:
         )
         lines = [line.strip() for line in (proc.stdout or "").splitlines() if line.strip()]
         if len(lines) >= 2:
-            return lines[0], lines[1] or "8123"
+            return lines[0], lines[1] or default_port
     except (OSError, subprocess.TimeoutExpired):
         pass
-    return "", "8123"
+    return "", default_port
 
 
 def _resolve_ha_urls(options: dict[str, Any]) -> dict[str, Any]:
-    # SUPERVISOR_TOKEN authenticates against the Supervisor Core proxy, not :8123.
+    # SUPERVISOR_TOKEN authenticates against the Supervisor Core proxy, not Core's HTTP port.
     _token, token_source = _ha_token_and_source(options)
     if token_source == "supervisor":
         return {
@@ -174,10 +188,11 @@ def _resolve_ha_urls(options: dict[str, Any]) -> dict[str, Any]:
             "source": "supervisor_token",
         }
 
+    default_port = _default_ha_port()
     helper = HELPER_PATH if HELPER_PATH.is_file() else Path(__file__).with_name("hermes_config_helper.py")
     if not helper.is_file():
         base = str(_nested(options, "home_assistant", "hass_url", default="") or "").strip().rstrip("/")
-        base = base or "http://127.0.0.1:8123"
+        base = base or _format_ha_base_url("127.0.0.1", default_port)
         return {"homeassistant_url": base, "mcp_url": f"{base}/api/mcp", "source": "fallback"}
 
     internal_host, internal_port = _bashio_ha_service()
@@ -185,7 +200,7 @@ def _resolve_ha_urls(options: dict[str, Any]) -> dict[str, Any]:
         "hass_url": str(_nested(options, "home_assistant", "hass_url", default="") or "").strip(),
         "supervisor_available": "true" if os.environ.get("SUPERVISOR_TOKEN") else "false",
         "internal_host": internal_host,
-        "internal_port": internal_port or "8123",
+        "internal_port": internal_port or default_port,
     }
     try:
         sys.path.insert(0, str(helper.parent))
@@ -196,7 +211,7 @@ def _resolve_ha_urls(options: dict[str, Any]) -> dict[str, Any]:
             return resolved
     except Exception:
         pass
-    base = payload["hass_url"] or "http://127.0.0.1:8123"
+    base = payload["hass_url"] or _format_ha_base_url("127.0.0.1", default_port)
     return {"homeassistant_url": base, "mcp_url": f"{base.rstrip('/')}/api/mcp", "source": "fallback"}
 
 

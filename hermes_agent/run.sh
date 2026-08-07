@@ -382,7 +382,20 @@ EFFECTIVE_HASS_URL="$HASS_URL"
 MCP_HA_URL=""
 HA_URL_SOURCE="user"
 HA_INTERNAL_HOST=""
-HA_INTERNAL_PORT="8123"
+# HAOS 2026.8+ defaults to 80; bashio overrides with the live Core port.
+# Non-supervisor / Container fallback remains 8123 (set in resolve_ha_instance_urls).
+HA_INTERNAL_PORT="80"
+
+format_ha_base_url() {
+  # Omit :80 for http (HAOS 2026.8+ default). Args: host port
+  local host="${1:-127.0.0.1}"
+  local port="${2:-80}"
+  if [ -z "$port" ] || [ "$port" = "80" ]; then
+    echo "http://${host}"
+  else
+    echo "http://${host}:${port}"
+  fi
+}
 
 load_bashio() {
   if [ -f /etc/bashio.sh ]; then
@@ -408,23 +421,27 @@ cloudflared_addon_running() {
 }
 
 resolve_ha_instance_urls() {
-  if [ ! -f "$HELPER_PATH" ]; then
-    EFFECTIVE_HASS_URL="${HASS_URL:-http://127.0.0.1:8123}"
-    MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
-    return 0
-  fi
-
   local supervisor_available="false"
+  local default_port="8123"
   if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
     supervisor_available="true"
+    default_port="80"
+  fi
+
+  if [ ! -f "$HELPER_PATH" ]; then
+    EFFECTIVE_HASS_URL="${HASS_URL:-$(format_ha_base_url "127.0.0.1" "$default_port")}"
+    MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
+    return 0
   fi
 
   if load_bashio; then
     HA_INTERNAL_HOST="$(bashio::services homeassistant "host" 2>/dev/null || true)"
     HA_INTERNAL_PORT="$(bashio::services homeassistant "port" 2>/dev/null || true)"
     if [ -z "$HA_INTERNAL_PORT" ]; then
-      HA_INTERNAL_PORT="8123"
+      HA_INTERNAL_PORT="$default_port"
     fi
+  else
+    HA_INTERNAL_PORT="$default_port"
   fi
 
   local ha_json resolved
@@ -446,12 +463,12 @@ resolve_ha_instance_urls() {
     HA_URL_SOURCE=$(echo "$resolved" | jq -r '.source // "user"')
   fi
   if [ -z "$EFFECTIVE_HASS_URL" ]; then
-    EFFECTIVE_HASS_URL="http://127.0.0.1:8123"
+    EFFECTIVE_HASS_URL="$(format_ha_base_url "127.0.0.1" "$HA_INTERNAL_PORT")"
   fi
   if [ -z "$MCP_HA_URL" ]; then
     MCP_HA_URL="${EFFECTIVE_HASS_URL%/}/api/mcp"
   fi
-  # SUPERVISOR_TOKEN authenticates against the Supervisor Core proxy, not :8123.
+  # SUPERVISOR_TOKEN authenticates against the Supervisor Core proxy, not Core's HTTP port.
   if [ "$HA_TOKEN_SOURCE" = "supervisor" ]; then
     EFFECTIVE_HASS_URL="http://supervisor/core"
     MCP_HA_URL="http://supervisor/core/api/mcp"
@@ -512,7 +529,7 @@ verify_ha_instance_reachable() {
   if [ "$HA_TOKEN_SOURCE" = "supervisor" ]; then
     log_warn "Supervisor token probe failed — paste a long-lived access token in homeassistant_token if MCP/HA tools fail"
   else
-    log_warn "If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant:8123 or your external URL)"
+    log_warn "If MCP or HA tools fail, set hass_url to your HA URL (e.g. http://homeassistant, http://homeassistant:8123, or your external URL)"
   fi
   return 0
 }

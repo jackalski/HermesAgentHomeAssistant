@@ -351,7 +351,7 @@ configuration:
         fields:
           value:
             name: URL de origem
-            description: 'Origem completa com esquema e host (inclua a porta se não for a padrão). Exemplos: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost.'
+            description: 'Origem completa com esquema e host (inclua a porta se não for a padrão). Exemplos: https://ha.example.com:8443, https://homeassistant.local, https://homeassistant.local:8123, capacitor://localhost.'
       controlui_disable_device_auth:
         name: Desativar pareamento por dispositivo no Control UI (lan_https)
         description: Recomendado LIGADO para LAN doméstica — pula aprovação por dispositivo (evita erro 1008).

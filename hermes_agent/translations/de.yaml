@@ -351,7 +351,7 @@ configuration:
         fields:
           value:
             name: Origin-URL
-            description: 'Vollständige Origin mit Schema und Host (Port bei Abweichung vom Standard). Beispiele: https://ha.example.com:8443, https://homeassistant.local:8123, capacitor://localhost.'
+            description: 'Vollständige Origin mit Schema und Host (Port bei Abweichung vom Standard). Beispiele: https://ha.example.com:8443, https://homeassistant.local, https://homeassistant.local:8123, capacitor://localhost.'
       controlui_disable_device_auth:
         name: Control-UI-Geräte-Pairing deaktivieren (lan_https)
         description: Empfohlen EIN für Heim-LAN — überspringt Gerätefreigabe (vermeidet Fehler 1008).

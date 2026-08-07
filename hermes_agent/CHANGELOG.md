@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.1.1] - 2026-08-07
+
+### Changed
+- **Home Assistant port defaults**: HAOS **2026.8+** uses HTTP port **80** (Container stays on **8123**). Autodetection still prefers the live Supervisor/bashio Core port; last-resort fallbacks and local `hass_url` placeholders now treat `:80` / portless loopback the same as legacy `:8123`.
+
 ## [0.1.0] - 2026-08-06
 
 ### Added

@@ -332,11 +332,20 @@ def has_main_model_api_key(
     return False
 
 
+# Local placeholders that mean "autodetect" (include legacy :8123 and HAOS 2026.8+ :80 / portless).
 HA_URL_AUTO_DEFAULTS = frozenset(
     {
         "",
+        "http://localhost",
+        "https://localhost",
+        "http://localhost:80",
+        "https://localhost:80",
         "http://localhost:8123",
         "https://localhost:8123",
+        "http://127.0.0.1",
+        "https://127.0.0.1",
+        "http://127.0.0.1:80",
+        "https://127.0.0.1:80",
         "http://127.0.0.1:8123",
         "https://127.0.0.1:8123",
     }
@@ -346,6 +355,21 @@ HA_URL_AUTO_DEFAULTS = frozenset(
 def is_hass_url_auto(user_url: str) -> bool:
     normalized = (user_url or "").strip().rstrip("/")
     return normalized in HA_URL_AUTO_DEFAULTS
+
+
+def _default_ha_port(supervisor_available: bool) -> str:
+    # HAOS 2026.8+ defaults to 80; Container / non-supervisor stays on 8123.
+    return "80" if supervisor_available else "8123"
+
+
+def format_home_assistant_url(host: str, port: str, *, scheme: str = "http") -> str:
+    """Build an HA base URL; omit :80 / :443 for default scheme ports."""
+    host = (host or "").strip() or "127.0.0.1"
+    port = (port or "").strip()
+    scheme = (scheme or "http").strip().lower() or "http"
+    if not port or (scheme == "http" and port == "80") or (scheme == "https" and port == "443"):
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{port}"
 
 
 def resolve_home_assistant_url(payload: dict):
@@ -366,6 +390,7 @@ def resolve_home_assistant_url(payload: dict):
     )
     internal_host = str(payload.get("internal_host", "")).strip()
     internal_port = str(payload.get("internal_port", "")).strip()
+    default_port = _default_ha_port(supervisor_available)
 
     if user_url and not is_hass_url_auto(user_url):
         return {
@@ -376,9 +401,10 @@ def resolve_home_assistant_url(payload: dict):
         }
 
     if supervisor_available:
-        ha_url = "http://127.0.0.1:8123"
-        if internal_host and internal_port:
-            ha_url = f"http://{internal_host}:{internal_port}"
+        ha_url = format_home_assistant_url(
+            internal_host or "127.0.0.1",
+            internal_port or default_port,
+        )
         return {
             "homeassistant_url": ha_url,
             "mcp_url": "http://supervisor/core/api/mcp",
@@ -386,7 +412,7 @@ def resolve_home_assistant_url(payload: dict):
             "verified": None,
         }
 
-    fallback = user_url or "http://127.0.0.1:8123"
+    fallback = user_url or format_home_assistant_url("127.0.0.1", default_port)
     return {
         "homeassistant_url": fallback,
         "mcp_url": f"{fallback}/api/mcp",

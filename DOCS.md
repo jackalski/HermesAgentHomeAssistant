@@ -54,12 +54,12 @@ jq -r '.gateway.auth.token' /config/.hermes/hermes.json
 
 ## Home Assistant autodetection
 
-When `hass_url` is empty or a local placeholder (`localhost` / `127.0.0.1:8123`), the add-on resolves URLs at startup:
+When `hass_url` is empty or a local placeholder (`localhost` / `127.0.0.1`, with or without `:80` / `:8123`), the add-on resolves URLs at startup:
 
 | Use | Autodetected URL (HAOS) |
 |-----|-------------------------|
 | MCP registration | `http://supervisor/core/api/mcp` |
-| `HOMEASSISTANT_URL` in `.env` | `http://127.0.0.1:8123` (or internal `homeassistant` service host) |
+| `HOMEASSISTANT_URL` in `.env` | Internal Core host/port from Supervisor (HAOS **2026.8+** defaults to port **80**; older installs and Container stay on **8123**) |
 
 Set `hass_url` only for non-standard setups (external URL, different port, remote HA).
 
@@ -100,7 +100,7 @@ ingress:
 
 Cloudflared forwards WebSockets to the add-on HTTPS origin on `:18789`; add-on nginx normalizes proxy headers (including `Origin`) before the loopback dashboard.
 
-> Nabu Casa remote access only proxies port 8123 — use Cloudflared or your own tunnel for Hermes.
+> Nabu Casa remote access only proxies Home Assistant’s HTTP port — use Cloudflared or your own tunnel for Hermes.
 
 **Alternative** — `lan_reverse_proxy` only if your proxy sends `X-Forwarded-User` (e.g. NPM custom header). Add proxy CIDRs under **Gateway Trusted Proxies** (one IP/CIDR per row). If the list is empty, the add-on applies defaults (`127.0.0.1,172.30.0.0/16,10.0.0.0/8`) and logs a hint when Cloudflared is detected.
 
@@ -528,7 +528,7 @@ curl -sS -m 10 -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: Bearer $
 | `404` | MCP Server integration not installed in HA |
 | `401` | Token invalid or expired — recreate long-lived token |
 | `405` | Endpoint exists (normal for GET on streamable HTTP MCP) |
-| `000` / timeout | Wrong `hass_url` or network — leave `hass_url` empty on HAOS, or set `http://homeassistant:8123` |
+| `000` / timeout | Wrong `hass_url` or network — leave `hass_url` empty on HAOS, or set `http://homeassistant` (port 80) / `http://homeassistant:8123` |
 
 ## Example automations
 
