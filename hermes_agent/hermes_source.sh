@@ -173,8 +173,18 @@ hermes_install_from_source() {
   # [all] no longer bundles messaging/TTS (lazy-installed upstream since 0.22); request them
   # up front so the image does not depend on first-use installs. Older tags
   # lack some extras, so fall back to plain [all].
-  if ! uv pip install --python "$HERMES_PYTHON" --no-cache -e "${src_dir}[all,messaging,tts-premium]" \
-    && ! uv pip install --python "$HERMES_PYTHON" --no-cache -e "${src_dir}[all]"; then
+  # Upstream resolves with [tool.uv] override-dependencies (e.g. Pillow 13 over browser-harness'
+  # exact pillow==12.3.0 pin). `uv pip` ignores that table, so replay it as an overrides file.
+  local overrides_file="${src_dir}/.addon-uv-overrides.txt"
+  python3 - "${src_dir}/pyproject.toml" > "$overrides_file" <<'PY' || : > "$overrides_file"
+import sys, tomllib
+with open(sys.argv[1], "rb") as fh:
+    data = tomllib.load(fh)
+for line in data.get("tool", {}).get("uv", {}).get("override-dependencies", []):
+    print(line)
+PY
+  if ! uv pip install --python "$HERMES_PYTHON" --no-cache --overrides "$overrides_file" -e "${src_dir}[all,messaging,tts-premium]" \
+    && ! uv pip install --python "$HERMES_PYTHON" --no-cache --overrides "$overrides_file" -e "${src_dir}[all]"; then
     log_error "Failed to install Hermes Agent from GitHub tag ${tag}."
     rm -rf "$src_dir"
     return 1
