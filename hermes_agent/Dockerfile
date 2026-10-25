@@ -174,7 +174,7 @@ RUN python3 -m pip config set global.break-system-packages true \
          echo "ERROR: npm install ${pkg} failed after 5 attempts"; \
          return 1; \
        } \
-    && npm_install_retry "@botiverse/raft@0.0.15" \
+    && npm_install_retry "@botiverse/raft@latest" \
     && npm_install_retry "agent-browser@latest"
 
 # System-Python deps for the add-on's own helpers (status exporter). Hermes itself and its

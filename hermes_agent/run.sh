@@ -979,7 +979,7 @@ bootstrap_selected_tools() {
   install_npm_package_if_missing "raft" "@botiverse/raft@0.0.15"
 
   if [ "$TOOL_TELEGRAM_ENABLED" = "true" ] || [ "$TOOL_TELEGRAM_ENABLED" = "1" ]; then
-    install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]==22.6"
+    install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]>=22.7"
   fi
 
   if [ "$TOOL_DISCORD_ENABLED" != "false" ] && [ -n "$DISCORD_BOT_TOKEN_OPT" ]; then
