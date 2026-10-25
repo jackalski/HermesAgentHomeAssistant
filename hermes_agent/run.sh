@@ -1531,7 +1531,8 @@ shutdown() {
     fi
   fi
 
-  stop_gw_relay
+  # Defined later in the script; absent if we are stopped during early startup.
+  if declare -F stop_gw_relay >/dev/null 2>&1; then stop_gw_relay; fi
 
   if [ -n "${CDP_CHROMIUM_PID}" ] && kill -0 "${CDP_CHROMIUM_PID}" >/dev/null 2>&1; then
     kill -TERM "${CDP_CHROMIUM_PID}" >/dev/null 2>&1 || true
