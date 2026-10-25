@@ -467,6 +467,9 @@ configuration:
       gateway_drain_seconds:
         name: Segundos de drain del gateway
         description: Segundos de espera del drain al detener el complemento (0–120). Predeterminado 15.
+      multiplex_profiles:
+        name: "Servir todos los perfiles desde un gateway"
+        description: "Fija gateway.multiplex_profiles=true para que el único gateway sirva todos los perfiles de Hermes (0.22+). Úsalo en lugar de 'hermes gateway migrate --multiplex', que requiere un slot s6 que este add-on no ofrece."
       clean_session_locks_on_start:
         name: Limpiar bloqueos de sesión al iniciar
         description: Eliminar archivos de bloqueo de sesión obsoletos cuando el complemento inicia.

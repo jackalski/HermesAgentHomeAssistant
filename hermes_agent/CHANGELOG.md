@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.2.2] - 2026-10-26
+
+### Added
+- **`advanced_settings.multiplex_profiles`** (default off): pins `gateway.multiplex_profiles: true` so Hermes 0.22's single gateway serves all profiles. Replaces the upstream hint `hermes gateway migrate --multiplex`, which needs an s6 gateway slot that this add-on does not have.
+
 ## [0.2.1] - 2026-10-25
 
 ### Fixed

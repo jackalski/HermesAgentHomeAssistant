@@ -493,6 +493,9 @@ configuration:
       gateway_drain_seconds:
         name: Gateway Drain Seconds
         description: "Seconds to wait for gateway drain on add-on stop (0–120). Default 15."
+      multiplex_profiles:
+        name: "Serve All Profiles From One Gateway"
+        description: "Pin gateway.multiplex_profiles=true so the single gateway serves every Hermes profile (0.22+). Use this instead of 'hermes gateway migrate --multiplex', which needs an s6 gateway slot this add-on does not provide."
       clean_session_locks_on_start:
         name: Clean Session Locks on Start
         description: Remove stale session lock files when the add-on starts.

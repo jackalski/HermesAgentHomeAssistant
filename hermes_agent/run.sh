@@ -183,6 +183,7 @@ if [ -z "$ROUTER_KEY" ]; then
 fi
 
 CLEAN_LOCKS_ON_START="$(read_nested_option advanced_settings clean_session_locks_on_start)"
+MULTIPLEX_PROFILES="$(read_nested_option advanced_settings multiplex_profiles)"
 CLEAN_LOCKS_ON_EXIT="$(read_nested_option advanced_settings clean_session_locks_on_exit)"
 
 # Gateway access
@@ -1042,6 +1043,14 @@ ensure_default_hermes_profile() {
   if hermes profile >/dev/null 2>&1; then
     log_info "Hermes profile summary:"
     hermes profile 2>/dev/null | head -8 || true
+  fi
+  if [ "$MULTIPLEX_PROFILES" = "true" ]; then
+    # `hermes gateway migrate --multiplex` needs an s6 gateway slot this add-on lacks; pin the config key instead.
+    if hermes config set gateway.multiplex_profiles true >/dev/null 2>&1; then
+      log_info "Pinned gateway.multiplex_profiles=true (one gateway serves all profiles)."
+    else
+      log_warn "Could not set gateway.multiplex_profiles; run 'hermes config set gateway.multiplex_profiles true' in the terminal."
+    fi
   fi
   if hermes gateway list >/dev/null 2>&1; then
     log_info "Hermes gateway list:"

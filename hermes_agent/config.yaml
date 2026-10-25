@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.2.1"
+version: "0.2.2"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -197,6 +197,9 @@ options:
     fallback_providers: []
     # When ON, seed use_gateway: true on web/image_gen/tts/browser (Nous Tool Gateway).
     nous_tool_gateway: false
+    # Serve all Hermes profiles from this one gateway (Hermes 0.22+, gateway.multiplex_profiles).
+    # false = leave to upstream auto-detection.
+    multiplex_profiles: false
     clean_session_locks_on_start: true
     clean_session_locks_on_exit: true
     gateway_drain_seconds: 15
@@ -329,6 +332,7 @@ schema:
     fallback_providers:
       - str
     nous_tool_gateway: bool?
+    multiplex_profiles: bool?
     clean_session_locks_on_start: bool?
     clean_session_locks_on_exit: bool?
     gateway_drain_seconds: int(0,120)?

@@ -467,6 +467,9 @@ configuration:
       gateway_drain_seconds:
         name: Gateway-Drain-Sekunden
         description: Wartezeit für Gateway-Drain beim Stoppen (0–120). Standard 15.
+      multiplex_profiles:
+        name: "Alle Profile über ein Gateway bedienen"
+        description: "Setzt gateway.multiplex_profiles=true, damit das eine Gateway alle Hermes-Profile bedient (0.22+). Statt 'hermes gateway migrate --multiplex' verwenden, das einen s6-Gateway-Slot braucht, den dieses Add-on nicht bereitstellt."
       clean_session_locks_on_start:
         name: Sitzungssperren beim Start bereinigen
         description: Veraltete Sitzungssperrdateien beim Start des Add-ons entfernen.

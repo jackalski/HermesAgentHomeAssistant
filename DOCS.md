@@ -404,6 +404,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
+| `multiplex_profiles` | `false` | Pins `gateway.multiplex_profiles: true` so the one gateway serves all Hermes profiles (0.22+). Fixes the "gateway serves only one profile … restart the container" notice; do not run `hermes gateway migrate --multiplex` here (no s6 gateway slot) |
 | `hermes_agent_version_custom` | `v0.22.5` | GitHub release tag or Hermes version when preset is `custom` |
 
 Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG, ElevenLabs, Groq, DeepInfra). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
