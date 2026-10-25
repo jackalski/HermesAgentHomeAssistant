@@ -8,6 +8,11 @@ HERMES_BAKED_WEB_DIST="${HERMES_BAKED_WEB_DIST:-/opt/hermes-agent/web_dist}"
 HERMES_IMAGE_SKILLS_DIR="${HERMES_IMAGE_SKILLS_DIR:-/opt/hermes-agent/skills}"
 HERMES_BAKED_TAG_FILE="${HERMES_BAKED_TAG_FILE:-/opt/hermes-agent/.baked-tag}"
 HERMES_VERSION_TAGS_FILE="${HERMES_VERSION_TAGS_FILE:-/opt/hermes-agent/version-tags.tsv}"
+# Hermes 0.22+ gates nearly every core dependency on python_version >= 3.14 (3.11 is only an
+# updater bridge), so it must run in a uv-managed 3.14 venv, never the Debian system Python.
+HERMES_VENV="${HERMES_VENV:-/opt/hermes-venv}"
+HERMES_PYTHON_VERSION="${HERMES_PYTHON_VERSION:-3.14}"
+HERMES_PYTHON="${HERMES_VENV}/bin/python"
 
 # Fallback logging when addon_log.sh is not sourced (Docker build).
 if ! command -v log_info >/dev/null 2>&1; then
@@ -115,6 +120,17 @@ hermes_download_source() {
   return 0
 }
 
+# Create (or reuse) the uv-managed Python 3.14 venv that hosts Hermes.
+hermes_ensure_venv() {
+  if [ -x "$HERMES_PYTHON" ] \
+    && "$HERMES_PYTHON" -c "import sys; sys.exit(0 if sys.version_info[:2] == tuple(map(int, '${HERMES_PYTHON_VERSION}'.split('.'))) else 1)" 2>/dev/null; then
+    return 0
+  fi
+  log_info "Creating Python ${HERMES_PYTHON_VERSION} venv at ${HERMES_VENV} ..."
+  rm -rf "$HERMES_VENV"
+  UV_SYSTEM_PYTHON=0 uv venv --python "$HERMES_PYTHON_VERSION" "$HERMES_VENV" >&2
+}
+
 hermes_install_from_source() {
   local tag="$1"
   local src_dir="${HERMES_SOURCE_ROOT}/src"
@@ -148,12 +164,36 @@ hermes_install_from_source() {
   # [all] no longer bundles messaging/TTS (lazy-installed upstream since 0.22); request them
   # up front so the read-only image does not depend on first-use installs. Older tags
   # lack some extras, so fall back to plain [all].
-  if ! uv pip install --system --break-system-packages --no-cache -e "${src_dir}[all,messaging,tts-premium]" \
-    && ! uv pip install --system --break-system-packages --no-cache -e "${src_dir}[all]"; then
+  if ! hermes_ensure_venv; then
+    log_error "Failed to install Hermes Agent from GitHub tag ${tag} (no Python ${HERMES_PYTHON_VERSION} venv)."
+    rm -rf "$src_dir"
+    return 1
+  fi
+
+  # [all] no longer bundles messaging/TTS (lazy-installed upstream since 0.22); request them
+  # up front so the image does not depend on first-use installs. Older tags
+  # lack some extras, so fall back to plain [all].
+  if ! uv pip install --python "$HERMES_PYTHON" --no-cache -e "${src_dir}[all,messaging,tts-premium]" \
+    && ! uv pip install --python "$HERMES_PYTHON" --no-cache -e "${src_dir}[all]"; then
     log_error "Failed to install Hermes Agent from GitHub tag ${tag}."
     rm -rf "$src_dir"
     return 1
   fi
+
+  # Extras the add-on exposes that are not exact-pinned by Hermes (installed after so
+  # Hermes pins win). Best-effort.
+  uv pip install --python "$HERMES_PYTHON" --no-cache \
+    "python-telegram-bot[webhooks]>=22.7" edge-tts ddgs "discord.py[voice]>=2.7.1" \
+    "brotlicffi>=1.2.0.1" >/dev/null 2>&1 \
+    || log_warn "Optional Python extras (telegram/discord/edge-tts/ddgs) failed to install."
+
+  # Expose the venv console scripts on the default PATH (ttyd, s6 and cron shells).
+  local script
+  for script in hermes hermes-agent hermes-acp; do
+    if [ -x "${HERMES_VENV}/bin/${script}" ]; then
+      ln -sf "${HERMES_VENV}/bin/${script}" "/usr/local/bin/${script}"
+    fi
+  done
 
   if [ -d "${src_dir}/skills" ]; then
     rm -rf "${HERMES_IMAGE_SKILLS_DIR}"
@@ -166,8 +206,9 @@ hermes_install_from_source() {
   # Keep ${src_dir}: upstream forbids non-editable wheels, so the install is
   # editable and must retain the GitHub checkout on disk.
 
-  if ! command -v hermes >/dev/null 2>&1; then
-    log_error "Failed to install Hermes Agent from GitHub tag ${tag}."
+  if ! hermes --version >/dev/null 2>&1; then
+    log_error "Hermes Agent ${tag} installed but 'hermes --version' fails:"
+    hermes --version 2>&1 | tail -5 >&2 || true
     return 1
   fi
 

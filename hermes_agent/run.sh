@@ -30,6 +30,10 @@ else
   exit 1
 fi
 
+# Python used for Hermes-side packages (0.22+: uv-managed 3.14 venv; fall back to system).
+HERMES_PY="${HERMES_PYTHON:-/opt/hermes-venv/bin/python}"
+[ -x "$HERMES_PY" ] || HERMES_PY="python3"
+
 # Ensure Homebrew and brew-installed binaries are in PATH
 # This is needed for Hermes Agent skills that depend on CLI tools (gemini, aider, etc.)
 export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
@@ -797,9 +801,6 @@ fi
 
 hermes_ensure_homeassistant_plugin || true
 
-if [ -f /repair_hermes_wheel.py ]; then
-  python3 /repair_hermes_wheel.py || true
-fi
 
 if ! command -v hermes >/dev/null 2>&1; then
   log_error "hermes CLI is not installed. Set hermes_agent_version_preset and restart the add-on."
@@ -881,45 +882,37 @@ safe_export_secret_env() {
 install_python_package_if_missing() {
   local module_name="$1"
   local package_spec="$2"
-  if python3 -c "import ${module_name}" >/dev/null 2>&1; then
+  if "$HERMES_PY" -c "import ${module_name}" >/dev/null 2>&1; then
     log_info "Python dependency '${package_spec}' already available."
     return 0
   fi
-  log_info "Installing missing Python dependency '${package_spec}' (system-wide)..."
+  log_info "Installing missing Python dependency '${package_spec}' (hermes venv)..."
   if command -v uv >/dev/null 2>&1 \
-    && uv pip install --system --break-system-packages --no-cache "${package_spec}" >/dev/null 2>&1; then
-    log_info "Installed Python dependency '${package_spec}' via uv (system)."
-  elif python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
-    log_info "Installed Python dependency '${package_spec}' via pip (system)."
+    && uv pip install --python "$HERMES_PY" --no-cache "${package_spec}" >/dev/null 2>&1; then
+    log_info "Installed Python dependency '${package_spec}' via uv (hermes venv)."
+  elif "$HERMES_PY" -m pip install --no-cache-dir "${package_spec}" >/dev/null 2>&1; then
+    log_info "Installed Python dependency '${package_spec}' via pip (hermes venv)."
   else
     log_warn "Could not install Python dependency '${package_spec}'. Tool may stay unavailable."
     return 1
   fi
 }
 
-# Hermes 0.19 HTTP MCP needs streamablehttp_client (mcp 1.x). mcp 2.x removed that
-# symbol; a bare `import mcp` still succeeds, so we probe the transport symbol.
+# Hermes 0.22+ pins mcp 2.x itself (streamablehttp_client moved); never downgrade it.
+# Older tags (<= 0.20) still need mcp 1.x's streamablehttp_client symbol.
 ensure_mcp_http_transport() {
-  local package_spec="mcp>=1.26.0,<2"
-  if python3 -c "from mcp.client.streamable_http import streamablehttp_client" >/dev/null 2>&1; then
-    log_info "MCP SDK HTTP transport available (${package_spec})."
+  if [ -x /opt/hermes-venv/bin/python ]; then
+    log_info "MCP SDK managed by Hermes (venv)."
     return 0
   fi
-  log_info "Installing/repairing MCP SDK for HTTP transport (${package_spec})..."
-  if command -v uv >/dev/null 2>&1 \
-    && uv pip install --system --break-system-packages --no-cache "${package_spec}" >/dev/null 2>&1; then
-    log_info "Installed Python dependency '${package_spec}' via uv (system)."
-  elif python3 -m pip install --no-cache-dir --break-system-packages "${package_spec}" >/dev/null 2>&1; then
-    log_info "Installed Python dependency '${package_spec}' via pip (system)."
-  else
-    log_warn "Could not install '${package_spec}'. HTTP MCP servers (HA, etc.) will fail."
-    return 1
+  local package_spec="mcp>=1.26.0,<2"
+  if python3 -c "from mcp.client.streamable_http import streamablehttp_client" >/dev/null 2>&1; then
+    return 0
   fi
-  if ! python3 -c "from mcp.client.streamable_http import streamablehttp_client" >/dev/null 2>&1; then
-    log_warn "MCP SDK installed but streamablehttp_client still missing — HTTP MCP will fail."
-    return 1
-  fi
+  uv pip install --system --break-system-packages --no-cache "${package_spec}" >/dev/null 2>&1 \
+    || log_warn "Could not install '${package_spec}'. HTTP MCP servers (HA, etc.) will fail."
 }
+
 
 install_npm_package_if_missing() {
   local command_name="$1"
@@ -1068,7 +1061,7 @@ resolve_hermes_web_dist() {
     echo "${HERMES_BAKED_WEB_DIST:-/opt/hermes-agent/web_dist}"
     return 0
   fi
-  web_dist="$(python3 - <<'PY' 2>/dev/null || true
+  web_dist="$("$HERMES_PY" - <<'PY' 2>/dev/null || true
 import pathlib
 try:
     import hermes_cli
@@ -1108,12 +1101,12 @@ run_hermes_dashboard() {
   fi
 
   # Embedded Chat tab (hermes --tui over PTY/WebSocket) needs ptyprocess + Node.
-  if python3 -c "import ptyprocess" 2>/dev/null; then
+  if "$HERMES_PY" -c "import ptyprocess" 2>/dev/null; then
     if hermes dashboard --help 2>&1 | grep -q -- '--tui'; then
       dashboard_args+=(--tui)
     fi
   else
-    log_warn "ptyprocess missing; Hermes dashboard Chat tab will be unavailable (uv pip install --system ptyprocess)."
+    log_warn "ptyprocess missing; Hermes dashboard Chat tab will be unavailable (uv pip install --python /opt/hermes-venv/bin/python ptyprocess)."
   fi
 
   if [ "$ENABLE_HTTPS_PROXY" = "true" ]; then
@@ -2535,7 +2528,7 @@ if [ "$ENABLE_HTTPS_PROXY" = "true" ] && [ "$GATEWAY_MODE" != "remote" ] \
     log_error "The dashboard is a separate service started with 'hermes dashboard' (needs hermes-agent[web])."
     log_error "Run 'hermes dashboard --port ${DASHBOARD_INTERNAL_PORT} --host 127.0.0.1 --no-open' in the terminal for startup errors."
     log_error "If import fails with hermes_cli.dashboard_auth, update add-on to 0.0.11+ (wheel repair runs automatically) or set hermes_agent_version_preset to latest."
-    log_error "If import fails otherwise, install Web UI deps: uv pip install --system 'fastapi' 'uvicorn[standard]' 'ptyprocess' (or pip --break-system-packages)"
+    log_error "If import fails otherwise, install Web UI deps: uv pip install --python /opt/hermes-venv/bin/python 'fastapi' 'uvicorn[standard]' 'ptyprocess'"
   fi
 fi
 

@@ -33,6 +33,7 @@ ARG BUILD_VERSION
 ENV PIP_BREAK_SYSTEM_PACKAGES=1 \
     UV_BREAK_SYSTEM_PACKAGES=1 \
     UV_SYSTEM_PYTHON=1 \
+    UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     NPM_CONFIG_PREFIX=/usr/local \
     PATH="/usr/local/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 
@@ -176,16 +177,10 @@ RUN python3 -m pip config set global.break-system-packages true \
     && npm_install_retry "@botiverse/raft@0.0.15" \
     && npm_install_retry "agent-browser@latest"
 
-# Extra Python deps that are NOT exact-pinned by Hermes [all] (uv preferred).
-# Do not list websockets/starlette/fastapi/uvicorn/mcp here — Hermes [all] must win.
-RUN uv pip install --system --break-system-packages --no-cache \
-        paho-mqtt \
-        "python-telegram-bot[webhooks]>=22.7" \
-        edge-tts \
-        ddgs \
-        "discord.py[voice]>=2.7.1" \
-        "brotlicffi>=1.2.0.1" \
-        ptyprocess
+# System-Python deps for the add-on's own helpers (status exporter). Hermes itself and its
+# extras (telegram, discord, edge-tts, ddgs) live in the Python 3.14 venv created by
+# hermes_install_from_source (Hermes 0.22+ does not install on the Debian system Python).
+RUN uv pip install --system --break-system-packages --no-cache paho-mqtt
 
 # Shared source-install helpers + semver→tag map.
 COPY hermes_source.sh /usr/local/lib/hermes_source.sh
@@ -199,10 +194,6 @@ RUN . /usr/local/lib/hermes_source.sh \
     && hermes_install_from_source "${HERMES_SOURCE_TAG}" \
     && printf '%s\n' "${HERMES_SOURCE_TAG}" > /opt/hermes-agent/.baked-tag \
     && hermes --version
-
-# Safety net if a Hermes PyPI wheel omits hermes_cli subpackages (upstream #34701 on older releases).
-COPY repair_hermes_wheel.py /repair_hermes_wheel.py
-RUN python3 /repair_hermes_wheel.py
 
 # Shell aliases and color options for interactive use
 RUN tee -a /etc/bash.bashrc <<'EOF'
@@ -239,7 +230,7 @@ COPY ha_dashboard/ /ha_dashboard/
 # Baked-in copy of the add-on manifest so runtime helpers can read the live
 # version (status exporter) without depending on the Supervisor API.
 COPY config.yaml /addon_config.yaml
-RUN chmod +x /run.sh /addon_log.sh /hermes_config_helper.py /hermes_status_exporter.py /hermes_mqtt_resolver.py /hermes_connection_tests.py /render_nginx.py /repair_hermes_wheel.py /usr/local/bin/hermes-cleanup /usr/local/bin/hermes-backup-share \
+RUN chmod +x /run.sh /addon_log.sh /hermes_config_helper.py /hermes_status_exporter.py /hermes_mqtt_resolver.py /hermes_connection_tests.py /render_nginx.py /usr/local/bin/hermes-cleanup /usr/local/bin/hermes-backup-share \
     && chmod +x /opt/hermes-example-scripts/*.sh \
     && mkdir -p /run/nginx
 

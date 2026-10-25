@@ -9,6 +9,8 @@ All notable changes to the Hermes Agent Integration Home Assistant Add-on are do
 - **Home Assistant gateway plugin**: Hermes 0.22 moved the HA platform out of core. The add-on installs the `homeassistant` plugin on startup when missing (`hermes plugins install homeassistant`).
 
 ### Changed
+- **Hermes runs in a uv-managed Python 3.14 venv** (`/opt/hermes-venv`, `hermes`/`hermes-agent`/`hermes-acp` symlinked into `/usr/local/bin`). Hermes 0.22 gates almost all core dependencies on Python ≥ 3.14, so installing on Debian's Python 3.11 left `ruamel.yaml` and others missing (`ModuleNotFoundError: ruamel`, dashboard and Assist API never started). Startup now also fails loudly if `hermes --version` does not run after an install.
+- Telegram/Discord/edge-tts/ddgs extras install into the venv; the add-on no longer pins `mcp<2` (Hermes 0.22 manages MCP itself). `repair_hermes_wheel.py` removed (PyPI-wheel workaround no longer applicable).
 - Hermes install now also requests the `messaging` and `tts-premium` extras (upstream `[all]` no longer bundles them); falls back to `[all]` for older tags.
 - **Session retention** (`agent_behavior.session_auto_prune`, `session_retention_days`): bootstrap `sessions.auto_prune` / `sessions.retention_days` when missing. Defaults keep upstream behavior (prune OFF, 90 days). Enabling prune removes old sessions from usage history.
 - Upstream 0.21–0.22 changes to be aware of: idle/daily session resets are retired; `todo` tool is now `todo_list` (old name still works); AGENTS.md / skills / memory writes always need approval (even in `off`/`smart`); stdio MCP servers no longer inherit the default profile's vault secrets.
