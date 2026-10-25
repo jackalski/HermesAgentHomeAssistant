@@ -252,7 +252,7 @@
         <small style="color:#6b7280">(If <code>hermes config show</code> redacts secrets, read the file directly instead.)</small>
       </div>
       <div class="muted" style="margin-top:6px">
-        The add-on starts the gateway automatically. For manual debugging in the terminal use <code>hermes gateway run</code> (not <code>hermes-agent gateway run</code>). Default Hermes Agent is <b>0.20.0</b> (GitHub tag <code>v2026.8.3</code>); set <code>hermes_agent_version_preset</code> to <b>latest</b> to track upstream releases.
+        The add-on starts the gateway automatically. For manual debugging in the terminal use <code>hermes gateway run</code> (not <code>hermes-agent gateway run</code>). Default Hermes Agent is <b>0.22.5</b> (GitHub tag <code>v0.22.5</code>); set <code>hermes_agent_version_preset</code> to <b>latest</b> to track upstream releases.
       </div>
     </details>
 

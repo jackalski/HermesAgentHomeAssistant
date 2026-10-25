@@ -212,6 +212,12 @@ configuration:
       max_turns:
         name: Max Turns
         description: "Max tool iterations per turn (agent.max_turns). Upstream default is 500; 60 is safer for Assist / home use."
+      session_auto_prune:
+        name: "Auto-Prune Old Sessions"
+        description: "Delete sessions unused for the retention period at startup (sessions.auto_prune). Upstream default is OFF; affects usage history."
+      session_retention_days:
+        name: "Session Retention (days)"
+        description: "Days to keep unused sessions when auto-prune is on (sessions.retention_days). Default 90."
       smart_policy:
         name: Smart Approval Policy
         description: "Optional extra rules appended to the smart-approval reviewer (approvals.smart_policy)."
@@ -473,10 +479,10 @@ configuration:
         description: Latest GitHub release, or a custom pinned tag.
         options:
           latest: "Latest GitHub release"
-          custom: "Custom tag (default v2026.8.3)"
+          custom: "Custom tag (default v0.22.5)"
       hermes_agent_version_custom:
         name: Hermes Agent Version (custom)
-        description: GitHub release tag (e.g. v2026.8.3) or Hermes version (e.g. 0.20.0).
+        description: GitHub release tag (e.g. v0.22.5) or Hermes version (e.g. 0.22.5).
 
       fallback_providers:
         name: Fallback Providers

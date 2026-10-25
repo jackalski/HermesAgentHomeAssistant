@@ -99,6 +99,8 @@ APPROVAL_MODE="$(read_nested_option agent_behavior approval_mode)"
 REASONING_EFFORT="$(read_nested_option agent_behavior reasoning_effort)"
 SHOW_REASONING="$(read_nested_option agent_behavior show_reasoning)"
 MAX_TURNS="$(read_nested_option agent_behavior max_turns)"
+SESSION_AUTO_PRUNE="$(read_nested_option agent_behavior session_auto_prune)"
+SESSION_RETENTION_DAYS="$(read_nested_option agent_behavior session_retention_days)"
 SMART_POLICY="$(read_nested_option agent_behavior smart_policy)"
 DENIAL_BREAKER_THRESHOLD="$(read_nested_option agent_behavior denial_breaker_threshold)"
 DENY_PATTERNS_JSON="$(jq -c '.agent_behavior.deny_patterns // []' "$OPTIONS_FILE" 2>/dev/null || echo '[]')"
@@ -225,7 +227,7 @@ GROQ_API_KEY_OPT="$(read_provider_option groq_api_key)"
 DEEPINFRA_API_KEY_OPT="$(read_provider_option deepinfra_api_key)"
 HERMES_AGENT_VERSION_PRESET="$(read_nested_option advanced_settings hermes_agent_version_preset)"
 HERMES_AGENT_VERSION_CUSTOM="$(read_nested_option advanced_settings hermes_agent_version_custom)"
-HERMES_DEFAULT_TAG="v2026.8.3"
+HERMES_DEFAULT_TAG="v0.22.5"
 IMAGE_BAKED_HERMES_TAG="$(tr -d '\r\n' < /opt/hermes-agent/.baked-tag 2>/dev/null || echo "$HERMES_DEFAULT_TAG")"
 GW_ENV_VARS_TYPE=$(jq -r 'if (.advanced_settings.gateway_env_vars // .gateway_env_vars) == null then "null" else ((.advanced_settings.gateway_env_vars // .gateway_env_vars) | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.advanced_settings.gateway_env_vars // .gateway_env_vars // empty' "$OPTIONS_FILE")
@@ -269,7 +271,7 @@ MQTT_STATE_PREFIX="$(read_nested_option mqtt_settings state_prefix)"
 [ -z "$NTFY_PUBLISH_ONLY" ] && NTFY_PUBLISH_ONLY="true"
 [ -z "$LM_STUDIO_BASE_URL" ] && LM_STUDIO_BASE_URL="http://127.0.0.1:1234/v1"
 [ -z "$HERMES_AGENT_VERSION_PRESET" ] && HERMES_AGENT_VERSION_PRESET="custom"
-[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="v2026.8.3"
+[ -z "$HERMES_AGENT_VERSION_CUSTOM" ] && HERMES_AGENT_VERSION_CUSTOM="v0.22.5"
 [ -z "$ENABLE_HA_STATUS_SENSORS" ] && ENABLE_HA_STATUS_SENSORS="true"
 [ -z "$PUBLISH_MQTT_DISCOVERY" ] && PUBLISH_MQTT_DISCOVERY="true"
 [ -z "$ENABLE_CONTROL_ENTITIES" ] && ENABLE_CONTROL_ENTITIES="false"
@@ -762,7 +764,7 @@ reconcile_hermes_agent_version() {
 
   log_error "Update progress [3/3]: Failed to install Hermes Agent from GitHub tag ${tag}."
   log_warn "The requested tag may not exist, or the network is unreachable."
-  log_warn "Tip: set advanced_settings.hermes_agent_version_custom to a known tag (e.g. v2026.7.20) and restart."
+  log_warn "Tip: set advanced_settings.hermes_agent_version_custom to a known tag (e.g. v2026.8.3) and restart."
   if command -v hermes >/dev/null 2>&1; then
     log_warn "Continuing with previously installed hermes CLI ($(hermes --version 2>/dev/null | head -1 || echo unknown))."
     # Do NOT overwrite the marker with the failed target — keep the last known-good marker
@@ -772,17 +774,17 @@ reconcile_hermes_agent_version() {
   return 1
 }
 
-# Hermes 0.20+ requires Node 26. Warn when a stale image or leftover managed tree is older.
+# Hermes 0.22+ requires Node 26. Warn when a stale image or leftover managed tree is older.
 warn_if_node_too_old() {
   local ver major
   ver="$(node -v 2>/dev/null || true)"
   major="$(echo "$ver" | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')"
   if [ -z "$major" ]; then
-    log_warn "Node.js not found on PATH; Hermes 0.20+ requires Node 26+."
+    log_warn "Node.js not found on PATH; Hermes 0.22+ requires Node 26+."
     return 0
   fi
   if [ "$major" -lt 26 ]; then
-    log_warn "Node ${ver} is below the Hermes 0.20+ requirement (Node 26+)."
+    log_warn "Node ${ver} is below the Hermes 0.22+ requirement (Node 26+)."
     log_warn "Rebuild/update this add-on image (Node is baked at build time). Persistent /config/.node_global cannot raise the system Node major."
   fi
 }
@@ -792,6 +794,8 @@ warn_if_node_too_old
 if ! reconcile_hermes_agent_version; then
   exit 1
 fi
+
+hermes_ensure_homeassistant_plugin || true
 
 if [ -f /repair_hermes_wheel.py ]; then
   python3 /repair_hermes_wheel.py || true
@@ -1779,6 +1783,8 @@ bootstrap_hermes_first_run() {
     --arg tts_voice "$TTS_VOICE" \
     --arg tts_speed "$TTS_SPEED" \
     --arg max_turns "$MAX_TURNS" \
+    --arg session_auto_prune "${SESSION_AUTO_PRUNE:-false}" \
+    --arg session_retention_days "${SESSION_RETENTION_DAYS:-90}" \
     --arg denial_breaker_threshold "$DENIAL_BREAKER_THRESHOLD" \
     --arg threshold_tokens "$COMPRESSION_THRESHOLD_TOKENS" \
     --arg proactive_prune_tokens "$COMPRESSION_PROACTIVE_PRUNE" \
@@ -1832,6 +1838,8 @@ bootstrap_hermes_first_run() {
       reasoning_effort: $reasoning_effort,
       show_reasoning: $show_reasoning,
       max_turns: ($max_turns | tonumber),
+      session_auto_prune: $session_auto_prune,
+      session_retention_days: ($session_retention_days | tonumber),
       smart_policy: $smart_policy,
       denial_breaker_threshold: ($denial_breaker_threshold | tonumber),
       deny_patterns: $deny_patterns,

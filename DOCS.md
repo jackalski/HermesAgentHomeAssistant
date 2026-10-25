@@ -27,7 +27,7 @@ Or add the repository manually:
 2. Add `https://github.com/jackalski/HermesAgentHomeAssistant`
 3. Install **Hermes Agent Integration** and start it.
 
-Architectures: `amd64`, `aarch64` (armv7 dropped in **0.1.0** — Hermes 0.20 requires Node 26).
+Architectures: `amd64`, `aarch64` (armv7 dropped in **0.1.0** — Hermes 0.20+ requires Node 26).
 
 From **0.0.37**, the Supervisor **pulls** a prebuilt image (`ghcr.io/jackalski/hermes-agent-addon:<version>`) built by GitHub Actions. It does **not** run `docker build` on the HA host. If install fails with a pull/manifest error, confirm that GHCR package version exists and is **Public**.
 
@@ -142,6 +142,7 @@ Upstream Hermes also has a **Home Assistant messaging platform** (WebSocket `sta
 
 - Leave **`enable_native_ha_platform: false`** (default) unless you want the add-on to seed `platforms.homeassistant` with safe `watch_domains` (binary_sensor, alarm_control_panel, climate).
 - Agent replies on this platform use HA **persistent notifications**.
+- Hermes 0.22+ ships this platform as the **`homeassistant` plugin** (the `[homeassistant]` extra was removed). The add-on runs `hermes plugins install homeassistant` automatically on startup when it is missing; if that fails (offline), run it manually in the terminal.
 - See [Hermes HA messaging docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/homeassistant).
 
 ### Webhooks + direct delivery (opt-in)
@@ -285,7 +286,7 @@ Upstream **Chronos** cron (`cron.provider: chronos`) is for Nous-hosted scale-to
 
 ### Chat, voice, Assist
 
-Hermes 0.20 splits voice into two directions. **Wake word and microphone stay on Home Assistant
+Hermes 0.20+ splits voice into two directions. **Wake word and microphone stay on Home Assistant
 Voice satellites** (Voice PE, ESPHome Assist satellite, Android companion) — the add-on container
 has no audio device. Hermes is the **brain** (conversation agent) and can also **push spoken
 announcements** back into the house.
@@ -368,6 +369,8 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `reasoning_effort` | `medium` | Bootstraps `agent.reasoning_effort` if missing |
 | `show_reasoning` | `true` | Bootstraps `display.show_reasoning` if missing |
 | `max_turns` | `60` | Bootstraps `agent.max_turns` if missing (Assist-safe) |
+| `session_auto_prune` | `false` | Bootstraps `sessions.auto_prune` if missing (Hermes 0.22+ upstream default is OFF). Pruned sessions disappear from usage history |
+| `session_retention_days` | `90` | Bootstraps `sessions.retention_days` if missing (1–3650) |
 | `smart_policy` | *(empty)* | Bootstraps `approvals.smart_policy` if missing |
 | `denial_breaker_threshold` | `3` | Bootstraps `approvals.denial_breaker_threshold` |
 | `deny_patterns` | HA-safe defaults | Bootstraps `approvals.deny` if missing |
@@ -401,7 +404,7 @@ Full schema: [`hermes_agent/config.yaml`](hermes_agent/config.yaml).
 | `force_ipv4_dns` | `true` | Recommended on HAOS |
 | `nginx_log_level` | `minimal` | Suppresses HA polling noise |
 | `hermes_agent_version_preset` | `custom` | `latest` or `custom` — reconciled on restart |
-| `hermes_agent_version_custom` | `v2026.8.3` | GitHub release tag or Hermes version when preset is `custom` |
+| `hermes_agent_version_custom` | `v0.22.5` | GitHub release tag or Hermes version when preset is `custom` |
 
 Provider keys live under **`provider_api_keys`** in the add-on UI (OpenAI, OpenRouter, Anthropic, Google, Ollama Cloud, MiniMax, Discord, GitHub, xAI, Firecrawl, SearXNG, ElevenLabs, Groq, DeepInfra). **Nous Portal** uses OAuth in the terminal (`hermes setup --portal`); **Ollama** in `default_provider` maps to Hermes `ollama-cloud`.
 
@@ -470,12 +473,12 @@ Hermes binary in the image is replaced on update; `/config/` data persists. When
 | Budget gauge / `sensor.hermes_cost_today` missing | Install package `hermes_usage.yaml` under `packages:` and restart Home Assistant Core. |
 | `ModuleNotFoundError: No module named 'hermes_cli.dashboard_auth'` | Add-on **0.0.11+** auto-patches missing wheel subpackages on startup; update to **0.0.14+** with Hermes **0.16.0** |
 | `EEXIST: file already exists` at `/usr/local/bin/hermes` during npm reconcile | Fixed in 0.0.9+; update add-on. Harmless on 0.0.8 — startup continues with image-baked `hermes` |
-| `externally-managed-environment` during Hermes install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo v2026.7.20 > /config/.hermes/.addon-managed-hermes-version` |
-| Hermes GitHub tag install fails on restart | Startup keeps the previous CLI and logs a tip. Set `hermes_agent_version_custom` to a known tag (e.g. `v2026.7.20` or `0.19.0`) and restart. |
+| `externally-managed-environment` during Hermes install | Fixed in 0.0.8+; rebuild/update add-on. Image-baked `hermes` is used if reconcile fails. To stop retries: `echo v2026.8.3 > /config/.hermes/.addon-managed-hermes-version` |
+| Hermes GitHub tag install fails on restart | Startup keeps the previous CLI and logs a tip. Set `hermes_agent_version_custom` to a known tag (e.g. `v0.22.5` or `0.22.5`) and restart. |
 | `[raft] raft CLI not found in PATH` in gateway logs | Fixed in **0.0.29+** — add-on installs `@botiverse/raft` globally. Only needed if you use Raft messaging (`RAFT_PROFILE` in `/config/.hermes/.env`); see [Hermes Raft docs](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/raft). |
 | Mosquitto log spam (`New connection` / `disconnected` every minute) | Fixed in **0.0.19+** — persistent MQTT client + one-shot discovery. Optional: Mosquitto `connection_messages false` in customize |
 | Expected wake word / barge-in inside the add-on | The container has **no microphone** — use HA Voice PE / ESPHome Assist satellites for wake word + STT/TTS. Hermes is the conversation agent via Assist API (`enable_openai_api`). |
-| Node version warning after upgrade | Hermes 0.20 requires **Node 26** (baked in the image). Update/rebuild the add-on; `/config/.node_global` cannot raise the system Node major. |
+| Node version warning after upgrade | Hermes 0.20+ requires **Node 26** (baked in the image). Update/rebuild the add-on; `/config/.node_global` cannot raise the system Node major. |
 
 Gateway token (if CLI redacts secrets):
 
@@ -530,6 +533,16 @@ curl -sS -m 10 -o /dev/null -w "HTTP %{http_code}\n" -H "Authorization: Bearer $
 | `401` | Token invalid or expired — recreate long-lived token |
 | `405` | Endpoint exists (normal for GET on streamable HTTP MCP) |
 | `000` / timeout | Wrong `hass_url` or network — leave `hass_url` empty on HAOS, or set `http://homeassistant` (port 80) / `http://homeassistant:8123` |
+
+## Hermes 0.22 upgrade notes
+
+- **Tags**: Hermes now uses SemVer tags (`v0.22.5`); legacy `v2026.x.y` pins and `0.20.0`-style versions still resolve. `v0.22.1` is not mapped (broken upstream build).
+- **Home Assistant platform** is a plugin; the add-on installs it on startup (`hermes plugins install homeassistant`).
+- **Protected files**: writes to AGENTS.md, skills and memory stores always require approval regardless of `approval_mode`.
+- **MCP**: stdio MCP servers no longer inherit the default profile's vault secrets; pass needed secrets explicitly in the server's `env`.
+- **Sessions**: idle/daily session resets are retired. Optional pruning via `session_auto_prune` / `session_retention_days`.
+- **Lazy extras**: messaging, voice and some provider backends install on first use upstream; the image pre-installs `messaging` and `tts-premium`. Other backends need network at first use.
+- **`hermes update`** is not the supported upgrade path in this add-on; change `hermes_agent_version_custom` instead.
 
 ## Example automations
 

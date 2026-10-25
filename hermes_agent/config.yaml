@@ -1,5 +1,5 @@
 name: Hermes Agent Integration
-version: "0.1.2"
+version: "0.2.0"
 slug: hermes_agent
 stage: experimental
 description: Run Hermes Agent inside Home Assistant via the Hermes Agent Integration add-on.
@@ -91,6 +91,9 @@ options:
     show_reasoning: true
     # Cap tool iterations per turn (upstream default is 500; 60 is safer for Assist).
     max_turns: 60
+    # Seed sessions.auto_prune / sessions.retention_days when missing (Hermes 0.22+; upstream prune is OFF by default).
+    session_auto_prune: false
+    session_retention_days: 90
     smart_policy: ""
     denial_breaker_threshold: 3
     deny_patterns:
@@ -188,7 +191,7 @@ options:
     nginx_log_level: minimal
     gateway_env_vars: []
     hermes_agent_version_preset: custom
-    hermes_agent_version_custom: "v2026.8.3"
+    hermes_agent_version_custom: "v0.22.5"
     # Bootstrap fallback_providers in Hermes config.yaml when the key is missing.
     # Entries: "provider" or "provider/model" (e.g. openrouter or openrouter/google/gemini-2.5-flash).
     fallback_providers: []
@@ -245,6 +248,8 @@ schema:
     reasoning_effort: list(none|minimal|low|medium|high|xhigh|max|ultra)?
     show_reasoning: bool?
     max_turns: int(10,500)?
+    session_auto_prune: bool?
+    session_retention_days: int(1,3650)?
     smart_policy: str?
     denial_breaker_threshold: int(0,10)?
     deny_patterns:

@@ -2,6 +2,20 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.2.0] - 2026-10-25
+
+### Added
+- **Hermes Agent 0.22.5** from GitHub tag **`v0.22.5`** (new default; Dockerfile bake + runtime reconcile). Upstream moved from CalVer tags (`v2026.x.y`) to SemVer (`v0.x.y`); both forms and versions `0.22.0`–`0.22.5` now resolve. Existing `v2026.8.3` / `0.20.0` pins keep working.
+- **Home Assistant gateway plugin**: Hermes 0.22 moved the HA platform out of core. The add-on installs the `homeassistant` plugin on startup when missing (`hermes plugins install homeassistant`).
+
+### Changed
+- Hermes install now also requests the `messaging` and `tts-premium` extras (upstream `[all]` no longer bundles them); falls back to `[all]` for older tags.
+- **Session retention** (`agent_behavior.session_auto_prune`, `session_retention_days`): bootstrap `sessions.auto_prune` / `sessions.retention_days` when missing. Defaults keep upstream behavior (prune OFF, 90 days). Enabling prune removes old sessions from usage history.
+- Upstream 0.21–0.22 changes to be aware of: idle/daily session resets are retired; `todo` tool is now `todo_list` (old name still works); AGENTS.md / skills / memory writes always need approval (even in `off`/`smart`); stdio MCP servers no longer inherit the default profile's vault secrets.
+
+### Notes
+- If you pinned a custom version, set `hermes_agent_version_custom` to `v0.22.5` to upgrade. Tags `v0.22.1` (broken build) are intentionally not mapped.
+
 ## [0.1.2] - 2026-08-07
 
 ### Fixed

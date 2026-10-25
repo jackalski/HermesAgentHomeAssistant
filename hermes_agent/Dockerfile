@@ -1,7 +1,7 @@
 # Base image is Debian Bookworm (glibc). BUILD_ARCH is supplied by the HA Supervisor build.
 # Replaces deprecated build.yaml (per-arch ghcr.io/home-assistant/*-base-debian:bookworm).
 # Default silences Dockerfile lint (InvalidDefaultArgInFrom); Supervisor always passes BUILD_ARCH.
-ARG HERMES_SOURCE_TAG=v2026.8.3
+ARG HERMES_SOURCE_TAG=v0.22.5
 ARG BUILD_ARCH=amd64
 ARG BUILD_VERSION
 

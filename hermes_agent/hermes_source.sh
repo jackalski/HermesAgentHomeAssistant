@@ -28,8 +28,8 @@ hermes_map_version_to_tag() {
     return 1
   fi
 
-  # Already a GitHub release tag (e.g. v2026.8.3).
-  if printf '%s' "$value" | grep -Eq '^v20[0-9]{2}\.[0-9]+\.[0-9]+$'; then
+  # Already a GitHub release tag: legacy CalVer (v2026.8.3) or SemVer since 0.21.x (v0.22.5).
+  if printf '%s' "$value" | grep -Eq '^v(20[0-9]{2}|[0-9]{1,2})\.[0-9]+\.[0-9]+$'; then
     printf '%s\n' "$value"
     return 0
   fi
@@ -145,7 +145,11 @@ hermes_install_from_source() {
     return 1
   fi
 
-  if ! uv pip install --system --break-system-packages --no-cache -e "${src_dir}[all]"; then
+  # [all] no longer bundles messaging/TTS (lazy-installed upstream since 0.22); request them
+  # up front so the read-only image does not depend on first-use installs. Older tags
+  # lack some extras, so fall back to plain [all].
+  if ! uv pip install --system --break-system-packages --no-cache -e "${src_dir}[all,messaging,tts-premium]" \
+    && ! uv pip install --system --break-system-packages --no-cache -e "${src_dir}[all]"; then
     log_error "Failed to install Hermes Agent from GitHub tag ${tag}."
     rm -rf "$src_dir"
     return 1
@@ -168,5 +172,24 @@ hermes_install_from_source() {
   fi
 
   log_info "Hermes Agent installed from source (${tag})."
+  return 0
+}
+
+# Hermes 0.22+ ships the Home Assistant gateway platform as a catalog plugin (the
+# hermes-agent[homeassistant] extra was removed). Plugins live in HERMES_HOME, which is
+# the persistent /config volume, so this runs at startup rather than at image build.
+hermes_ensure_homeassistant_plugin() {
+  if ! hermes plugins --help >/dev/null 2>&1; then
+    return 0
+  fi
+  if hermes plugins list 2>/dev/null | grep -qi 'homeassistant'; then
+    return 0
+  fi
+  log_info "Installing Hermes homeassistant plugin (required for the HA gateway platform) ..."
+  if timeout 180 hermes plugins install homeassistant </dev/null >/dev/null 2>&1; then
+    log_info "Hermes homeassistant plugin installed."
+  else
+    log_warn "Could not install the Hermes homeassistant plugin; run 'hermes plugins install homeassistant' in the terminal."
+  fi
   return 0
 }

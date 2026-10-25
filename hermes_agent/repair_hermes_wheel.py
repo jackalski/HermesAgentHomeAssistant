@@ -13,7 +13,7 @@ import tempfile
 import urllib.request
 
 SUBPACKAGES = ("dashboard_auth", "proxy")
-DEFAULT_TAG = "v2026.6.5"
+DEFAULT_TAG = "v0.22.5"
 FALLBACK_ARCHIVE = "https://github.com/NousResearch/hermes-agent/archive/45b00bb49.tar.gz"
 
 

@@ -991,6 +991,37 @@ def bootstrap_reasoning_if_missing(reasoning_effort: str, show_reasoning: bool):
     return False
 
 
+def bootstrap_session_prune_if_missing(auto_prune, retention_days) -> bool:
+    """Seed sessions.auto_prune / retention_days when missing (Hermes 0.22+; upstream default OFF)."""
+    enabled = str(auto_prune).lower() in ("1", "true", "yes")
+    try:
+        days = int(retention_days)
+    except (TypeError, ValueError):
+        days = 90
+    days = max(1, min(days, 3650))
+
+    cfg = read_yaml_config()
+    if cfg is None:
+        return False
+    sessions = cfg.get("sessions")
+    if not isinstance(sessions, dict):
+        sessions = {}
+    changed = False
+    if "auto_prune" not in sessions:
+        sessions["auto_prune"] = enabled
+        changed = True
+    if "retention_days" not in sessions:
+        sessions["retention_days"] = days
+        changed = True
+    if not changed:
+        return True
+    cfg["sessions"] = sessions
+    if write_yaml_config(cfg):
+        print(f"INFO: Bootstrapped sessions.auto_prune={enabled} retention_days={days} in {YAML_CONFIG_PATH}")
+        return True
+    return False
+
+
 def bootstrap_max_turns_if_missing(max_turns) -> bool:
     """Seed agent.max_turns when missing (Assist-safe default is typically < upstream 500)."""
     try:
@@ -1755,6 +1786,8 @@ def bootstrap_first_run(payload: dict):
     except (TypeError, ValueError):
         max_turns = 60
     smart_policy = str(payload.get("smart_policy", "") or "")
+    session_auto_prune = payload.get("session_auto_prune", "false")
+    session_retention_days = payload.get("session_retention_days", 90)
     try:
         denial_breaker_threshold = int(payload.get("denial_breaker_threshold", 3) or 3)
     except (TypeError, ValueError):
@@ -1819,6 +1852,7 @@ def bootstrap_first_run(payload: dict):
     )
     ok = bootstrap_reasoning_if_missing(reasoning_effort, show_reasoning) and ok
     ok = bootstrap_max_turns_if_missing(max_turns) and ok
+    ok = bootstrap_session_prune_if_missing(session_auto_prune, session_retention_days) and ok
     ok = (
         bootstrap_voice_speech_if_missing(
             stt_enabled=stt_enabled,

@@ -201,6 +201,12 @@ configuration:
       max_turns:
         name: Max Turns
         description: Max tool iterations per turn (agent.max_turns). Upstream default is 500; 60 is safer for Assist / home use.
+      session_auto_prune:
+        name: "Automatycznie usuwaj stare sesje"
+        description: "Przy starcie usuwa sesje nieużywane dłużej niż okres przechowywania (sessions.auto_prune). Domyślnie w upstream WYŁĄCZONE; wpływa na historię użycia."
+      session_retention_days:
+        name: "Przechowywanie sesji (dni)"
+        description: "Liczba dni przechowywania nieużywanych sesji przy włączonym auto-prune (sessions.retention_days). Domyślnie 90."
       smart_policy:
         name: Smart Approval Policy
         description: Optional extra rules appended to the smart-approval reviewer (approvals.smart_policy).
@@ -448,10 +454,10 @@ configuration:
         description: Najnowsze wydanie GitHub lub własny tag.
         options:
           latest: Najnowsze wydanie GitHub
-          custom: Własny tag (domyślnie v2026.8.3)
+          custom: Własny tag (domyślnie v0.22.5)
       hermes_agent_version_custom:
         name: Wersja Hermes Agent (niestandardowa)
-        description: Tag wydania GitHub (np. v2026.8.3) lub wersja Hermes (np. 0.20.0).
+        description: Tag wydania GitHub (np. v0.22.5) lub wersja Hermes (np. 0.22.5).
       fallback_providers:
         name: Dostawcy zapasowi
         description: Bootstrap fallback_providers gdy brak. Wpisy jak openrouter lub openrouter/google/gemini-2.5-flash. Puste = pomiń.
