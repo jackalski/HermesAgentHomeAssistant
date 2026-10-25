@@ -2,6 +2,15 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.2.1] - 2026-10-25
+
+### Fixed
+- **Hermes failed to start (`ModuleNotFoundError: ruamel`)**: Hermes 0.22 needs Python 3.14, which it now gets from a uv-managed venv (`/opt/hermes-venv`). Version bumped so Home Assistant pulls the rebuilt image — 0.2.0 images that were rebuilt in place are cached and still broken.
+- Install resolves on Python 3.14 (replays upstream uv overrides), MQTT exporter uses a unique client id and logs disconnects, and `stop_gw_relay` no longer errors on early shutdown.
+
+### Changed
+- CI actions and a few dependency pins bumped (see 0.2.0 notes).
+
 ## [0.2.0] - 2026-10-25
 
 ### Added
