@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1177,7 +1178,10 @@ def mark_discovery_published(prefix: str, control_enabled: bool = False) -> None
 class MqttPublisher:
     """Persistent MQTT client — one broker connection reused across poll cycles."""
 
-    CLIENT_ID = "hermes-agent-integration"
+    # Unique per process: a fixed id makes two exporters (e.g. a second add-on instance or a
+    # lingering old container) kick each other off the broker in a loop, which shows up as
+    # connects succeeding but every QoS1 publish timing out without a PUBACK.
+    CLIENT_ID = f"hermes-agent-integration-{uuid.uuid4().hex[:8]}"
     KEEPALIVE = 60
     CONNECT_TIMEOUT = 15
     PUBLISH_TIMEOUT = 10
@@ -1238,6 +1242,12 @@ class MqttPublisher:
         self._pending = []
         self._subscribed_command = False
 
+    def _on_disconnect(self, _client: Any, _userdata: Any, *args: Any) -> None:
+        # paho v1: (rc,) / v2: (flags, reason_code, properties). Log so broker kicks
+        # (session takeover, ACL, keepalive) are visible instead of silent publish timeouts.
+        detail = ", ".join(str(a) for a in args if a is not None)
+        print(f"WARN: MQTT disconnected from broker ({detail or 'no reason'})", file=sys.stderr)
+
     def _on_message(self, _client: Any, _userdata: Any, msg: Any) -> None:
         if self._command_handler is None:
             return
@@ -1295,6 +1305,7 @@ class MqttPublisher:
             client = mqtt.Client(client_id=self.CLIENT_ID, protocol=mqtt.MQTTv311)
 
         client.max_inflight_messages_set(self.MAX_INFLIGHT)
+        client.on_disconnect = self._on_disconnect
         if self._availability_topic:
             # Without a will, an add-on crash leaves every entity "available"
             # with frozen values until the next successful publish.
@@ -1408,7 +1419,8 @@ class MqttPublisher:
                 f"WARN: MQTT publish timed out for {timed_out}/{len(pending)} topics "
                 f"(first: {first_timeout_topic}). Broker accepted the TCP session but "
                 f"did not PUBACK — check ACL write access to homeassistant/# and your "
-                f"state prefix, credentials, and that Mosquitto is reachable.",
+                f"state prefix, credentials, that Mosquitto is reachable, and that no second "
+                f"Hermes add-on instance publishes to the same broker.",
                 file=sys.stderr,
             )
         return ok
