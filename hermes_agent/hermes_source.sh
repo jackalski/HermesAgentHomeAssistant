@@ -192,10 +192,14 @@ PY
 
   # Extras the add-on exposes that are not exact-pinned by Hermes (installed after so
   # Hermes pins win). Best-effort.
+  # aiohttp is required by built-in api_server + webhook adapters; upstream puts it in
+  # the [messaging] extra, but if that extra fails and we fall back to [all] alone,
+  # both adapters die with "No adapter available" and do not self-heal (unlike Telegram).
   uv pip install --python "$HERMES_PYTHON" --no-cache \
+    "aiohttp>=3.14.5" \
     "python-telegram-bot[webhooks]>=22.7" edge-tts ddgs "discord.py[voice]>=2.7.1" \
     "brotlicffi>=1.2.0.1" >/dev/null 2>&1 \
-    || log_warn "Optional Python extras (telegram/discord/edge-tts/ddgs) failed to install."
+    || log_warn "Optional Python extras (aiohttp/telegram/discord/edge-tts/ddgs) failed to install."
 
   # Expose the venv console scripts on the default PATH (ttyd, s6 and cron shells).
   local script

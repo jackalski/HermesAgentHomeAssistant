@@ -955,11 +955,35 @@ initialize_skills_hub_if_enabled() {
   fi
 }
 
+ensure_aiohttp_for_http_adapters() {
+  # Built-in api_server + webhook adapters import aiohttp at module load and permanently
+  # disable themselves when missing (no lazy-install self-heal like Telegram).
+  install_python_package_if_missing "aiohttp" "aiohttp>=3.14.5" || true
+  if "$HERMES_PY" -c "import aiohttp" >/dev/null 2>&1; then
+    return 0
+  fi
+  local need_api="false"
+  local need_webhook="false"
+  if [ "${ENABLE_OPENAI_API:-false}" = "true" ] || [ "${ENABLE_OPENAI_API:-false}" = "1" ]; then
+    need_api="true"
+  fi
+  if [ "${ENABLE_WEBHOOKS:-false}" = "true" ] || [ "${ENABLE_WEBHOOKS:-false}" = "1" ]; then
+    need_webhook="true"
+  fi
+  if [ "$need_api" = "true" ] || [ "$need_webhook" = "true" ]; then
+    log_error "aiohttp missing in Hermes venv — api_server/webhook will show 'No adapter available'."
+    log_error "Fix in add-on terminal: uv pip install --python /opt/hermes-venv/bin/python 'aiohttp>=3.14.5' && restart the add-on."
+  else
+    log_warn "aiohttp missing in Hermes venv (optional until Assist API / webhooks are enabled)."
+  fi
+  return 1
+}
+
 bootstrap_selected_tools() {
   ensure_mcp_http_transport
   install_python_package_if_missing "edge_tts" "edge-tts"
   install_python_package_if_missing "ddgs" "ddgs"
-  install_python_package_if_missing "aiohttp" "aiohttp"
+  ensure_aiohttp_for_http_adapters || true
 
   # Provider-gated STT/TTS deps (avoid bloating every install).
   if [ "$STT_PROVIDER" = "local" ] && { [ "$STT_ENABLED" = "true" ] || [ "$STT_ENABLED" = "1" ]; }; then
@@ -977,7 +1001,7 @@ bootstrap_selected_tools() {
   # Hermes 0.17+ bundled raft-platform plugin probes for `raft` on PATH during
   # gateway config loads. Install the canonical CLI so logs stay quiet for users
   # who do not use RAFT_PROFILE (optional Raft messaging integration).
-  install_npm_package_if_missing "raft" "@botiverse/raft@0.0.15"
+  install_npm_package_if_missing "raft" "@botiverse/raft@latest"
 
   if [ "$TOOL_TELEGRAM_ENABLED" = "true" ] || [ "$TOOL_TELEGRAM_ENABLED" = "1" ]; then
     install_python_package_if_missing "telegram" "python-telegram-bot[webhooks]>=22.7"

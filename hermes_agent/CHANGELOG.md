@@ -2,6 +2,11 @@
 
 All notable changes to the Hermes Agent Integration Home Assistant Add-on are documented in this file.
 
+## [0.2.3] - 2026-10-27
+
+### Fixed
+- **Dashboard "No adapter available for enabled api_server / webhook"**: those built-in adapters need `aiohttp` and do not lazy-install it (unlike Telegram). The add-on now always installs `aiohttp>=3.14.5` into the Hermes venv after source install, verifies import at bootstrap when Assist API / webhooks are enabled, and logs an actionable repair command if it is still missing.
+
 ## [0.2.2] - 2026-10-26
 
 ### Added
